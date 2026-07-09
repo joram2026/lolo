@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { UserAccount } from '../types';
 import { db, auth } from '../firebase';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { updateProfile } from 'firebase/auth';
 import { 
   Shield, Key, Sparkles, User, Gift, Check, ArrowLeft, AlertCircle, 
@@ -35,6 +35,10 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
   const [verificationError, setVerificationError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [copiedReferral, setCopiedReferral] = useState(false);
+
+  // Referral list states
+  const [referredUsers, setReferredUsers] = useState<any[]>([]);
+  const [loadingReferred, setLoadingReferred] = useState(false);
   const [deactivating, setDeactivating] = useState(false);
   const [deactivateCode, setDeactivateCode] = useState('');
   const [deactivateError, setDeactivateError] = useState<string | null>(null);
@@ -149,6 +153,41 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
     }
     fetchProfile();
   }, [user]);
+
+  useEffect(() => {
+    const code = (profile as any)?.uniqueCode;
+    if (!code) return;
+
+    async function fetchReferredUsers() {
+      setLoadingReferred(true);
+      try {
+        const q = query(
+          collection(db, 'users'),
+          where('referralSource', '==', code)
+        );
+        const querySnapshot = await getDocs(q);
+        const list: any[] = [];
+        querySnapshot.forEach((docSnap) => {
+          const uData = docSnap.data();
+          list.push({
+            uid: docSnap.id,
+            displayName: uData.displayName || 'Anonymous User',
+            email: uData.email || '',
+            createdAt: uData.createdAt ? uData.createdAt.toDate() : new Date(),
+          });
+        });
+        // Sort by registration date descending
+        list.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+        setReferredUsers(list);
+      } catch (err) {
+        console.error('Error fetching referred users:', err);
+      } finally {
+        setLoadingReferred(false);
+      }
+    }
+
+    fetchReferredUsers();
+  }, [profile]);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -369,6 +408,65 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
               <span className="text-[10px] text-emerald-400 flex items-center gap-1.5 mt-1 font-semibold">
                 <Check size={10} /> Copied to clipboard! Share it with your friends.
               </span>
+            )}
+          </div>
+
+          {/* Referred Users List */}
+          <div className="space-y-2 border-t border-slate-700/50 pt-3">
+            <div className="flex justify-between items-center text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+              <span>Your Referred Friends ({referredUsers.length})</span>
+              {loadingReferred && <span className="text-zinc-500 animate-pulse font-normal lowercase">fetching...</span>}
+            </div>
+
+            {loadingReferred ? (
+              <div className="text-center py-4 text-xs text-zinc-500">
+                Loading referred users...
+              </div>
+            ) : referredUsers.length === 0 ? (
+              <div className="text-center py-5 bg-slate-900/30 border border-dashed border-slate-800 rounded-xl text-xs text-zinc-500">
+                No friends have joined using your code yet.
+              </div>
+            ) : (
+              <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                {referredUsers.map((refUser) => {
+                  // Obfuscate email for privacy (e.g. jor***@gmail.com)
+                  const parts = refUser.email.split('@');
+                  let obfuscatedEmail = refUser.email;
+                  if (parts.length === 2) {
+                    const namePart = parts[0];
+                    const domainPart = parts[1];
+                    if (namePart.length > 2) {
+                      obfuscatedEmail = `${namePart.substring(0, 2)}***@${domainPart}`;
+                    } else {
+                      obfuscatedEmail = `***@${domainPart}`;
+                    }
+                  }
+
+                  return (
+                    <div 
+                      key={refUser.uid} 
+                      className="flex items-center justify-between bg-slate-900/50 border border-slate-800/80 p-2.5 rounded-xl text-xs hover:border-slate-700/50 transition-colors"
+                    >
+                      <div className="space-y-0.5 text-left">
+                        <p className="font-bold text-zinc-200 truncate max-w-[150px]">
+                          {refUser.displayName}
+                        </p>
+                        <p className="text-[10px] text-zinc-500 font-mono">
+                          {obfuscatedEmail}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[10px] text-zinc-500 font-mono">
+                          {refUser.createdAt.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </p>
+                        <p className="text-[9px] text-emerald-400 font-semibold uppercase tracking-wider">
+                          Active
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </div>
         </div>
