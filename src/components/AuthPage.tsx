@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { auth, db } from '../firebase';
 import { 
   signInWithEmailAndPassword, 
@@ -29,6 +29,17 @@ export default function AuthPage({ onSuccess }: AuthPageProps) {
   const [twoFactorError, setTwoFactorError] = useState<string | null>(null);
 
   const [showPassword, setShowPassword] = useState(false);
+
+  // Check URL parameters for referral codes
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const refCode = params.get('ref') || params.get('code');
+    if (refCode) {
+      setReferral(refCode);
+      setIsSignUp(true);
+      setSuccessMsg(`Welcome! Referral code "${refCode}" has been successfully pre-filled.`);
+    }
+  }, []);
 
   const handleVerify2faLogin = (e: React.FormEvent) => {
     e.preventDefault();

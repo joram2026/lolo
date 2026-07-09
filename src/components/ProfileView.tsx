@@ -34,6 +34,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
   const [verificationCode, setVerificationCode] = useState('');
   const [verificationError, setVerificationError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [copiedReferral, setCopiedReferral] = useState(false);
   const [deactivating, setDeactivating] = useState(false);
   const [deactivateCode, setDeactivateCode] = useState('');
   const [deactivateError, setDeactivateError] = useState<string | null>(null);
@@ -55,6 +56,14 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
     navigator.clipboard.writeText(temp2faSecret);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleCopyReferral = () => {
+    const code = (profile as any)?.uniqueCode || '';
+    const referralLink = `https://lolo-navy.vercel.app/?ref=${code}`;
+    navigator.clipboard.writeText(referralLink);
+    setCopiedReferral(true);
+    setTimeout(() => setCopiedReferral(false), 2500);
   };
 
   const handleVerifyAndEnable2fa = async () => {
@@ -317,6 +326,53 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
         </button>
 
       </form>
+
+      {/* Referral Program Section */}
+      <div id="referral-program-section" className="mt-8 pt-6 border-t border-slate-800 space-y-4 text-left">
+        <div className="flex items-center gap-2">
+          <Gift className="text-emerald-400" size={18} />
+          <h3 className="text-sm font-bold text-zinc-100">Referral Program</h3>
+        </div>
+
+        <p className="text-xs text-zinc-400 leading-relaxed">
+          Invite your friends to join LOLO Crypto using your unique referral code or link and earn together!
+        </p>
+
+        <div className="bg-slate-800/40 border border-slate-700 rounded-2xl p-4 space-y-3.5">
+          {/* Referral Code Box */}
+          <div className="flex justify-between items-center text-xs">
+            <span className="text-zinc-500">Your Referral Code</span>
+            <span className="font-mono text-emerald-400 font-bold tracking-wider text-sm">
+              {(profile as any)?.uniqueCode || '-----'}
+            </span>
+          </div>
+
+          {/* Referral Link Box */}
+          <div className="space-y-1.5 border-t border-slate-700/50 pt-3">
+            <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">
+              Your Shareable Referral Link
+            </label>
+            <div className="flex gap-2 items-center bg-slate-900 border border-slate-700/60 p-2.5 rounded-xl font-mono text-xs">
+              <span className="text-zinc-300 font-medium select-all truncate flex-1">
+                https://lolo-navy.vercel.app/?ref={(profile as any)?.uniqueCode || ''}
+              </span>
+              <button
+                type="button"
+                onClick={handleCopyReferral}
+                className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-750 text-zinc-400 hover:text-white transition-colors cursor-pointer shrink-0"
+                title="Copy Referral Link"
+              >
+                {copiedReferral ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
+              </button>
+            </div>
+            {copiedReferral && (
+              <span className="text-[10px] text-emerald-400 flex items-center gap-1.5 mt-1 font-semibold">
+                <Check size={10} /> Copied to clipboard! Share it with your friends.
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
 
       {/* Wallet PIN Section */}
       <div id="wallet-pin-security-card" className="mt-8 pt-6 border-t border-slate-800 space-y-4 text-left">
