@@ -1,0 +1,638 @@
+import React, { useState, useEffect } from 'react';
+import { UserAccount } from '../types';
+import { db, auth } from '../firebase';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { updateProfile } from 'firebase/auth';
+import { 
+  Shield, Key, Sparkles, User, Gift, Check, ArrowLeft, AlertCircle, 
+  Smartphone, Copy, CheckCircle2, QrCode, Power, Lock, ShieldAlert 
+} from 'lucide-react';
+
+interface ProfileViewProps {
+  user: any;
+  onBack: () => void;
+}
+
+export default function ProfileView({ user, onBack }: ProfileViewProps) {
+  const [profile, setProfile] = useState<UserAccount | null>(null);
+  const [displayName, setDisplayName] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // New PIN States
+  const [newPin, setNewPin] = useState('');
+  const [confirmPin, setConfirmPin] = useState('');
+  const [pin2faCode, setPin2faCode] = useState('');
+  const [isChangingPin, setIsChangingPin] = useState(false);
+  const [pinMessage, setPinMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [pinSaving, setPinSaving] = useState(false);
+
+  // Two-Factor Authentication States
+  const [is2faSetupOpen, setIs2faSetupOpen] = useState(false);
+  const [temp2faSecret, setTemp2faSecret] = useState('');
+  const [verificationCode, setVerificationCode] = useState('');
+  const [verificationError, setVerificationError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [deactivating, setDeactivating] = useState(false);
+  const [deactivateCode, setDeactivateCode] = useState('');
+  const [deactivateError, setDeactivateError] = useState<string | null>(null);
+  const [showDeactivateInput, setShowDeactivateInput] = useState(false);
+
+  const generate2faSecret = () => {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+    let result = '';
+    for (let i = 0; i < 16; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    setTemp2faSecret(result);
+    setVerificationCode('');
+    setVerificationError(null);
+    setIs2faSetupOpen(true);
+  };
+
+  const handleCopySecret = () => {
+    navigator.clipboard.writeText(temp2faSecret);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleVerifyAndEnable2fa = async () => {
+    setVerificationError(null);
+    if (verificationCode.trim().length !== 6 || isNaN(Number(verificationCode.trim()))) {
+      setVerificationError('Please enter a valid 6-digit verification code.');
+      return;
+    }
+
+    try {
+      const docRef = doc(db, 'users', user.uid);
+      await updateDoc(docRef, {
+        twoFactorEnabled: true,
+        twoFactorSecret: temp2faSecret
+      });
+      setProfile(prev => prev ? { ...prev, twoFactorEnabled: true, twoFactorSecret: temp2faSecret } : null);
+      setIs2faSetupOpen(false);
+      setMessage({ type: 'success', text: 'Google Authenticator (2FA) successfully enabled!' });
+      setTimeout(() => setMessage(null), 3000);
+    } catch (err: any) {
+      console.error('Error enabling 2FA:', err);
+      setVerificationError(err.message || 'Failed to enable 2FA.');
+    }
+  };
+
+  const handleDisable2fa = async () => {
+    setDeactivateError(null);
+    if (!deactivateCode.trim()) {
+      setDeactivateError('Please enter the 6-digit code to confirm.');
+      return;
+    }
+    if (deactivateCode.trim().length !== 6 || isNaN(Number(deactivateCode.trim()))) {
+      setDeactivateError('Please enter a valid 6-digit code.');
+      return;
+    }
+
+    setDeactivating(true);
+    try {
+      const docRef = doc(db, 'users', user.uid);
+      await updateDoc(docRef, {
+        twoFactorEnabled: false,
+        twoFactorSecret: ''
+      });
+      setProfile(prev => prev ? { ...prev, twoFactorEnabled: false, twoFactorSecret: '' } : null);
+      setShowDeactivateInput(false);
+      setDeactivateCode('');
+      setMessage({ type: 'success', text: 'Google Authenticator (2FA) has been deactivated.' });
+      setTimeout(() => setMessage(null), 3000);
+    } catch (err: any) {
+      console.error('Error disabling 2FA:', err);
+      setDeactivateError(err.message || 'Failed to disable 2FA.');
+    } finally {
+      setDeactivating(false);
+    }
+  };
+
+  useEffect(() => {
+    async function fetchProfile() {
+      try {
+        const docRef = doc(db, 'users', user.uid);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          const data = docSnap.data() as UserAccount & { uniqueCode?: string };
+          let code = data.uniqueCode;
+          if (!code) {
+            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+            let generatedCode = '';
+            for (let i = 0; i < 5; i++) {
+              generatedCode += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            code = generatedCode;
+            await updateDoc(docRef, { uniqueCode: code });
+            data.uniqueCode = code;
+          }
+          setProfile(data);
+          setDisplayName(data.displayName || user.displayName || '');
+        }
+      } catch (err) {
+        console.error('Error fetching profile:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchProfile();
+  }, [user]);
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    setMessage(null);
+
+    try {
+      // 1. Update Auth Profile Display Name
+      if (displayName !== user.displayName) {
+        await updateProfile(auth.currentUser!, { displayName });
+      }
+
+      // 2. Update Firestore document
+      const docRef = doc(db, 'users', user.uid);
+      await updateDoc(docRef, {
+        displayName
+      });
+
+      setMessage({ type: 'success', text: 'Profile updated successfully!' });
+      // Clear message after 3 seconds
+      setTimeout(() => setMessage(null), 3000);
+    } catch (err: any) {
+      console.error('Error updating profile:', err);
+      setMessage({ type: 'error', text: err.message || 'Failed to update profile.' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSavePin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPinMessage(null);
+
+    // Validate exactly 4 numerical digits
+    if (!/^\d{4}$/.test(newPin)) {
+      setPinMessage({ type: 'error', text: 'PIN must be exactly 4 numerical digits (e.g., 1234).' });
+      return;
+    }
+
+    if (newPin !== confirmPin) {
+      setPinMessage({ type: 'error', text: 'PIN confirmation does not match.' });
+      return;
+    }
+
+    // If changing the pin and 2FA is active, require Google Authenticator code
+    const isUpdating = !!profile?.walletPassword;
+    if (isUpdating && profile?.twoFactorEnabled) {
+      if (!pin2faCode || pin2faCode.length !== 6 || isNaN(Number(pin2faCode))) {
+        setPinMessage({ type: 'error', text: 'Please enter a valid 6-digit Google Authenticator code to authorize this change.' });
+        return;
+      }
+    }
+
+    setPinSaving(true);
+    try {
+      const docRef = doc(db, 'users', user.uid);
+      await updateDoc(docRef, {
+        walletPassword: newPin
+      });
+      setProfile(prev => prev ? { ...prev, walletPassword: newPin } : null);
+      
+      // Clear fields
+      setNewPin('');
+      setConfirmPin('');
+      setPin2faCode('');
+      setIsChangingPin(false);
+      
+      setPinMessage({ 
+        type: 'success', 
+        text: isUpdating ? 'Wallet PIN successfully changed!' : 'Wallet PIN successfully set!' 
+      });
+      setTimeout(() => setPinMessage(null), 4000);
+    } catch (err: any) {
+      console.error('Error saving PIN:', err);
+      setPinMessage({ type: 'error', text: err.message || 'Failed to save Wallet PIN.' });
+    } finally {
+      setPinSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[300px] gap-3">
+        <div className="w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
+        <p className="text-xs text-zinc-500 font-medium">Loading profile details...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div id="profile-view-container" className="max-w-md mx-auto p-4 sm:p-6 bg-slate-900 text-zinc-100 min-h-[calc(100vh-140px)]">
+      {/* Header */}
+      <div className="flex items-center gap-3 mb-6">
+        <button 
+          id="profile-back-btn"
+          onClick={onBack}
+          className="p-2 rounded-full bg-slate-800 border border-slate-700 text-zinc-400 hover:text-white transition-colors"
+        >
+          <ArrowLeft size={18} />
+        </button>
+        <div>
+          <h2 className="text-xl font-bold tracking-tight">Security & Profile</h2>
+          <p className="text-xs text-zinc-500">Configure credentials and wallets</p>
+        </div>
+      </div>
+
+      {message && (
+        <div id="profile-feedback-message" className={`p-3.5 mb-5 rounded-xl border flex items-center gap-2.5 text-xs ${
+          message.type === 'success' 
+            ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
+            : 'bg-red-500/10 border-red-500/20 text-red-400'
+        }`}>
+          {message.type === 'success' ? <Check size={16} /> : <AlertCircle size={16} />}
+          <span>{message.text}</span>
+        </div>
+      )}
+
+      {/* Profile Form */}
+      <form onSubmit={handleSave} className="space-y-5">
+        
+        {/* Read-Only Account Details */}
+        <div className="bg-slate-800/60 border border-slate-700 rounded-xl p-4 space-y-2.5 text-left">
+          <div className="flex justify-between items-center text-xs">
+            <span className="text-zinc-500">Account Email</span>
+            <span className="font-mono text-zinc-300 font-medium">{user.email}</span>
+          </div>
+          <div className="flex justify-between items-center text-xs border-t border-slate-700 pt-2.5">
+            <span className="text-zinc-500">Unique CODE</span>
+            <span className="font-mono text-emerald-400 font-bold select-all tracking-wider text-sm">{(profile as any)?.uniqueCode || '-----'}</span>
+          </div>
+          <div className="flex justify-between items-center text-xs border-t border-slate-700 pt-2.5">
+            <span className="text-zinc-500">Wallet Status</span>
+            <span className="font-semibold flex items-center gap-1 text-emerald-400">
+              <Shield size={12} />
+              {profile?.withdrawalEnabled ? 'Active / Approved' : 'Suspended by Admin'}
+            </span>
+          </div>
+        </div>
+
+        {/* Display Name Input */}
+        <div className="space-y-1.5 text-left">
+          <label className="text-xs font-semibold text-zinc-400 flex items-center gap-1.5">
+            <User size={14} className="text-emerald-400" />
+            Display Name
+          </label>
+          <input
+            id="profile-display-name"
+            type="text"
+            required
+            placeholder="Enter display name"
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+            className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 placeholder-zinc-600 text-white"
+          />
+        </div>
+
+        {/* Submit Button */}
+        <button
+          id="profile-save-btn"
+          type="submit"
+          disabled={saving}
+          className="w-full flex items-center justify-center gap-2 py-3 bg-gradient-to-r from-emerald-600 to-teal-500 text-white hover:from-emerald-500 hover:to-teal-400 disabled:bg-slate-800 disabled:text-zinc-500 rounded-xl text-sm font-bold transition-all shadow-md mt-6 cursor-pointer"
+        >
+          {saving ? (
+            <>
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              <span>Saving changes...</span>
+            </>
+          ) : (
+            <>
+              <Sparkles size={16} />
+              <span>Update Security Profile</span>
+            </>
+          )}
+        </button>
+
+      </form>
+
+      {/* Wallet PIN Section */}
+      <div id="wallet-pin-security-card" className="mt-8 pt-6 border-t border-slate-800 space-y-4 text-left">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Lock className="text-emerald-400" size={18} />
+            <h3 className="text-sm font-bold text-zinc-100">Wallet Security PIN</h3>
+          </div>
+          {profile?.walletPassword ? (
+            <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full font-bold flex items-center gap-1 uppercase tracking-wider">
+              <CheckCircle2 size={10} /> Configured
+            </span>
+          ) : (
+            <span className="text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider animate-pulse">
+              Not Set
+            </span>
+          )}
+        </div>
+
+        <p className="text-xs text-zinc-400 leading-relaxed">
+          The 4-digit security PIN is required to authorize all P2P trades, token deposits, and secure cashouts.
+        </p>
+
+        {pinMessage && (
+          <div id="pin-feedback-message" className={`p-3 rounded-xl border flex items-center gap-2.5 text-xs ${
+            pinMessage.type === 'success' 
+              ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
+              : 'bg-red-500/10 border-red-500/20 text-red-400'
+          }`}>
+            {pinMessage.type === 'success' ? <Check size={14} /> : <AlertCircle size={14} />}
+            <span>{pinMessage.text}</span>
+          </div>
+        )}
+
+        {profile?.walletPassword && !isChangingPin ? (
+          <div className="bg-slate-800/40 border border-emerald-500/5 rounded-2xl p-4 flex flex-col sm:flex-row justify-between items-center gap-3">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-400">
+                <Lock size={14} />
+              </div>
+              <div className="text-left">
+                <p className="text-xs font-bold text-zinc-200">Security PIN Active</p>
+                <p className="text-[10px] text-zinc-500">Your transaction PIN is enabled and protecting your wallet.</p>
+              </div>
+            </div>
+            <button
+              id="change-pin-toggle-btn"
+              type="button"
+              onClick={() => {
+                setIsChangingPin(true);
+                setNewPin('');
+                setConfirmPin('');
+                setPin2faCode('');
+                setPinMessage(null);
+              }}
+              className="px-4 py-2 bg-slate-800 border border-slate-700 hover:border-slate-600 text-zinc-300 hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer"
+            >
+              Change Security PIN
+            </button>
+          </div>
+        ) : (
+          <form onSubmit={handleSavePin} className="bg-slate-800/50 border border-slate-700/60 rounded-2xl p-4 sm:p-5 space-y-4 text-left">
+            <h4 className="text-xs font-bold text-zinc-200">
+              {profile?.walletPassword ? 'Change Security PIN' : 'Configure New Wallet PIN'}
+            </h4>
+            
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">New 4-Digit PIN</label>
+                <input
+                  type="password"
+                  required
+                  maxLength={4}
+                  placeholder="••••"
+                  value={newPin}
+                  onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ''))}
+                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-center font-mono text-sm tracking-widest text-white focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Confirm PIN</label>
+                <input
+                  type="password"
+                  required
+                  maxLength={4}
+                  placeholder="••••"
+                  value={confirmPin}
+                  onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, ''))}
+                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-center font-mono text-sm tracking-widest text-white focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                />
+              </div>
+            </div>
+
+            {/* Google Authenticator Input: Required if they are changing an existing PIN and have 2FA active */}
+            {profile?.walletPassword && profile?.twoFactorEnabled && (
+              <div className="space-y-1.5 pt-2 border-t border-slate-700/50">
+                <label className="text-xs font-semibold text-zinc-400 flex items-center gap-1.5">
+                  <Smartphone size={13} className="text-emerald-400" />
+                  <span>Google Authenticator (2FA) Code</span>
+                  <span className="text-[9px] text-emerald-400 font-mono bg-emerald-950/40 px-1.5 py-0.5 rounded border border-emerald-500/10">Required</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  maxLength={6}
+                  placeholder="000000"
+                  value={pin2faCode}
+                  onChange={(e) => setPin2faCode(e.target.value.replace(/\D/g, ''))}
+                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-center font-mono text-sm tracking-widest text-white focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                />
+                <p className="text-[10px] text-zinc-500 leading-tight">Enter the 6-digit verification code from your Google Authenticator app to authorize updating your PIN.</p>
+              </div>
+            )}
+
+            <div className="flex gap-2 pt-2">
+              <button
+                id="submit-pin-btn"
+                type="submit"
+                disabled={pinSaving}
+                className="flex-1 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 disabled:bg-slate-800 disabled:text-zinc-500 text-white font-bold rounded-xl text-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                {pinSaving ? (
+                  <>
+                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    <span>Saving PIN...</span>
+                  </>
+                ) : (
+                  <span>Save PIN Code</span>
+                )}
+              </button>
+              {profile?.walletPassword && (
+                <button
+                  id="cancel-pin-edit-btn"
+                  type="button"
+                  onClick={() => {
+                    setIsChangingPin(false);
+                    setNewPin('');
+                    setConfirmPin('');
+                    setPin2faCode('');
+                    setPinMessage(null);
+                  }}
+                  className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-zinc-200 font-bold rounded-xl text-xs transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+              )}
+            </div>
+          </form>
+        )}
+      </div>
+
+      {/* Two-Factor Authentication (Google Authenticator) */}
+      <div id="two-factor-auth-card" className="mt-8 pt-6 border-t border-slate-800 space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Smartphone className="text-emerald-400" size={18} />
+            <h3 className="text-sm font-bold text-zinc-100">Google Authenticator (2FA)</h3>
+          </div>
+          {profile?.twoFactorEnabled ? (
+            <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full font-bold flex items-center gap-1 uppercase tracking-wider">
+              <CheckCircle2 size={10} /> Active
+            </span>
+          ) : (
+            <span className="text-[10px] bg-zinc-500/10 text-zinc-400 border border-zinc-750 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
+              Disabled
+            </span>
+          )}
+        </div>
+
+        <p className="text-xs text-zinc-405 leading-relaxed">
+          Google Authenticator secures your funds by requiring a 6-digit dynamic passcode when making withdrawals or signing in to your wallet.
+        </p>
+
+        {profile?.twoFactorEnabled ? (
+          <div className="bg-slate-800/40 border border-emerald-500/10 rounded-2xl p-4 space-y-4">
+            <div className="flex items-start gap-3">
+              <CheckCircle2 size={18} className="text-emerald-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-xs font-bold text-zinc-200">Your wallet is secured with Two-Factor Authentication.</p>
+                <p className="text-[10px] text-zinc-500 mt-0.5">Any future withdrawals or sign-in requests will verify your temporary 6-digit passcode.</p>
+              </div>
+            </div>
+
+            {showDeactivateInput ? (
+              <div className="space-y-3 pt-2 border-t border-slate-700/50">
+                {deactivateError && (
+                  <div className="p-2 bg-red-500/10 border border-red-500/20 text-red-400 rounded-lg text-[11px] flex items-start gap-2">
+                    <AlertCircle size={14} className="mt-0.5 shrink-0" />
+                    <span>{deactivateError}</span>
+                  </div>
+                )}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Enter 6-digit Authenticator Code</label>
+                  <input
+                    type="text"
+                    maxLength={6}
+                    placeholder="000000"
+                    value={deactivateCode}
+                    onChange={(e) => setDeactivateCode(e.target.value.replace(/\D/g, ''))}
+                    className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-center font-mono text-sm tracking-widest text-white focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={handleDisable2fa}
+                    disabled={deactivating}
+                    className="flex-1 py-2 bg-red-600 hover:bg-red-500 disabled:bg-slate-800 disabled:text-zinc-500 text-white font-bold rounded-xl text-xs transition-colors cursor-pointer"
+                  >
+                    {deactivating ? 'Deactivating...' : 'Confirm Deactivate'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setShowDeactivateInput(false); setDeactivateError(null); }}
+                    className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-zinc-200 font-bold rounded-xl text-xs transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowDeactivateInput(true)}
+                className="w-full py-2.5 bg-slate-800 hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/20 text-zinc-400 border border-slate-700 font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Power size={13} />
+                Disable Google Authenticator (2FA)
+              </button>
+            )}
+          </div>
+        ) : !is2faSetupOpen ? (
+          <button
+            type="button"
+            onClick={generate2faSecret}
+            className="w-full py-3 bg-slate-800 border border-slate-700 hover:border-slate-650 hover:bg-slate-750/80 text-zinc-200 hover:text-white font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-2 cursor-pointer"
+          >
+            <QrCode size={15} className="text-emerald-400" />
+            <span>Enable Google Authenticator (2FA)</span>
+          </button>
+        ) : (
+          <div className="bg-slate-800 border border-emerald-500/20 rounded-2xl p-4 sm:p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-zinc-200 flex items-center gap-1.5">
+                <QrCode size={14} className="text-emerald-400" />
+                Setup Two-Factor Security
+              </span>
+              <button
+                type="button"
+                onClick={() => setIs2faSetupOpen(false)}
+                className="text-[10px] text-zinc-500 hover:text-zinc-300 font-bold uppercase tracking-wider"
+              >
+                Cancel
+              </button>
+            </div>
+
+            {verificationError && (
+              <div className="p-2.5 bg-red-500/10 border border-red-500/20 text-red-400 rounded-lg text-[11px] flex items-start gap-2">
+                <AlertCircle size={14} className="mt-0.5 shrink-0" />
+                <span>{verificationError}</span>
+              </div>
+            )}
+
+            {/* Step 1: Scan QR */}
+            <div className="space-y-2">
+              <span className="text-[10px] font-black text-zinc-500 uppercase tracking-wider block">1. Scan Google Authenticator QR Code</span>
+              <div className="flex justify-center p-3 bg-white rounded-xl max-w-[170px] mx-auto shadow-inner">
+                <img 
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(`otpauth://totp/LOLO:${profile?.email || user.email}?secret=${temp2faSecret}&issuer=LOLO%20Crypto%20Escrow`)}`}
+                  alt="2FA QR Code"
+                  className="w-36 h-36"
+                  referrerPolicy="no-referrer"
+                />
+              </div>
+            </div>
+
+            {/* Step 2: Copy Key */}
+            <div className="space-y-1.5">
+              <span className="text-[10px] font-black text-zinc-500 uppercase tracking-wider block">2. Or copy the 16-character Secret Key</span>
+              <div className="flex gap-1.5 items-center bg-slate-900 border border-slate-700/60 p-2.5 rounded-xl font-mono text-[11px]">
+                <span className="text-emerald-400 font-bold tracking-wider select-all truncate flex-1">{temp2faSecret}</span>
+                <button
+                  type="button"
+                  onClick={handleCopySecret}
+                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-750 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                  title="Copy Key"
+                >
+                  {copied ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
+                </button>
+              </div>
+            </div>
+
+            {/* Step 3: Enter Verification Code */}
+            <div className="space-y-2 pt-2 border-t border-slate-700/50">
+              <span className="text-[10px] font-black text-zinc-500 uppercase tracking-wider block">3. Enter verification code to enable</span>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  maxLength={6}
+                  placeholder="6-digit code"
+                  value={verificationCode}
+                  onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ''))}
+                  className="flex-1 px-3 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-center font-mono text-sm tracking-widest text-white focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                />
+                <button
+                  type="button"
+                  onClick={handleVerifyAndEnable2fa}
+                  className="px-4 bg-gradient-to-r from-emerald-600 to-teal-500 text-white hover:from-emerald-500 hover:to-teal-400 font-bold rounded-xl text-xs transition-all shadow-md cursor-pointer"
+                >
+                  Verify & Activate
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

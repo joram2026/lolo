@@ -1,0 +1,6 @@
+{
+  "name": "LOLO",
+  "description": "LOLO is a learning prototype simulating crypto wallet operations, peer-to-peer (P2P) networks, and admin-mediated escrow and deposit/withdrawal flows.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
