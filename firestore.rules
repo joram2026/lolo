@@ -19,7 +19,12 @@ service cloud.firestore {
 
     // Users Collection rules
     match /users/{userId} {
-      allow read: if isAuth() && (isOwner(userId) || isAdmin());
+      allow read: if isAuth() && (
+        isOwner(userId) || 
+        isAdmin() || 
+        (resource.data.referralSource != null && 
+         resource.data.referralSource == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.uniqueCode)
+      );
       // A user can create their own profile during registration
       allow create: if isAuth() && isOwner(userId);
       // Only owner can update details like password/displayName, but cannot change withdrawal permission or email

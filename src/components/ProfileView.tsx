@@ -5,7 +5,8 @@ import { doc, getDoc, updateDoc, collection, query, where, getDocs } from 'fireb
 import { updateProfile } from 'firebase/auth';
 import { 
   Shield, Key, Sparkles, User, Gift, Check, ArrowLeft, AlertCircle, 
-  Smartphone, Copy, CheckCircle2, QrCode, Power, Lock, ShieldAlert 
+  Smartphone, Copy, CheckCircle2, QrCode, Power, Lock, ShieldAlert,
+  ChevronRight
 } from 'lucide-react';
 
 interface ProfileViewProps {
@@ -19,6 +20,9 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Active sub-page state
+  const [activeSubPage, setActiveSubPage] = useState<'menu' | 'personal' | 'referral' | 'pin' | '2fa'>('menu');
 
   // New PIN States
   const [newPin, setNewPin] = useState('');
@@ -279,514 +283,697 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
 
   return (
     <div id="profile-view-container" className="max-w-md mx-auto p-4 sm:p-6 bg-slate-900 text-zinc-100 min-h-[calc(100vh-140px)]">
-      {/* Header */}
-      <div className="flex items-center gap-3 mb-6">
-        <button 
-          id="profile-back-btn"
-          onClick={onBack}
-          className="p-2 rounded-full bg-slate-800 border border-slate-700 text-zinc-400 hover:text-white transition-colors"
-        >
-          <ArrowLeft size={18} />
-        </button>
-        <div>
-          <h2 className="text-xl font-bold tracking-tight">Security & Profile</h2>
-          <p className="text-xs text-zinc-500">Configure credentials and wallets</p>
-        </div>
-      </div>
+      {activeSubPage === 'menu' && (
+        <div className="space-y-6">
+          {/* Header */}
+          <div className="flex items-center gap-3">
+            <button 
+              id="profile-back-btn"
+              onClick={onBack}
+              className="p-2 rounded-full bg-slate-800 border border-slate-700 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+            >
+              <ArrowLeft size={18} />
+            </button>
+            <div className="text-left">
+              <h2 className="text-xl font-bold tracking-tight">Security & Profile</h2>
+              <p className="text-xs text-zinc-500">Manage security settings and credentials</p>
+            </div>
+          </div>
 
-      {message && (
-        <div id="profile-feedback-message" className={`p-3.5 mb-5 rounded-xl border flex items-center gap-2.5 text-xs ${
-          message.type === 'success' 
-            ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
-            : 'bg-red-500/10 border-red-500/20 text-red-400'
-        }`}>
-          {message.type === 'success' ? <Check size={16} /> : <AlertCircle size={16} />}
-          <span>{message.text}</span>
+          {/* User profile banner */}
+          <div className="bg-slate-800/40 border border-slate-800 rounded-2xl p-4 flex items-center gap-3.5 text-left">
+            <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center text-white font-extrabold text-base shadow-md uppercase">
+              {displayName ? displayName.charAt(0) : (user.email ? user.email.charAt(0) : 'U')}
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="text-sm font-bold text-zinc-100 truncate">{displayName || 'Anonymous User'}</h3>
+              <p className="text-[11px] text-zinc-500 font-mono truncate">{user.email}</p>
+            </div>
+            <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] px-2.5 py-1 rounded-full font-bold flex items-center gap-1 shrink-0">
+              <Shield size={10} />
+              <span>Verified</span>
+            </div>
+          </div>
+
+          {/* Navigation Links List */}
+          <div className="space-y-3.5 text-left">
+            {/* Personal Info */}
+            <button
+              id="nav-personal-info"
+              onClick={() => { setActiveSubPage('personal'); setMessage(null); }}
+              className="w-full bg-slate-800/50 border border-slate-800/60 hover:border-slate-700 hover:bg-slate-800/90 p-4 rounded-2xl flex items-center gap-4 transition-all cursor-pointer group"
+            >
+              <div className="w-10 h-10 rounded-xl bg-slate-900 border border-slate-700/50 flex items-center justify-center text-emerald-400 shrink-0 group-hover:bg-emerald-500/10 group-hover:text-emerald-300 transition-all">
+                <User size={18} />
+              </div>
+              <div className="flex-1 min-w-0 text-left">
+                <h4 className="text-sm font-bold text-zinc-200 group-hover:text-white transition-colors">Personal Details</h4>
+                <p className="text-[11px] text-zinc-500 mt-0.5 leading-tight">Display name and basic account settings</p>
+              </div>
+              <ChevronRight size={16} className="text-zinc-500 group-hover:text-zinc-300 transition-colors shrink-0" />
+            </button>
+
+            {/* Referral Program */}
+            <button
+              id="nav-referral-program"
+              onClick={() => { setActiveSubPage('referral'); setMessage(null); }}
+              className="w-full bg-slate-800/50 border border-slate-800/60 hover:border-slate-700 hover:bg-slate-800/90 p-4 rounded-2xl flex items-center gap-4 transition-all cursor-pointer group"
+            >
+              <div className="w-10 h-10 rounded-xl bg-slate-900 border border-slate-700/50 flex items-center justify-center text-emerald-400 shrink-0 group-hover:bg-emerald-500/10 group-hover:text-emerald-300 transition-all">
+                <Gift size={18} />
+              </div>
+              <div className="flex-1 min-w-0 text-left">
+                <h4 className="text-sm font-bold text-zinc-200 group-hover:text-white transition-colors">Referral Program</h4>
+                <p className="text-[11px] text-zinc-500 mt-0.5 leading-tight">Invite friends and track your referral list</p>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-900 border border-slate-700/60 text-zinc-400">
+                  {referredUsers.length}
+                </span>
+                <ChevronRight size={16} className="text-zinc-500 group-hover:text-zinc-300 transition-colors" />
+              </div>
+            </button>
+
+            {/* Wallet PIN */}
+            <button
+              id="nav-wallet-pin"
+              onClick={() => { setActiveSubPage('pin'); setPinMessage(null); }}
+              className="w-full bg-slate-800/50 border border-slate-800/60 hover:border-slate-700 hover:bg-slate-800/90 p-4 rounded-2xl flex items-center gap-4 transition-all cursor-pointer group"
+            >
+              <div className="w-10 h-10 rounded-xl bg-slate-900 border border-slate-700/50 flex items-center justify-center text-emerald-400 shrink-0 group-hover:bg-emerald-500/10 group-hover:text-emerald-300 transition-all">
+                <Lock size={18} />
+              </div>
+              <div className="flex-1 min-w-0 text-left">
+                <h4 className="text-sm font-bold text-zinc-200 group-hover:text-white transition-colors">Wallet Security PIN</h4>
+                <p className="text-[11px] text-zinc-500 mt-0.5 leading-tight">4-digit security PIN for secure cashouts</p>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                {profile?.walletPassword ? (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+                    Active
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400">
+                    Not Set
+                  </span>
+                )}
+                <ChevronRight size={16} className="text-zinc-500 group-hover:text-zinc-300 transition-colors" />
+              </div>
+            </button>
+
+            {/* Google Authenticator */}
+            <button
+              id="nav-google-authenticator"
+              onClick={() => { setActiveSubPage('2fa'); }}
+              className="w-full bg-slate-800/50 border border-slate-800/60 hover:border-slate-700 hover:bg-slate-800/90 p-4 rounded-2xl flex items-center gap-4 transition-all cursor-pointer group"
+            >
+              <div className="w-10 h-10 rounded-xl bg-slate-900 border border-slate-700/50 flex items-center justify-center text-emerald-400 shrink-0 group-hover:bg-emerald-500/10 group-hover:text-emerald-300 transition-all">
+                <Smartphone size={18} />
+              </div>
+              <div className="flex-1 min-w-0 text-left">
+                <h4 className="text-sm font-bold text-zinc-200 group-hover:text-white transition-colors">Google Authenticator</h4>
+                <p className="text-[11px] text-zinc-500 mt-0.5 leading-tight">Add dynamic passcode 2FA protection</p>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                {profile?.twoFactorEnabled ? (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+                    Active
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-900 border border-slate-700/60 text-zinc-400">
+                    Disabled
+                  </span>
+                )}
+                <ChevronRight size={16} className="text-zinc-500 group-hover:text-zinc-300 transition-colors" />
+              </div>
+            </button>
+          </div>
         </div>
       )}
 
-      {/* Profile Form */}
-      <form onSubmit={handleSave} className="space-y-5">
-        
-        {/* Read-Only Account Details */}
-        <div className="bg-slate-800/60 border border-slate-700 rounded-xl p-4 space-y-2.5 text-left">
-          <div className="flex justify-between items-center text-xs">
-            <span className="text-zinc-500">Account Email</span>
-            <span className="font-mono text-zinc-300 font-medium">{user.email}</span>
-          </div>
-          <div className="flex justify-between items-center text-xs border-t border-slate-700 pt-2.5">
-            <span className="text-zinc-500">Unique CODE</span>
-            <span className="font-mono text-emerald-400 font-bold select-all tracking-wider text-sm">{(profile as any)?.uniqueCode || '-----'}</span>
-          </div>
-          <div className="flex justify-between items-center text-xs border-t border-slate-700 pt-2.5">
-            <span className="text-zinc-500">Wallet Status</span>
-            <span className="font-semibold flex items-center gap-1 text-emerald-400">
-              <Shield size={12} />
-              {profile?.withdrawalEnabled ? 'Active / Approved' : 'Suspended by Admin'}
-            </span>
-          </div>
-        </div>
-
-        {/* Display Name Input */}
-        <div className="space-y-1.5 text-left">
-          <label className="text-xs font-semibold text-zinc-400 flex items-center gap-1.5">
-            <User size={14} className="text-emerald-400" />
-            Display Name
-          </label>
-          <input
-            id="profile-display-name"
-            type="text"
-            required
-            placeholder="Enter display name"
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-            className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 placeholder-zinc-600 text-white"
-          />
-        </div>
-
-        {/* Submit Button */}
-        <button
-          id="profile-save-btn"
-          type="submit"
-          disabled={saving}
-          className="w-full flex items-center justify-center gap-2 py-3 bg-gradient-to-r from-emerald-600 to-teal-500 text-white hover:from-emerald-500 hover:to-teal-400 disabled:bg-slate-800 disabled:text-zinc-500 rounded-xl text-sm font-bold transition-all shadow-md mt-6 cursor-pointer"
-        >
-          {saving ? (
-            <>
-              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-              <span>Saving changes...</span>
-            </>
-          ) : (
-            <>
-              <Sparkles size={16} />
-              <span>Update Security Profile</span>
-            </>
-          )}
-        </button>
-
-      </form>
-
-      {/* Referral Program Section */}
-      <div id="referral-program-section" className="mt-8 pt-6 border-t border-slate-800 space-y-4 text-left">
-        <div className="flex items-center gap-2">
-          <Gift className="text-emerald-400" size={18} />
-          <h3 className="text-sm font-bold text-zinc-100">Referral Program</h3>
-        </div>
-
-        <p className="text-xs text-zinc-400 leading-relaxed">
-          Invite your friends to join LOLO Crypto using your unique referral code or link and earn together!
-        </p>
-
-        <div className="bg-slate-800/40 border border-slate-700 rounded-2xl p-4 space-y-3.5">
-          {/* Referral Code Box */}
-          <div className="flex justify-between items-center text-xs">
-            <span className="text-zinc-500">Your Referral Code</span>
-            <span className="font-mono text-emerald-400 font-bold tracking-wider text-sm">
-              {(profile as any)?.uniqueCode || '-----'}
-            </span>
-          </div>
-
-          {/* Referral Link Box */}
-          <div className="space-y-1.5 border-t border-slate-700/50 pt-3">
-            <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">
-              Your Shareable Referral Link
-            </label>
-            <div className="flex gap-2 items-center bg-slate-900 border border-slate-700/60 p-2.5 rounded-xl font-mono text-xs">
-              <span className="text-zinc-300 font-medium select-all truncate flex-1">
-                https://lolo-navy.vercel.app/?ref={(profile as any)?.uniqueCode || ''}
-              </span>
-              <button
-                type="button"
-                onClick={handleCopyReferral}
-                className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-750 text-zinc-400 hover:text-white transition-colors cursor-pointer shrink-0"
-                title="Copy Referral Link"
-              >
-                {copiedReferral ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
-              </button>
-            </div>
-            {copiedReferral && (
-              <span className="text-[10px] text-emerald-400 flex items-center gap-1.5 mt-1 font-semibold">
-                <Check size={10} /> Copied to clipboard! Share it with your friends.
-              </span>
-            )}
-          </div>
-
-          {/* Referred Users List */}
-          <div className="space-y-2 border-t border-slate-700/50 pt-3">
-            <div className="flex justify-between items-center text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
-              <span>Your Referred Friends ({referredUsers.length})</span>
-              {loadingReferred && <span className="text-zinc-500 animate-pulse font-normal lowercase">fetching...</span>}
-            </div>
-
-            {loadingReferred ? (
-              <div className="text-center py-4 text-xs text-zinc-500">
-                Loading referred users...
-              </div>
-            ) : referredUsers.length === 0 ? (
-              <div className="text-center py-5 bg-slate-900/30 border border-dashed border-slate-800 rounded-xl text-xs text-zinc-500">
-                No friends have joined using your code yet.
-              </div>
-            ) : (
-              <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-                {referredUsers.map((refUser) => {
-                  // Obfuscate email for privacy (e.g. jor***@gmail.com)
-                  const parts = refUser.email.split('@');
-                  let obfuscatedEmail = refUser.email;
-                  if (parts.length === 2) {
-                    const namePart = parts[0];
-                    const domainPart = parts[1];
-                    if (namePart.length > 2) {
-                      obfuscatedEmail = `${namePart.substring(0, 2)}***@${domainPart}`;
-                    } else {
-                      obfuscatedEmail = `***@${domainPart}`;
-                    }
-                  }
-
-                  return (
-                    <div 
-                      key={refUser.uid} 
-                      className="flex items-center justify-between bg-slate-900/50 border border-slate-800/80 p-2.5 rounded-xl text-xs hover:border-slate-700/50 transition-colors"
-                    >
-                      <div className="space-y-0.5 text-left">
-                        <p className="font-bold text-zinc-200 truncate max-w-[150px]">
-                          {refUser.displayName}
-                        </p>
-                        <p className="text-[10px] text-zinc-500 font-mono">
-                          {obfuscatedEmail}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-[10px] text-zinc-500 font-mono">
-                          {refUser.createdAt.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-                        </p>
-                        <p className="text-[9px] text-emerald-400 font-semibold uppercase tracking-wider">
-                          Active
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Wallet PIN Section */}
-      <div id="wallet-pin-security-card" className="mt-8 pt-6 border-t border-slate-800 space-y-4 text-left">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Lock className="text-emerald-400" size={18} />
-            <h3 className="text-sm font-bold text-zinc-100">Wallet Security PIN</h3>
-          </div>
-          {profile?.walletPassword ? (
-            <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full font-bold flex items-center gap-1 uppercase tracking-wider">
-              <CheckCircle2 size={10} /> Configured
-            </span>
-          ) : (
-            <span className="text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider animate-pulse">
-              Not Set
-            </span>
-          )}
-        </div>
-
-        <p className="text-xs text-zinc-400 leading-relaxed">
-          The 4-digit security PIN is required to authorize all P2P trades, token deposits, and secure cashouts.
-        </p>
-
-        {pinMessage && (
-          <div id="pin-feedback-message" className={`p-3 rounded-xl border flex items-center gap-2.5 text-xs ${
-            pinMessage.type === 'success' 
-              ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
-              : 'bg-red-500/10 border-red-500/20 text-red-400'
-          }`}>
-            {pinMessage.type === 'success' ? <Check size={14} /> : <AlertCircle size={14} />}
-            <span>{pinMessage.text}</span>
-          </div>
-        )}
-
-        {profile?.walletPassword && !isChangingPin ? (
-          <div className="bg-slate-800/40 border border-emerald-500/5 rounded-2xl p-4 flex flex-col sm:flex-row justify-between items-center gap-3">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-400">
-                <Lock size={14} />
-              </div>
-              <div className="text-left">
-                <p className="text-xs font-bold text-zinc-200">Security PIN Active</p>
-                <p className="text-[10px] text-zinc-500">Your transaction PIN is enabled and protecting your wallet.</p>
-              </div>
-            </div>
-            <button
-              id="change-pin-toggle-btn"
-              type="button"
-              onClick={() => {
-                setIsChangingPin(true);
-                setNewPin('');
-                setConfirmPin('');
-                setPin2faCode('');
-                setPinMessage(null);
-              }}
-              className="px-4 py-2 bg-slate-800 border border-slate-700 hover:border-slate-600 text-zinc-300 hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer"
+      {/* Subpage: Personal details */}
+      {activeSubPage === 'personal' && (
+        <div className="space-y-6">
+          {/* Header */}
+          <div className="flex items-center gap-3">
+            <button 
+              id="personal-back-btn"
+              onClick={() => { setActiveSubPage('menu'); setMessage(null); }}
+              className="p-2 rounded-full bg-slate-800 border border-slate-700 text-zinc-400 hover:text-white transition-colors cursor-pointer"
             >
-              Change Security PIN
+              <ArrowLeft size={18} />
             </button>
+            <div className="text-left">
+              <h2 className="text-xl font-bold tracking-tight">Personal Details</h2>
+              <p className="text-xs text-zinc-500">View and edit display configuration</p>
+            </div>
           </div>
-        ) : (
-          <form onSubmit={handleSavePin} className="bg-slate-800/50 border border-slate-700/60 rounded-2xl p-4 sm:p-5 space-y-4 text-left">
-            <h4 className="text-xs font-bold text-zinc-200">
-              {profile?.walletPassword ? 'Change Security PIN' : 'Configure New Wallet PIN'}
-            </h4>
+
+          {message && (
+            <div id="profile-feedback-message" className={`p-3.5 rounded-xl border flex items-center gap-2.5 text-xs text-left ${
+              message.type === 'success' 
+                ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
+                : 'bg-red-500/10 border-red-500/20 text-red-400'
+            }`}>
+              {message.type === 'success' ? <Check size={16} /> : <AlertCircle size={16} />}
+              <span>{message.text}</span>
+            </div>
+          )}
+
+          {/* Profile Form */}
+          <form onSubmit={handleSave} className="space-y-5">
             
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">New 4-Digit PIN</label>
-                <input
-                  type="password"
-                  required
-                  maxLength={4}
-                  placeholder="••••"
-                  value={newPin}
-                  onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ''))}
-                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-center font-mono text-sm tracking-widest text-white focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
-                />
+            {/* Read-Only Account Details */}
+            <div className="bg-slate-800/60 border border-slate-700 rounded-xl p-4 space-y-2.5 text-left">
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-zinc-500">Account Email</span>
+                <span className="font-mono text-zinc-300 font-medium">{user.email}</span>
               </div>
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Confirm PIN</label>
-                <input
-                  type="password"
-                  required
-                  maxLength={4}
-                  placeholder="••••"
-                  value={confirmPin}
-                  onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, ''))}
-                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-center font-mono text-sm tracking-widest text-white focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
-                />
+              <div className="flex justify-between items-center text-xs border-t border-slate-700 pt-2.5">
+                <span className="text-zinc-500">Unique CODE</span>
+                <span className="font-mono text-emerald-400 font-bold select-all tracking-wider text-sm">{(profile as any)?.uniqueCode || '-----'}</span>
+              </div>
+              <div className="flex justify-between items-center text-xs border-t border-slate-700 pt-2.5">
+                <span className="text-zinc-500">Wallet Status</span>
+                <span className="font-semibold flex items-center gap-1 text-emerald-400">
+                  <Shield size={12} />
+                  {profile?.withdrawalEnabled ? 'Active / Approved' : 'Suspended by Admin'}
+                </span>
               </div>
             </div>
 
-            {/* Google Authenticator Input: Required if they are changing an existing PIN and have 2FA active */}
-            {profile?.walletPassword && profile?.twoFactorEnabled && (
-              <div className="space-y-1.5 pt-2 border-t border-slate-700/50">
-                <label className="text-xs font-semibold text-zinc-400 flex items-center gap-1.5">
-                  <Smartphone size={13} className="text-emerald-400" />
-                  <span>Google Authenticator (2FA) Code</span>
-                  <span className="text-[9px] text-emerald-400 font-mono bg-emerald-950/40 px-1.5 py-0.5 rounded border border-emerald-500/10">Required</span>
+            {/* Display Name Input */}
+            <div className="space-y-1.5 text-left">
+              <label className="text-xs font-semibold text-zinc-400 flex items-center gap-1.5">
+                <User size={14} className="text-emerald-400" />
+                Display Name
+              </label>
+              <input
+                id="profile-display-name"
+                type="text"
+                required
+                placeholder="Enter display name"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 placeholder-zinc-600 text-white"
+              />
+            </div>
+
+            {/* Submit Button */}
+            <button
+              id="profile-save-btn"
+              type="submit"
+              disabled={saving}
+              className="w-full flex items-center justify-center gap-2 py-3 bg-gradient-to-r from-emerald-600 to-teal-500 text-white hover:from-emerald-500 hover:to-teal-400 disabled:bg-slate-800 disabled:text-zinc-500 rounded-xl text-sm font-bold transition-all shadow-md mt-6 cursor-pointer"
+            >
+              {saving ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  <span>Saving changes...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles size={16} />
+                  <span>Update Security Profile</span>
+                </>
+              )}
+            </button>
+          </form>
+        </div>
+      )}
+
+      {/* Subpage: Referral Program */}
+      {activeSubPage === 'referral' && (
+        <div className="space-y-6">
+          {/* Header */}
+          <div className="flex items-center gap-3">
+            <button 
+              id="referral-back-btn"
+              onClick={() => { setActiveSubPage('menu'); }}
+              className="p-2 rounded-full bg-slate-800 border border-slate-700 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+            >
+              <ArrowLeft size={18} />
+            </button>
+            <div className="text-left">
+              <h2 className="text-xl font-bold tracking-tight">Referral Program</h2>
+              <p className="text-xs text-zinc-500">Invite friends and track achievements</p>
+            </div>
+          </div>
+
+          <div id="referral-program-section" className="space-y-4 text-left">
+            <p className="text-xs text-zinc-400 leading-relaxed">
+              Invite your friends to join LOLO Crypto using your unique referral code or link and earn rewards together!
+            </p>
+
+            <div className="bg-slate-800/40 border border-slate-700 rounded-2xl p-4 space-y-4">
+              {/* Referral Code Box */}
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-zinc-500">Your Referral Code</span>
+                <span className="font-mono text-emerald-400 font-bold tracking-wider text-sm">
+                  {(profile as any)?.uniqueCode || '-----'}
+                </span>
+              </div>
+
+              {/* Referral Link Box */}
+              <div className="space-y-1.5 border-t border-slate-700/50 pt-3">
+                <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">
+                  Your Shareable Referral Link
                 </label>
-                <input
-                  type="text"
-                  required
-                  maxLength={6}
-                  placeholder="000000"
-                  value={pin2faCode}
-                  onChange={(e) => setPin2faCode(e.target.value.replace(/\D/g, ''))}
-                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-center font-mono text-sm tracking-widest text-white focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
-                />
-                <p className="text-[10px] text-zinc-500 leading-tight">Enter the 6-digit verification code from your Google Authenticator app to authorize updating your PIN.</p>
+                <div className="flex gap-2 items-center bg-slate-900 border border-slate-700/60 p-2.5 rounded-xl font-mono text-xs">
+                  <span className="text-zinc-300 font-medium select-all truncate flex-1">
+                    https://lolo-navy.vercel.app/?ref={(profile as any)?.uniqueCode || ''}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleCopyReferral}
+                    className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-750 text-zinc-400 hover:text-white transition-colors cursor-pointer shrink-0"
+                    title="Copy Referral Link"
+                  >
+                    {copiedReferral ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
+                  </button>
+                </div>
+                {copiedReferral && (
+                  <span className="text-[10px] text-emerald-400 flex items-center gap-1.5 mt-1 font-semibold">
+                    <Check size={10} /> Copied to clipboard! Share it with your friends.
+                  </span>
+                )}
+              </div>
+
+              {/* Referred Users List */}
+              <div className="space-y-2 border-t border-slate-700/50 pt-3">
+                <div className="flex justify-between items-center text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                  <span>Your Referred Friends ({referredUsers.length})</span>
+                  {loadingReferred && <span className="text-zinc-500 animate-pulse font-normal lowercase">fetching...</span>}
+                </div>
+
+                {loadingReferred ? (
+                  <div className="text-center py-4 text-xs text-zinc-500">
+                    Loading referred users...
+                  </div>
+                ) : referredUsers.length === 0 ? (
+                  <div className="text-center py-6 bg-slate-900/30 border border-dashed border-slate-800 rounded-xl text-xs text-zinc-500">
+                    No friends have joined using your code yet.
+                  </div>
+                ) : (
+                  <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+                    {referredUsers.map((refUser) => {
+                      const parts = refUser.email.split('@');
+                      let obfuscatedEmail = refUser.email;
+                      if (parts.length === 2) {
+                        const namePart = parts[0];
+                        const domainPart = parts[1];
+                        if (namePart.length > 2) {
+                          obfuscatedEmail = `${namePart.substring(0, 2)}***@${domainPart}`;
+                        } else {
+                          obfuscatedEmail = `***@${domainPart}`;
+                        }
+                      }
+
+                      return (
+                        <div 
+                          key={refUser.uid} 
+                          className="flex items-center justify-between bg-slate-900/50 border border-slate-800/80 p-2.5 rounded-xl text-xs hover:border-slate-700/50 transition-colors"
+                        >
+                          <div className="space-y-0.5 text-left">
+                            <p className="font-bold text-zinc-200 truncate max-w-[150px]">
+                              {refUser.displayName}
+                            </p>
+                            <p className="text-[10px] text-zinc-500 font-mono">
+                              {obfuscatedEmail}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-[10px] text-zinc-500 font-mono">
+                              {refUser.createdAt.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                            </p>
+                            <p className="text-[9px] text-emerald-400 font-semibold uppercase tracking-wider">
+                              Active
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Subpage: Wallet Security PIN */}
+      {activeSubPage === 'pin' && (
+        <div className="space-y-6">
+          {/* Header */}
+          <div className="flex items-center gap-3">
+            <button 
+              id="pin-back-btn"
+              onClick={() => { setActiveSubPage('menu'); setPinMessage(null); }}
+              className="p-2 rounded-full bg-slate-800 border border-slate-700 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+            >
+              <ArrowLeft size={18} />
+            </button>
+            <div className="text-left">
+              <h2 className="text-xl font-bold tracking-tight">Security PIN</h2>
+              <p className="text-xs text-zinc-500">Protect your wallet transactions</p>
+            </div>
+          </div>
+
+          <div id="wallet-pin-security-card" className="space-y-4 text-left">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Lock className="text-emerald-400" size={18} />
+                <h3 className="text-sm font-bold text-zinc-100 font-sans">Wallet Security PIN</h3>
+              </div>
+              {profile?.walletPassword ? (
+                <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full font-bold flex items-center gap-1 uppercase tracking-wider">
+                  <CheckCircle2 size={10} /> Configured
+                </span>
+              ) : (
+                <span className="text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider animate-pulse">
+                  Not Set
+                </span>
+              )}
+            </div>
+
+            <p className="text-xs text-zinc-400 leading-relaxed">
+              The 4-digit security PIN is required to authorize all P2P trades, token deposits, and secure cashouts.
+            </p>
+
+            {pinMessage && (
+              <div id="pin-feedback-message" className={`p-3 rounded-xl border flex items-center gap-2.5 text-xs ${
+                pinMessage.type === 'success' 
+                  ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
+                  : 'bg-red-500/10 border-red-500/20 text-red-400'
+              }`}>
+                {pinMessage.type === 'success' ? <Check size={14} /> : <AlertCircle size={14} />}
+                <span>{pinMessage.text}</span>
               </div>
             )}
 
-            <div className="flex gap-2 pt-2">
-              <button
-                id="submit-pin-btn"
-                type="submit"
-                disabled={pinSaving}
-                className="flex-1 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 disabled:bg-slate-800 disabled:text-zinc-500 text-white font-bold rounded-xl text-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5"
-              >
-                {pinSaving ? (
-                  <>
-                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    <span>Saving PIN...</span>
-                  </>
-                ) : (
-                  <span>Save PIN Code</span>
-                )}
-              </button>
-              {profile?.walletPassword && (
+            {profile?.walletPassword && !isChangingPin ? (
+              <div className="bg-slate-800/40 border border-slate-700 rounded-2xl p-4 flex flex-col gap-4 text-left">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-400">
+                    <Lock size={14} />
+                  </div>
+                  <div className="text-left">
+                    <p className="text-xs font-bold text-zinc-200">Security PIN Active</p>
+                    <p className="text-[10px] text-zinc-500 mt-0.5">Your transaction PIN is enabled and protecting your wallet.</p>
+                  </div>
+                </div>
                 <button
-                  id="cancel-pin-edit-btn"
+                  id="change-pin-toggle-btn"
                   type="button"
                   onClick={() => {
-                    setIsChangingPin(false);
+                    setIsChangingPin(true);
                     setNewPin('');
                     setConfirmPin('');
                     setPin2faCode('');
                     setPinMessage(null);
                   }}
-                  className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-zinc-200 font-bold rounded-xl text-xs transition-colors cursor-pointer"
+                  className="w-full py-2.5 bg-slate-800 border border-slate-700 hover:border-slate-600 text-zinc-300 hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer text-center"
                 >
-                  Cancel
+                  Change Security PIN
                 </button>
-              )}
-            </div>
-          </form>
-        )}
-      </div>
-
-      {/* Two-Factor Authentication (Google Authenticator) */}
-      <div id="two-factor-auth-card" className="mt-8 pt-6 border-t border-slate-800 space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Smartphone className="text-emerald-400" size={18} />
-            <h3 className="text-sm font-bold text-zinc-100">Google Authenticator (2FA)</h3>
-          </div>
-          {profile?.twoFactorEnabled ? (
-            <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full font-bold flex items-center gap-1 uppercase tracking-wider">
-              <CheckCircle2 size={10} /> Active
-            </span>
-          ) : (
-            <span className="text-[10px] bg-zinc-500/10 text-zinc-400 border border-zinc-750 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
-              Disabled
-            </span>
-          )}
-        </div>
-
-        <p className="text-xs text-zinc-405 leading-relaxed">
-          Google Authenticator secures your funds by requiring a 6-digit dynamic passcode when making withdrawals or signing in to your wallet.
-        </p>
-
-        {profile?.twoFactorEnabled ? (
-          <div className="bg-slate-800/40 border border-emerald-500/10 rounded-2xl p-4 space-y-4">
-            <div className="flex items-start gap-3">
-              <CheckCircle2 size={18} className="text-emerald-400 shrink-0 mt-0.5" />
-              <div>
-                <p className="text-xs font-bold text-zinc-200">Your wallet is secured with Two-Factor Authentication.</p>
-                <p className="text-[10px] text-zinc-500 mt-0.5">Any future withdrawals or sign-in requests will verify your temporary 6-digit passcode.</p>
               </div>
-            </div>
+            ) : (
+              <form onSubmit={handleSavePin} className="bg-slate-800/50 border border-slate-700/60 rounded-2xl p-4 sm:p-5 space-y-4 text-left">
+                <h4 className="text-xs font-bold text-zinc-200">
+                  {profile?.walletPassword ? 'Change Security PIN' : 'Configure New Wallet PIN'}
+                </h4>
+                
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">New 4-Digit PIN</label>
+                    <input
+                      type="password"
+                      required
+                      maxLength={4}
+                      placeholder="••••"
+                      value={newPin}
+                      onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ''))}
+                      className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-center font-mono text-sm tracking-widest text-white focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Confirm PIN</label>
+                    <input
+                      type="password"
+                      required
+                      maxLength={4}
+                      placeholder="••••"
+                      value={confirmPin}
+                      onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, ''))}
+                      className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-center font-mono text-sm tracking-widest text-white focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                    />
+                  </div>
+                </div>
 
-            {showDeactivateInput ? (
-              <div className="space-y-3 pt-2 border-t border-slate-700/50">
-                {deactivateError && (
-                  <div className="p-2 bg-red-500/10 border border-red-500/20 text-red-400 rounded-lg text-[11px] flex items-start gap-2">
-                    <AlertCircle size={14} className="mt-0.5 shrink-0" />
-                    <span>{deactivateError}</span>
+                {/* Google Authenticator Input: Required if they are changing an existing PIN and have 2FA active */}
+                {profile?.walletPassword && profile?.twoFactorEnabled && (
+                  <div className="space-y-1.5 pt-2 border-t border-slate-700/50">
+                    <label className="text-xs font-semibold text-zinc-400 flex items-center gap-1.5">
+                      <Smartphone size={13} className="text-emerald-400" />
+                      <span>Google Authenticator (2FA) Code</span>
+                      <span className="text-[9px] text-emerald-400 font-mono bg-emerald-950/40 px-1.5 py-0.5 rounded border border-emerald-500/10">Required</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      maxLength={6}
+                      placeholder="000000"
+                      value={pin2faCode}
+                      onChange={(e) => setPin2faCode(e.target.value.replace(/\D/g, ''))}
+                      className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-center font-mono text-sm tracking-widest text-white focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                    />
+                    <p className="text-[10px] text-zinc-500 leading-tight">Enter the 6-digit verification code from your Google Authenticator app to authorize updating your PIN.</p>
                   </div>
                 )}
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Enter 6-digit Authenticator Code</label>
-                  <input
-                    type="text"
-                    maxLength={6}
-                    placeholder="000000"
-                    value={deactivateCode}
-                    onChange={(e) => setDeactivateCode(e.target.value.replace(/\D/g, ''))}
-                    className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-center font-mono text-sm tracking-widest text-white focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
-                  />
-                </div>
-                <div className="flex gap-2">
+
+                <div className="flex gap-2 pt-2">
                   <button
-                    type="button"
-                    onClick={handleDisable2fa}
-                    disabled={deactivating}
-                    className="flex-1 py-2 bg-red-600 hover:bg-red-500 disabled:bg-slate-800 disabled:text-zinc-500 text-white font-bold rounded-xl text-xs transition-colors cursor-pointer"
+                    id="submit-pin-btn"
+                    type="submit"
+                    disabled={pinSaving}
+                    className="flex-1 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 disabled:bg-slate-800 disabled:text-zinc-500 text-white font-bold rounded-xl text-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5"
                   >
-                    {deactivating ? 'Deactivating...' : 'Confirm Deactivate'}
+                    {pinSaving ? (
+                      <>
+                        <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        <span>Saving PIN...</span>
+                      </>
+                    ) : (
+                      <span>Save PIN Code</span>
+                    )}
                   </button>
+                  {profile?.walletPassword && (
+                    <button
+                      id="cancel-pin-edit-btn"
+                      type="button"
+                      onClick={() => {
+                        setIsChangingPin(false);
+                        setNewPin('');
+                        setConfirmPin('');
+                        setPin2faCode('');
+                        setPinMessage(null);
+                      }}
+                      className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-zinc-200 font-bold rounded-xl text-xs transition-colors cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                  )}
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Subpage: Google Authenticator 2FA */}
+      {activeSubPage === '2fa' && (
+        <div className="space-y-6">
+          {/* Header */}
+          <div className="flex items-center gap-3">
+            <button 
+              id="2fa-back-btn"
+              onClick={() => { setActiveSubPage('menu'); }}
+              className="p-2 rounded-full bg-slate-800 border border-slate-700 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+            >
+              <ArrowLeft size={18} />
+            </button>
+            <div className="text-left">
+              <h2 className="text-xl font-bold tracking-tight">Authenticator</h2>
+              <p className="text-xs text-zinc-500">Configure Two-Factor security</p>
+            </div>
+          </div>
+
+          <div id="two-factor-auth-card" className="space-y-4 text-left">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Smartphone className="text-emerald-400" size={18} />
+                <h3 className="text-sm font-bold text-zinc-100 font-sans">Google Authenticator (2FA)</h3>
+              </div>
+              {profile?.twoFactorEnabled ? (
+                <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full font-bold flex items-center gap-1 uppercase tracking-wider">
+                  <CheckCircle2 size={10} /> Active
+                </span>
+              ) : (
+                <span className="text-[10px] bg-zinc-500/10 text-zinc-400 border border-zinc-750 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
+                  Disabled
+                </span>
+              )}
+            </div>
+
+            <p className="text-xs text-zinc-400 leading-relaxed">
+              Google Authenticator secures your funds by requiring a 6-digit dynamic passcode when making withdrawals or signing in to your wallet.
+            </p>
+
+            {profile?.twoFactorEnabled ? (
+              <div className="bg-slate-800/40 border border-emerald-500/10 rounded-2xl p-4 space-y-4">
+                <div className="flex items-start gap-3 text-left">
+                  <CheckCircle2 size={18} className="text-emerald-400 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-xs font-bold text-zinc-200">Your wallet is secured with Two-Factor Authentication.</p>
+                    <p className="text-[10px] text-zinc-500 mt-0.5">Any future withdrawals or sign-in requests will verify your temporary 6-digit passcode.</p>
+                  </div>
+                </div>
+
+                {showDeactivateInput ? (
+                  <div className="space-y-3 pt-2 border-t border-slate-700/50">
+                    {deactivateError && (
+                      <div className="p-2 bg-red-500/10 border border-red-500/20 text-red-400 rounded-lg text-[11px] flex items-start gap-2">
+                        <AlertCircle size={14} className="mt-0.5 shrink-0" />
+                        <span>{deactivateError}</span>
+                      </div>
+                    )}
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Enter 6-digit Authenticator Code</label>
+                      <input
+                        type="text"
+                        maxLength={6}
+                        placeholder="000000"
+                        value={deactivateCode}
+                        onChange={(e) => setDeactivateCode(e.target.value.replace(/\D/g, ''))}
+                        className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-center font-mono text-sm tracking-widest text-white focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={handleDisable2fa}
+                        disabled={deactivating}
+                        className="flex-1 py-2 bg-red-600 hover:bg-red-500 disabled:bg-slate-800 disabled:text-zinc-500 text-white font-bold rounded-xl text-xs transition-colors cursor-pointer"
+                      >
+                        {deactivating ? 'Deactivating...' : 'Confirm Deactivate'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setShowDeactivateInput(false); setDeactivateError(null); }}
+                        className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-zinc-200 font-bold rounded-xl text-xs transition-colors cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
                   <button
                     type="button"
-                    onClick={() => { setShowDeactivateInput(false); setDeactivateError(null); }}
-                    className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-zinc-200 font-bold rounded-xl text-xs transition-colors cursor-pointer"
+                    onClick={() => setShowDeactivateInput(true)}
+                    className="w-full py-2.5 bg-slate-800 hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/20 text-zinc-400 border border-slate-700 font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <Power size={13} />
+                    Disable Google Authenticator (2FA)
+                  </button>
+                )}
+              </div>
+            ) : !is2faSetupOpen ? (
+              <button
+                type="button"
+                onClick={generate2faSecret}
+                className="w-full py-3 bg-slate-800 border border-slate-700 hover:border-slate-650 hover:bg-slate-750/80 text-zinc-200 hover:text-white font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <QrCode size={15} className="text-emerald-400" />
+                <span>Enable Google Authenticator (2FA)</span>
+              </button>
+            ) : (
+              <div className="bg-slate-800 border border-emerald-500/20 rounded-2xl p-4 sm:p-5 space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-zinc-200 flex items-center gap-1.5">
+                    <QrCode size={14} className="text-emerald-400" />
+                    Setup Two-Factor Security
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setIs2faSetupOpen(false)}
+                    className="text-[10px] text-zinc-500 hover:text-zinc-300 font-bold uppercase tracking-wider cursor-pointer"
                   >
                     Cancel
                   </button>
                 </div>
+
+                {verificationError && (
+                  <div className="p-2.5 bg-red-500/10 border border-red-500/20 text-red-400 rounded-lg text-[11px] flex items-start gap-2">
+                    <AlertCircle size={14} className="mt-0.5 shrink-0" />
+                    <span>{verificationError}</span>
+                  </div>
+                )}
+
+                {/* Step 1: Scan QR */}
+                <div className="space-y-2">
+                  <span className="text-[10px] font-black text-zinc-500 uppercase tracking-wider block">1. Scan Google Authenticator QR Code</span>
+                  <div className="flex justify-center p-3 bg-white rounded-xl max-w-[170px] mx-auto shadow-inner">
+                    <img 
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(`otpauth://totp/LOLO:${profile?.email || user.email}?secret=${temp2faSecret}&issuer=LOLO%20Crypto%20Escrow`)}`}
+                      alt="2FA QR Code"
+                      className="w-36 h-36"
+                      referrerPolicy="no-referrer"
+                    />
+                  </div>
+                </div>
+
+                {/* Step 2: Copy Key */}
+                <div className="space-y-1.5">
+                  <span className="text-[10px] font-black text-zinc-500 uppercase tracking-wider block">2. Or copy the 16-character Secret Key</span>
+                  <div className="flex gap-1.5 items-center bg-slate-900 border border-slate-700/60 p-2.5 rounded-xl font-mono text-[11px]">
+                    <span className="text-emerald-400 font-bold tracking-wider select-all truncate flex-1">{temp2faSecret}</span>
+                    <button
+                      type="button"
+                      onClick={handleCopySecret}
+                      className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-750 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                      title="Copy Key"
+                    >
+                      {copied ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Step 3: Enter Verification Code */}
+                <div className="space-y-2 pt-2 border-t border-slate-700/50">
+                  <span className="text-[10px] font-black text-zinc-500 uppercase tracking-wider block">3. Enter verification code to enable</span>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      maxLength={6}
+                      placeholder="6-digit code"
+                      value={verificationCode}
+                      onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ''))}
+                      className="flex-1 px-3 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-center font-mono text-sm tracking-widest text-white focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleVerifyAndEnable2fa}
+                      className="px-4 bg-gradient-to-r from-emerald-600 to-teal-500 text-white hover:from-emerald-500 hover:to-teal-400 font-bold rounded-xl text-xs transition-all shadow-md cursor-pointer"
+                    >
+                      Verify & Activate
+                    </button>
+                  </div>
+                </div>
               </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setShowDeactivateInput(true)}
-                className="w-full py-2.5 bg-slate-800 hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/20 text-zinc-400 border border-slate-700 font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-              >
-                <Power size={13} />
-                Disable Google Authenticator (2FA)
-              </button>
             )}
           </div>
-        ) : !is2faSetupOpen ? (
-          <button
-            type="button"
-            onClick={generate2faSecret}
-            className="w-full py-3 bg-slate-800 border border-slate-700 hover:border-slate-650 hover:bg-slate-750/80 text-zinc-200 hover:text-white font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-2 cursor-pointer"
-          >
-            <QrCode size={15} className="text-emerald-400" />
-            <span>Enable Google Authenticator (2FA)</span>
-          </button>
-        ) : (
-          <div className="bg-slate-800 border border-emerald-500/20 rounded-2xl p-4 sm:p-5 space-y-4">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-zinc-200 flex items-center gap-1.5">
-                <QrCode size={14} className="text-emerald-400" />
-                Setup Two-Factor Security
-              </span>
-              <button
-                type="button"
-                onClick={() => setIs2faSetupOpen(false)}
-                className="text-[10px] text-zinc-500 hover:text-zinc-300 font-bold uppercase tracking-wider"
-              >
-                Cancel
-              </button>
-            </div>
-
-            {verificationError && (
-              <div className="p-2.5 bg-red-500/10 border border-red-500/20 text-red-400 rounded-lg text-[11px] flex items-start gap-2">
-                <AlertCircle size={14} className="mt-0.5 shrink-0" />
-                <span>{verificationError}</span>
-              </div>
-            )}
-
-            {/* Step 1: Scan QR */}
-            <div className="space-y-2">
-              <span className="text-[10px] font-black text-zinc-500 uppercase tracking-wider block">1. Scan Google Authenticator QR Code</span>
-              <div className="flex justify-center p-3 bg-white rounded-xl max-w-[170px] mx-auto shadow-inner">
-                <img 
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(`otpauth://totp/LOLO:${profile?.email || user.email}?secret=${temp2faSecret}&issuer=LOLO%20Crypto%20Escrow`)}`}
-                  alt="2FA QR Code"
-                  className="w-36 h-36"
-                  referrerPolicy="no-referrer"
-                />
-              </div>
-            </div>
-
-            {/* Step 2: Copy Key */}
-            <div className="space-y-1.5">
-              <span className="text-[10px] font-black text-zinc-500 uppercase tracking-wider block">2. Or copy the 16-character Secret Key</span>
-              <div className="flex gap-1.5 items-center bg-slate-900 border border-slate-700/60 p-2.5 rounded-xl font-mono text-[11px]">
-                <span className="text-emerald-400 font-bold tracking-wider select-all truncate flex-1">{temp2faSecret}</span>
-                <button
-                  type="button"
-                  onClick={handleCopySecret}
-                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-750 text-zinc-400 hover:text-white transition-colors cursor-pointer"
-                  title="Copy Key"
-                >
-                  {copied ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
-                </button>
-              </div>
-            </div>
-
-            {/* Step 3: Enter Verification Code */}
-            <div className="space-y-2 pt-2 border-t border-slate-700/50">
-              <span className="text-[10px] font-black text-zinc-500 uppercase tracking-wider block">3. Enter verification code to enable</span>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  maxLength={6}
-                  placeholder="6-digit code"
-                  value={verificationCode}
-                  onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ''))}
-                  className="flex-1 px-3 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-center font-mono text-sm tracking-widest text-white focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
-                />
-                <button
-                  type="button"
-                  onClick={handleVerifyAndEnable2fa}
-                  className="px-4 bg-gradient-to-r from-emerald-600 to-teal-500 text-white hover:from-emerald-500 hover:to-teal-400 font-bold rounded-xl text-xs transition-all shadow-md cursor-pointer"
-                >
-                  Verify & Activate
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
