@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { db } from '../firebase';
 import { doc, getDoc, onSnapshot, collection, query, where, getDocs, updateDoc, addDoc } from 'firebase/firestore';
 import { UserAccount, Transaction, CryptoPrice } from '../types';
@@ -347,6 +347,37 @@ export default function StandardUserDashboard({
   });
 
   const totalPortfolioValue = userAssets.reduce((sum, asset) => sum + asset.usdValue, 0);
+
+  // Calculate portfolio 24-hour change (increase or decrease) based on dynamic holdings & price shifts
+  const portfolioDailyChange = useMemo(() => {
+    let originalValue = 0;
+    let currentValue = 0;
+
+    userAssets.forEach(asset => {
+      const coinInfo = cryptoPrices.find(c => c.symbol === asset.symbol);
+      const change24h = coinInfo?.change24h || 0;
+      const currentPrice = coinInfo?.price || 1.00;
+      
+      // price_now = price_then * (1 + change24h/100) => price_then = price_now / (1 + change24h/100)
+      const divider = 1 + (change24h / 100);
+      const price24hAgo = divider > 0 ? (currentPrice / divider) : currentPrice;
+      
+      const valNow = asset.coinAmount * currentPrice;
+      const valThen = asset.coinAmount * price24hAgo;
+      
+      currentValue += valNow;
+      originalValue += valThen;
+    });
+
+    const diffUSD = currentValue - originalValue;
+    const pctChange = originalValue > 0 ? (diffUSD / originalValue) * 100 : 0;
+    
+    return {
+      diffUSD,
+      pctChange,
+      isPositive: diffUSD >= 0
+    };
+  }, [userAssets, cryptoPrices]);
 
   // Dynamic buy/sell real transaction execution
   const handleBuySellCrypto = async (symbol: string, type: 'BUY' | 'SELL', amountInput: string) => {
@@ -970,6 +1001,21 @@ export default function StandardUserDashboard({
                     <h2 className="text-3xl font-black tracking-tight font-mono mt-1">
                       $ {totalPortfolioValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </h2>
+                    <div className="flex items-center gap-1 mt-1.5 text-[11px] font-bold">
+                      {portfolioDailyChange.isPositive ? (
+                        <span className="flex items-center gap-1 text-emerald-100 bg-emerald-750/30 px-2 py-0.5 rounded-full border border-emerald-400/20 shadow-sm">
+                          <TrendingUp size={11} className="text-emerald-300 shrink-0" />
+                          <span>+${Math.abs(portfolioDailyChange.diffUSD).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                          <span className="text-[9px] opacity-85 font-medium shrink-0">({portfolioDailyChange.pctChange.toFixed(2)}% today)</span>
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1 text-rose-100 bg-rose-700/30 px-2 py-0.5 rounded-full border border-rose-400/20 shadow-sm">
+                          <TrendingDown size={11} className="text-rose-300 shrink-0" />
+                          <span>-${Math.abs(portfolioDailyChange.diffUSD).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                          <span className="text-[9px] opacity-85 font-medium shrink-0">({portfolioDailyChange.pctChange.toFixed(2)}% today)</span>
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <div className="px-2 py-1 rounded-lg bg-black/15 border border-white/10 text-[9px] font-black uppercase tracking-wider text-white">
                     USDT WALLET
@@ -999,7 +1045,7 @@ export default function StandardUserDashboard({
               </div>
 
               {/* News slideshow */}
-              <NewsCarousel />
+              <NewsCarousel cryptoPrices={cryptoPrices} />
 
               {/* Live Crypto Prices container with search bar */}
               <div className="space-y-3">
@@ -1074,6 +1120,21 @@ export default function StandardUserDashboard({
                     <h2 className="text-3xl font-black tracking-tight font-mono mt-1">
                       $ {totalPortfolioValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </h2>
+                    <div className="flex items-center gap-1 mt-1.5 text-[11px] font-bold">
+                      {portfolioDailyChange.isPositive ? (
+                        <span className="flex items-center gap-1 text-emerald-100 bg-emerald-700/30 px-2 py-0.5 rounded-full border border-emerald-400/20 shadow-sm">
+                          <TrendingUp size={11} className="text-emerald-300 shrink-0" />
+                          <span>+${Math.abs(portfolioDailyChange.diffUSD).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                          <span className="text-[9px] opacity-85 font-medium shrink-0">({portfolioDailyChange.pctChange.toFixed(2)}% today)</span>
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1 text-rose-100 bg-rose-700/30 px-2 py-0.5 rounded-full border border-rose-400/20 shadow-sm">
+                          <TrendingDown size={11} className="text-rose-300 shrink-0" />
+                          <span>-${Math.abs(portfolioDailyChange.diffUSD).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                          <span className="text-[9px] opacity-85 font-medium shrink-0">({portfolioDailyChange.pctChange.toFixed(2)}% today)</span>
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <div className="px-2 py-1 rounded-lg bg-black/15 border border-white/10 text-[9px] font-black uppercase tracking-wider text-white">
                     USDT WALLET
