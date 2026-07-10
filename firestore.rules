@@ -60,6 +60,13 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // Referral Codes mapping rules
+    match /referralCodes/{code} {
+      allow read: if isAuth();
+      allow create, update: if isAuth() && request.resource.data.uid == request.auth.uid;
+      allow delete: if isAdmin();
+    }
+
     // Crypto Networks configuration rules
     match /crypto_networks/{networkId} {
       allow read: if isAuth();

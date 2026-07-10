@@ -94,15 +94,24 @@ export default function AuthPage({ onSuccess }: AuthPageProps) {
           walletPassword: '' // Blank password initially
         });
 
-        // If a referral code was provided, look up the referrer and award 0.5 USDT automatically
+        // Also save the newly created user's referral code mapping
+        try {
+          await setDoc(doc(db, 'referralCodes', generatedCode), {
+            uid: user.uid,
+            email: formattedEmail
+          });
+        } catch (mappingErr) {
+          console.error('Error saving referral code mapping:', mappingErr);
+        }
+
+        // If a referral code was provided, look up the referrer via referralCodes and award 0.5 USDT automatically
         if (trimmedReferral) {
           try {
-            const referrerQuery = query(collection(db, 'users'), where('uniqueCode', '==', trimmedReferral));
-            const querySnapshot = await getDocs(referrerQuery);
-            if (!querySnapshot.empty) {
-              const referrerDoc = querySnapshot.docs[0];
-              const referrerUid = referrerDoc.id;
-              const referrerEmail = referrerDoc.data().email || '';
+            const refMappingSnap = await getDoc(doc(db, 'referralCodes', trimmedReferral));
+            if (refMappingSnap.exists()) {
+              const refData = refMappingSnap.data();
+              const referrerUid = refData.uid;
+              const referrerEmail = refData.email || '';
 
               // Credit referrer's balance by 0.5 USDT
               await updateDoc(doc(db, 'users', referrerUid), {

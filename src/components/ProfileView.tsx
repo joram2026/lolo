@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { UserAccount } from '../types';
 import { db, auth } from '../firebase';
-import { doc, getDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, collection, query, where, getDocs, setDoc } from 'firebase/firestore';
 import { updateProfile } from 'firebase/auth';
 import { 
   Shield, Key, Sparkles, User, Gift, Check, ArrowLeft, AlertCircle, 
@@ -146,6 +146,17 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
             await updateDoc(docRef, { uniqueCode: code });
             data.uniqueCode = code;
           }
+
+          // Ensure the referral codes collection mapping is synchronized
+          try {
+            await setDoc(doc(db, 'referralCodes', code), {
+              uid: user.uid,
+              email: data.email || user.email || ''
+            }, { merge: true });
+          } catch (refCodeErr) {
+            console.error('Error syncing referral mapping:', refCodeErr);
+          }
+
           setProfile(data);
           setDisplayName(data.displayName || user.displayName || '');
         }
