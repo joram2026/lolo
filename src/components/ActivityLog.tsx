@@ -57,13 +57,14 @@ const FILTER_OPTIONS = [
   { value: 'buy', label: 'Buy Crypto' },
   { value: 'sell', label: 'Sell Crypto' },
   { value: 'swap', label: 'Swap & Convert' },
+  { value: 'referral', label: 'Referral Rewards' },
 ] as const;
 
 export default function ActivityLog({ userId }: ActivityLogProps) {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<'all' | 'deposits' | 'withdrawals' | 'buy' | 'sell' | 'swap'>('all');
+  const [filter, setFilter] = useState<'all' | 'deposits' | 'withdrawals' | 'buy' | 'sell' | 'swap' | 'referral'>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState(false);
 
@@ -120,12 +121,14 @@ export default function ActivityLog({ userId }: ActivityLogProps) {
     const isBuy = tx.type === 'buy_crypto';
     const isSell = tx.type === 'sell_crypto';
     const isSwap = tx.type === 'swap_crypto';
+    const isReferral = tx.type === 'referral_reward';
 
     if (filter === 'deposits') return isDeposit;
     if (filter === 'withdrawals') return isWithdrawal;
     if (filter === 'buy') return isBuy;
     if (filter === 'sell') return isSell;
     if (filter === 'swap') return isSwap;
+    if (filter === 'referral') return isReferral;
     
     // For 'all' filter, show everything
     return true;
