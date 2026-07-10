@@ -431,7 +431,7 @@ export default function StandardUserDashboard({
           amount: totalCost,
           status: 'APPROVED',
           createdAt: new Date(),
-          paymentMessage: `Crypto Exchange: Purchased ${amount} ${symbol} at $${price.toLocaleString()}`
+          paymentMessage: `Crypto Exchange: Purchased ${amount} ${symbol} at $${price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`
         });
 
         setTradeMessage({ 
@@ -477,7 +477,7 @@ export default function StandardUserDashboard({
           amount: totalEarnings,
           status: 'APPROVED',
           createdAt: new Date(),
-          paymentMessage: `Crypto Exchange: Sold ${amount} ${symbol} at $${price.toLocaleString()}`
+          paymentMessage: `Crypto Exchange: Sold ${amount} ${symbol} at $${price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`
         });
 
         setTradeMessage({ 
@@ -1083,7 +1083,7 @@ export default function StandardUserDashboard({
                       <div className="flex items-end justify-between">
                         <div>
                           <span className="font-bold text-xs font-mono block text-zinc-200">
-                            ${coin.price.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                            ${coin.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
                           </span>
                         </div>
                         <div className={`flex items-center gap-0.5 text-[10px] font-bold shrink-0 ${
@@ -1228,7 +1228,7 @@ export default function StandardUserDashboard({
                               </span>
                             </div>
                             <span className="text-[10px] text-zinc-500 font-mono mt-0.5 block">
-                              1 {asset.symbol} ≈ ${asset.price.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                              1 {asset.symbol} ≈ ${asset.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
                             </span>
                           </div>
                         </div>
@@ -1296,7 +1296,7 @@ export default function StandardUserDashboard({
                     className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-xs focus:outline-none focus:border-emerald-500 text-white font-bold cursor-pointer"
                   >
                     {cryptoPrices.map(c => (
-                      <option key={c.symbol} value={c.symbol}>{c.symbol} - {c.name} (${c.price.toLocaleString()})</option>
+                      <option key={c.symbol} value={c.symbol}>{c.symbol} - {c.name} (${c.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })})</option>
                     ))}
                   </select>
                 </div>
@@ -1319,7 +1319,7 @@ export default function StandardUserDashboard({
                     className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-xs focus:outline-none focus:border-emerald-500 text-white font-bold cursor-pointer"
                   >
                     {cryptoPrices.map(c => (
-                      <option key={c.symbol} value={c.symbol}>{c.symbol} - {c.name} (${c.price.toLocaleString()})</option>
+                      <option key={c.symbol} value={c.symbol}>{c.symbol} - {c.name} (${c.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })})</option>
                     ))}
                   </select>
                 </div>

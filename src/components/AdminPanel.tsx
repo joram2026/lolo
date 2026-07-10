@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { db, auth } from '../firebase';
 import { sendPasswordResetEmail } from 'firebase/auth';
 import { 
@@ -71,6 +71,12 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
   const [networks, setNetworks] = useState<CryptoNetwork[]>([]);
   const [merchants, setMerchants] = useState<P2PMerchant[]>([]);
   const [cryptoPricesList, setCryptoPricesList] = useState<CryptoPrice[]>([]);
+  const pricesListRef = useRef<CryptoPrice[]>([]);
+
+  // Keep ref in sync to avoid stale closures in the auto-sync interval
+  useEffect(() => {
+    pricesListRef.current = cryptoPricesList;
+  }, [cryptoPricesList]);
   const [editingPriceSymbol, setEditingPriceSymbol] = useState<string | null>(null);
   const [priceForm, setPriceForm] = useState<{ price: string; change24h: string }>({ price: '', change24h: '' });
 
@@ -312,6 +318,18 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
 
   useEffect(() => {
     loadAllData();
+  }, []);
+
+  // Automatic syncing of live market prices every 15 seconds
+  useEffect(() => {
+    // Run an initial silent sync on load/mount
+    handleSyncAllLivePrices(true);
+
+    const interval = setInterval(() => {
+      handleSyncAllLivePrices(true);
+    }, 15000);
+
+    return () => clearInterval(interval);
   }, []);
 
   const showFeedback = (type: 'success' | 'error' | 'info', text: string) => {
@@ -773,14 +791,18 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
     }
   };
 
-  const handleSyncAllLivePrices = async () => {
+  const handleSyncAllLivePrices = async (silent = false) => {
     try {
-      showFeedback('info', 'Synchronizing all live market prices from world exchanges...');
+      if (!silent) {
+        showFeedback('info', 'Synchronizing all live market prices from world exchanges...');
+      }
       const apiPrices = await fetchAllLivePrices();
       const batch = writeBatch(db);
       
       let syncedCount = 0;
-      cryptoPricesList.forEach((cp) => {
+      const targetList = pricesListRef.current.length > 0 ? pricesListRef.current : cryptoPricesList;
+      
+      targetList.forEach((cp) => {
         // If coin mode is 'live' (or undefined, which we default to live for btc/eth/sol/bnb)
         const isStablecoin = cp.symbol === 'USDT' || cp.symbol === 'USDC';
         const currentMode = cp.mode || (isStablecoin ? 'custom' : 'live');
@@ -801,14 +823,20 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
 
       if (syncedCount > 0) {
         await batch.commit();
-        showFeedback('success', `Successfully synchronized ${syncedCount} coins to the latest world market prices!`);
+        if (!silent) {
+          showFeedback('success', `Successfully synchronized ${syncedCount} coins to the latest world market prices!`);
+        }
       } else {
-        showFeedback('info', 'No coins are currently configured in Live Market Mode.');
+        if (!silent) {
+          showFeedback('info', 'No coins are currently configured in Live Market Mode.');
+        }
       }
       await loadAllData(true);
     } catch (err: any) {
       console.error(err);
-      showFeedback('error', 'Error syncing live market prices: ' + err.message);
+      if (!silent) {
+        showFeedback('error', 'Error syncing live market prices: ' + err.message);
+      }
     }
   };
 
@@ -1365,14 +1393,23 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                       <p className="text-[10px] text-zinc-500 font-semibold mt-0.5">Toggle between Live World Market Rates (auto-syncing) or Custom Control values.</p>
                     </div>
                   </div>
-                  <button
-                    id="sync-all-live-prices-btn"
-                    onClick={handleSyncAllLivePrices}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 font-bold text-[10px] rounded-lg border border-emerald-500/25 transition-colors cursor-pointer"
-                  >
-                    <RefreshCw size={12} />
-                    <span>Sync All Live Market Coins</span>
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-1.5 text-emerald-400 bg-emerald-500/5 px-2 py-1 rounded-md border border-emerald-500/10 text-[9px] font-bold">
+                      <span className="relative flex h-1.5 w-1.5">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                      </span>
+                      <span>Auto-sync active (15s)</span>
+                    </div>
+                    <button
+                      id="sync-all-live-prices-btn"
+                      onClick={() => handleSyncAllLivePrices(false)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 font-bold text-[10px] rounded-lg border border-emerald-500/25 transition-colors cursor-pointer"
+                    >
+                      <RefreshCw size={12} />
+                      <span>Sync All Live Market Coins</span>
+                    </button>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
