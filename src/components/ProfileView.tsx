@@ -6,7 +6,7 @@ import { updateProfile } from 'firebase/auth';
 import { 
   Shield, Key, Sparkles, User, Gift, Check, ArrowLeft, AlertCircle, 
   Smartphone, Copy, CheckCircle2, QrCode, Power, Lock, ShieldAlert,
-  ChevronRight
+  ChevronRight, HelpCircle, MessageSquare, Send
 } from 'lucide-react';
 
 interface ProfileViewProps {
@@ -22,7 +22,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Active sub-page state
-  const [activeSubPage, setActiveSubPage] = useState<'menu' | 'personal' | 'referral' | 'pin' | '2fa'>('menu');
+  const [activeSubPage, setActiveSubPage] = useState<'menu' | 'personal' | 'referral' | 'pin' | '2fa' | 'support'>('menu');
 
   // New PIN States
   const [newPin, setNewPin] = useState('');
@@ -415,6 +415,27 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                     Disabled
                   </span>
                 )}
+                <ChevronRight size={16} className="text-zinc-500 group-hover:text-zinc-300 transition-colors" />
+              </div>
+            </button>
+
+            {/* Customer Support */}
+            <button
+              id="nav-customer-support"
+              onClick={() => { setActiveSubPage('support'); setMessage(null); }}
+              className="w-full bg-slate-800/50 border border-slate-800/60 hover:border-slate-700 hover:bg-slate-800/90 p-4 rounded-2xl flex items-center gap-4 transition-all cursor-pointer group"
+            >
+              <div className="w-10 h-10 rounded-xl bg-slate-900 border border-slate-700/50 flex items-center justify-center text-emerald-400 shrink-0 group-hover:bg-emerald-500/10 group-hover:text-emerald-300 transition-all">
+                <HelpCircle size={18} />
+              </div>
+              <div className="flex-1 min-w-0 text-left">
+                <h4 className="text-sm font-bold text-zinc-200 group-hover:text-white transition-colors">Customer Support</h4>
+                <p className="text-[11px] text-zinc-500 mt-0.5 leading-tight">Get 24/7 assistance via WhatsApp & Telegram</p>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+                  Online
+                </span>
                 <ChevronRight size={16} className="text-zinc-500 group-hover:text-zinc-300 transition-colors" />
               </div>
             </button>
@@ -1149,6 +1170,98 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Subpage: Customer Support */}
+      {activeSubPage === 'support' && (
+        <div className="space-y-6">
+          {/* Header */}
+          <div className="flex items-center gap-3">
+            <button 
+              id="support-back-btn"
+              onClick={() => { setActiveSubPage('menu'); }}
+              className="p-2 rounded-full bg-slate-800 border border-slate-700 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+            >
+              <ArrowLeft size={18} />
+            </button>
+            <div className="text-left">
+              <h2 className="text-xl font-bold tracking-tight">Customer Support</h2>
+              <p className="text-xs text-zinc-500">Connect with our support team 24/7</p>
+            </div>
+          </div>
+
+          <div className="space-y-4 text-left">
+            {/* Promo / Intro Banner */}
+            <div className="bg-gradient-to-br from-emerald-500/10 via-slate-800/60 to-slate-800 border border-slate-800 rounded-2xl p-4 space-y-2">
+              <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+                We are online to help
+              </h3>
+              <p className="text-xs text-zinc-400 leading-relaxed">
+                If you have questions regarding deposits, withdrawals, referrals, or trade executions, please reach out to our team. Our typical response time is less than 5 minutes.
+              </p>
+            </div>
+
+            {/* Support Channels */}
+            <div className="space-y-3">
+              {/* WhatsApp Business Option */}
+              <a
+                href="https://wa.me/#"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-4 bg-slate-800/40 hover:bg-slate-800/70 border border-slate-800 hover:border-slate-700 p-4 rounded-2xl transition-all group cursor-pointer no-underline block"
+              >
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-400 shrink-0 group-hover:bg-emerald-500/20 transition-all">
+                  <MessageSquare size={18} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h4 className="text-sm font-bold text-zinc-200 group-hover:text-white transition-colors">WhatsApp Support</h4>
+                  <p className="text-[11px] text-zinc-500 mt-0.5">Instant chats, transfer guides, and rapid answers</p>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+                    Online
+                  </span>
+                  <ChevronRight size={16} className="text-zinc-500 group-hover:text-zinc-300 transition-colors" />
+                </div>
+              </a>
+
+              {/* Telegram Channel Option */}
+              <a
+                href="https://t.me/#"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-4 bg-slate-800/40 hover:bg-slate-800/70 border border-slate-800 hover:border-slate-700 p-4 rounded-2xl transition-all group cursor-pointer no-underline block"
+              >
+                <div className="w-10 h-10 rounded-xl bg-sky-500/10 flex items-center justify-center text-sky-400 shrink-0 group-hover:bg-sky-500/20 transition-all">
+                  <Send size={18} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h4 className="text-sm font-bold text-zinc-200 group-hover:text-white transition-colors">Telegram Support</h4>
+                  <p className="text-[11px] text-zinc-500 mt-0.5">Secure messaging, automated ticket opening, and news</p>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-500/10 border border-sky-500/20 text-sky-400">
+                    Online
+                  </span>
+                  <ChevronRight size={16} className="text-zinc-500 group-hover:text-zinc-300 transition-colors" />
+                </div>
+              </a>
+            </div>
+
+            {/* Quick Note Card */}
+            <div className="bg-slate-800/30 border border-slate-800/80 rounded-2xl p-4 flex gap-3 text-xs text-zinc-500 leading-relaxed">
+              <ShieldAlert size={18} className="text-emerald-400 shrink-0 mt-0.5" />
+              <div>
+                <strong className="text-zinc-300 block mb-1">Official Protection Notice</strong>
+                LOLO Support agents will never ask for your Google Authenticator 2FA secret, account passwords, or secure wallet PINs. Never share these credentials with anyone.
+              </div>
+            </div>
           </div>
         </div>
       )}

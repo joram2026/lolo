@@ -108,7 +108,7 @@ interface Candle {
 }
 
 const generateCandleData = (coinPrice: number, change: number, timeframe: string): Candle[] => {
-  const count = 16;
+  const count = 24;
   const candles: Candle[] = [];
   
   const isUp = change >= 0;
@@ -251,13 +251,20 @@ export default function StandardUserDashboard({
             change24h: parseFloat((change * 100).toFixed(2))
           };
         } else {
-          // More active, high-fidelity fluctuations for main coins (BTC, ETH, SOL, BNB)
+          // More active, high-fidelity fluctuations for main coins (BTC, ETH, SOL, BNB, etc.)
           const percentageChange = (Math.random() - 0.485) * 0.0035; 
           const newPrice = coin.price * (1 + percentageChange);
           const newChange24h = coin.change24h + percentageChange * 100;
+          
+          // Dynamically check if the previous price was defined with more than 2 decimal places, 
+          // or if the coin is a low-priced asset (under $5) where 4-decimal precision is necessary.
+          const priceStr = coin.price.toString();
+          const hasMoreThan2Decimals = priceStr.includes('.') && priceStr.split('.')[1].length > 2;
+          const decimals = (hasMoreThan2Decimals || coin.price < 5) ? 4 : 2;
+
           return {
             ...coin,
-            price: parseFloat(newPrice.toFixed(2)),
+            price: parseFloat(newPrice.toFixed(decimals)),
             change24h: parseFloat(Math.max(-15, Math.min(15, newChange24h)).toFixed(2))
           };
         }
@@ -586,13 +593,65 @@ export default function StandardUserDashboard({
     const min = Math.min(...lows);
     const range = max - min || 1;
     
+    // We increase chart SVG height to 200 for a much more premium look and feel
     const getY = (val: number) => {
-      return 180 - ((val - min) / range) * 125 - 25; // padding top 25, bottom 25
+      return 200 - ((val - min) / range) * 145 - 25; // padding top 25, bottom 25
     };
 
     const displayedCandle = hoveredCandle || candles[candles.length - 1];
     const holding = getCoinHolding(liveCoin.symbol);
     const usdVal = holding * liveCoin.price;
+
+    // High fidelity financial stats simulation based on the active live price
+    const getSimulatedStats = (symbol: string, price: number) => {
+      const sym = symbol.toUpperCase();
+      let volume = "";
+      let mcap = "";
+      
+      if (sym === 'BTC') {
+        volume = "$32.48B";
+        mcap = "$1.85T";
+      } else if (sym === 'ETH') {
+        volume = "$15.82B";
+        mcap = "$417.6B";
+      } else if (sym === 'SOL') {
+        volume = "$4.12B";
+        mcap = "$86.3B";
+      } else if (sym === 'BNB') {
+        volume = "$1.65B";
+        mcap = "$88.1B";
+      } else if (sym === 'USDT' || sym === 'USDC') {
+        volume = "$52.10B";
+        mcap = sym === 'USDT' ? "$114.5B" : "$32.2B";
+      } else if (sym === 'XRP') {
+        volume = "$2.95B";
+        mcap = "$144.2B";
+      } else if (sym === 'WLD') {
+        volume = "$340.5M";
+        mcap = "$1.12B";
+      } else if (sym === 'TRX') {
+        volume = "$210.8M";
+        mcap = "$19.4B";
+      } else if (sym === 'DOGE') {
+        volume = "$1.45B";
+        mcap = "$54.8B";
+      } else {
+        const seed = sym.charCodeAt(0) + sym.charCodeAt(sym.length - 1);
+        const volVal = (price * 12000000) * (0.85 + (seed % 10) / 20);
+        const mcapVal = (price * 450000000) * (0.9 + (seed % 7) / 15);
+        
+        if (volVal >= 1e9) volume = `$${(volVal / 1e9).toFixed(2)}B`;
+        else if (volVal >= 1e6) volume = `$${(volVal / 1e6).toFixed(2)}M`;
+        else volume = `$${volVal.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+
+        if (mcapVal >= 1e9) mcap = `$${(mcapVal / 1e9).toFixed(2)}B`;
+        else if (mcapVal >= 1e6) mcap = `$${(mcapVal / 1e6).toFixed(2)}M`;
+        else mcap = `$${mcapVal.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+      }
+      return { volume, mcap };
+    };
+
+    const { volume: vol24h, mcap: mcap24h } = getSimulatedStats(liveCoin.symbol, liveCoin.price);
 
     return (
       <div id="coin-detail-page-root" className="min-h-screen bg-slate-900 text-zinc-100 font-sans pb-16 animate-fade-in">
@@ -604,55 +663,79 @@ export default function StandardUserDashboard({
               setSelectedCoin(null);
               setHoveredCandle(null);
             }}
-            className="p-2 rounded-full bg-slate-800 border border-slate-700 text-zinc-400 hover:text-white transition-colors cursor-pointer flex items-center justify-center"
+            className="p-2.5 rounded-full bg-slate-800 border border-slate-700 text-zinc-400 hover:text-white transition-all cursor-pointer flex items-center justify-center hover:scale-105 active:scale-95"
           >
             <ArrowLeft size={16} />
           </button>
-          <div>
-            <h2 className="text-lg font-black tracking-tight flex items-center gap-1.5">
-              <span>{liveCoin.name}</span>
-              <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider px-1.5 py-0.5 bg-slate-950 rounded">
-                {liveCoin.symbol}
-              </span>
-            </h2>
-            <p className="text-[10px] text-zinc-500 font-bold select-none">CRYPTO ASSET DETAILS</p>
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-full overflow-hidden bg-slate-800 border border-slate-700 flex items-center justify-center">
+              <CoinIcon symbol={liveCoin.symbol} className="w-6 h-6" />
+            </div>
+            <div>
+              <h2 className="text-base font-black tracking-tight flex items-center gap-1.5">
+                <span>{liveCoin.name}</span>
+                <span className="text-[9px] text-emerald-400 font-extrabold uppercase tracking-wider px-1.5 py-0.5 bg-emerald-950/80 border border-emerald-900/50 rounded-md">
+                  {liveCoin.symbol}
+                </span>
+              </h2>
+              <p className="text-[9px] text-zinc-500 font-extrabold tracking-widest uppercase mt-0.5 select-none">REAL-TIME TRADING PAIR</p>
+            </div>
           </div>
         </header>
 
-        <main className="max-w-md mx-auto px-4 mt-5 space-y-6">
+        <main className="max-w-md mx-auto px-4 mt-5 space-y-5">
           {/* Price Display */}
-          <div className="flex justify-between items-baseline select-none">
+          <div className="flex justify-between items-center select-none bg-slate-950/40 border border-slate-850 p-4 rounded-2xl">
             <div>
-              <span className="text-[10px] text-zinc-500 font-extrabold uppercase tracking-wider">Live Price</span>
-              <h3 className="text-3xl font-black text-zinc-100 font-mono tracking-tight mt-0.5">
-                ${liveCoin.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
+              <span className="text-[9px] text-zinc-500 font-extrabold uppercase tracking-widest block">LAST TRADED PRICE</span>
+              <h3 className="text-3xl font-black text-zinc-100 font-mono tracking-tight mt-1 flex items-baseline gap-1">
+                <span>${liveCoin.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}</span>
+                <span className="text-xs text-zinc-500 font-bold uppercase font-mono">USDT</span>
               </h3>
             </div>
-            <div className={`flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-bold ${
+            <div className={`flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-black ${
               liveCoin.change24h >= 0 ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'
             }`}>
-              {liveCoin.change24h >= 0 ? <TrendingUp size={13} /> : <TrendingDown size={13} />}
+              {liveCoin.change24h >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
               <span>{liveCoin.change24h >= 0 ? '+' : ''}{liveCoin.change24h.toFixed(2)}%</span>
             </div>
           </div>
 
           {/* Candlestick OHLC Stat Header */}
-          <div className="flex gap-2 text-[9px] font-mono font-bold text-zinc-400 justify-between items-center bg-slate-950 p-2.5 border border-slate-850 rounded-xl select-none">
-            <span className="text-[10px] text-zinc-500 font-extrabold tracking-tight">
-              {hoveredCandle ? "HOVERED CANDLE:" : "LATEST DATA:"}
-            </span>
-            <div className="flex gap-2 font-black">
-              <span>O: <span className={displayedCandle.close >= displayedCandle.open ? "text-emerald-400" : "text-red-400"}>${displayedCandle.open.toLocaleString()}</span></span>
-              <span>H: <span className="text-zinc-200">${displayedCandle.high.toLocaleString()}</span></span>
-              <span>L: <span className="text-zinc-200">${displayedCandle.low.toLocaleString()}</span></span>
-              <span>C: <span className={displayedCandle.close >= displayedCandle.open ? "text-emerald-400" : "text-red-400"}>${displayedCandle.close.toLocaleString()}</span></span>
+          <div className="grid grid-cols-4 gap-1.5 bg-slate-950 p-2.5 border border-slate-850 rounded-xl select-none text-center">
+            <div className="bg-slate-900/40 p-1.5 rounded-lg border border-slate-850/50">
+              <span className="text-[8px] text-zinc-500 font-extrabold uppercase tracking-wider block">Open</span>
+              <span className={`text-[10px] font-mono font-bold block mt-0.5 leading-none ${displayedCandle.close >= displayedCandle.open ? "text-emerald-400" : "text-red-400"}`}>
+                ${displayedCandle.open.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
+              </span>
+            </div>
+            <div className="bg-slate-900/40 p-1.5 rounded-lg border border-slate-850/50">
+              <span className="text-[8px] text-zinc-500 font-extrabold uppercase tracking-wider block">High</span>
+              <span className="text-[10px] font-mono font-bold text-zinc-200 block mt-0.5 leading-none">
+                ${displayedCandle.high.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
+              </span>
+            </div>
+            <div className="bg-slate-900/40 p-1.5 rounded-lg border border-slate-850/50">
+              <span className="text-[8px] text-zinc-500 font-extrabold uppercase tracking-wider block">Low</span>
+              <span className="text-[10px] font-mono font-bold text-zinc-200 block mt-0.5 leading-none">
+                ${displayedCandle.low.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
+              </span>
+            </div>
+            <div className="bg-slate-900/40 p-1.5 rounded-lg border border-slate-850/50">
+              <span className="text-[8px] text-zinc-500 font-extrabold uppercase tracking-wider block">Close</span>
+              <span className={`text-[10px] font-mono font-bold block mt-0.5 leading-none ${displayedCandle.close >= displayedCandle.open ? "text-emerald-400" : "text-red-400"}`}>
+                ${displayedCandle.close.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
+              </span>
             </div>
           </div>
 
           {/* Vector Candlestick Chart */}
-          <div className="bg-slate-950 p-4 border border-slate-850 rounded-2xl space-y-3.5 relative overflow-hidden">
+          <div className="bg-slate-950 p-4 border border-slate-850 rounded-2xl space-y-4 relative overflow-hidden">
             <div className="flex justify-between items-center select-none">
-              <span className="text-[10px] text-zinc-500 font-black uppercase tracking-wider">Candlestick Trend</span>
+              <div className="flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span className="text-[10px] text-zinc-400 font-black uppercase tracking-wider">Live Candlestick Trend</span>
+              </div>
               
               {/* Timeframe selector tabs */}
               <div className="flex gap-1 bg-slate-900 p-0.5 rounded-lg border border-slate-800">
@@ -660,9 +743,9 @@ export default function StandardUserDashboard({
                   <button
                     key={tf}
                     onClick={() => setChartTimeframe(tf)}
-                    className={`px-2 py-0.5 text-[9px] font-extrabold rounded-md transition-all ${
+                    className={`px-2 py-0.5 text-[9px] font-extrabold rounded-md transition-all cursor-pointer ${
                       chartTimeframe === tf 
-                        ? 'bg-slate-850 text-emerald-400 shadow-sm' 
+                        ? 'bg-slate-850 text-emerald-400 shadow-sm border border-slate-700/50' 
                         : 'text-zinc-500 hover:text-zinc-300'
                     }`}
                   >
@@ -673,12 +756,72 @@ export default function StandardUserDashboard({
             </div>
 
             {/* SVG Chart area */}
-            <div className="w-full h-[180px] relative">
-              <svg viewBox="0 0 350 180" className="w-full h-full overflow-visible">
-                {/* Grid lines */}
-                <line x1="0" y1="25" x2="350" y2="25" stroke="#1e293b" strokeOpacity="0.45" strokeDasharray="3 3" />
-                <line x1="0" y1="90" x2="350" y2="90" stroke="#1e293b" strokeOpacity="0.45" strokeDasharray="3 3" />
-                <line x1="0" y1="155" x2="350" y2="155" stroke="#1e293b" strokeOpacity="0.45" strokeDasharray="3 3" />
+            <div className="w-full h-[200px] relative">
+              <svg viewBox="0 0 350 200" className="w-full h-full overflow-visible">
+                {/* Horizontal Grid lines */}
+                <line x1="0" y1="25" x2="350" y2="25" stroke="#1e293b" strokeOpacity="0.5" strokeDasharray="3 3" />
+                <line x1="0" y1="100" x2="350" y2="100" stroke="#1e293b" strokeOpacity="0.5" strokeDasharray="3 3" />
+                <line x1="0" y1="175" x2="350" y2="175" stroke="#1e293b" strokeOpacity="0.5" strokeDasharray="3 3" />
+
+                {/* Vertical tracking crosshair line when hovering */}
+                {hoveredCandle && (
+                  <line
+                    x1={15 + (candles.indexOf(hoveredCandle) / (candles.length - 1)) * 320}
+                    y1="10"
+                    x2={15 + (candles.indexOf(hoveredCandle) / (candles.length - 1)) * 320}
+                    y2="190"
+                    stroke="#475569"
+                    strokeOpacity="0.75"
+                    strokeWidth="1"
+                    strokeDasharray="2 2"
+                    pointerEvents="none"
+                  />
+                )}
+
+                {/* Horizontal tracking intersection line when hovering */}
+                {hoveredCandle && (
+                  <line
+                    x1="0"
+                    y1={getY(hoveredCandle.close)}
+                    x2="350"
+                    y2={getY(hoveredCandle.close)}
+                    stroke="#475569"
+                    strokeOpacity="0.5"
+                    strokeWidth="1"
+                    strokeDasharray="2 2"
+                    pointerEvents="none"
+                  />
+                )}
+
+                {/* Live Real-time Price Horizontal Indicator Line (The requested Price Line) */}
+                <line
+                  x1="0"
+                  y1={getY(liveCoin.price)}
+                  x2="350"
+                  y2={getY(liveCoin.price)}
+                  stroke={liveCoin.change24h >= 0 ? "rgba(16, 185, 129, 0.65)" : "rgba(239, 68, 68, 0.65)"}
+                  strokeWidth="1.25"
+                  strokeDasharray="3 3"
+                  className="animate-pulse"
+                  pointerEvents="none"
+                />
+
+                {/* Pulsing target coordinate dot on live price line */}
+                <circle
+                  cx="345"
+                  cy={getY(liveCoin.price)}
+                  r="4"
+                  fill={liveCoin.change24h >= 0 ? "#10b981" : "#ef4444"}
+                  className="animate-ping"
+                  pointerEvents="none"
+                />
+                <circle
+                  cx="345"
+                  cy={getY(liveCoin.price)}
+                  r="2"
+                  fill={liveCoin.change24h >= 0 ? "#34d399" : "#f87171"}
+                  pointerEvents="none"
+                />
 
                 {/* Candlesticks & Volumes */}
                 {candles.map((candle, i) => {
@@ -688,11 +831,11 @@ export default function StandardUserDashboard({
                   const yHigh = getY(candle.high);
                   const yLow = getY(candle.low);
                   const isUp = candle.close >= candle.open;
-                  const bodyWidth = 12;
+                  const bodyWidth = 9;
 
                   // Volume bar height simulation
-                  const volHeight = 12 + (Math.sin(i * 1.7) + 1.2) * 8;
-                  const volY = 178 - volHeight;
+                  const volHeight = 10 + (Math.sin(i * 1.5) + 1.2) * 6;
+                  const volY = 198 - volHeight;
 
                   return (
                     <g 
@@ -708,8 +851,8 @@ export default function StandardUserDashboard({
                         width={bodyWidth}
                         height={volHeight}
                         fill={isUp ? "#10b981" : "#ef4444"}
-                        className="opacity-15 group-hover/candle:opacity-40 transition-opacity"
-                        rx="1.5"
+                        className="opacity-15 group-hover/candle:opacity-35 transition-opacity"
+                        rx="1"
                       />
 
                       {/* Wick / Shadow line */}
@@ -719,7 +862,7 @@ export default function StandardUserDashboard({
                         x2={cx}
                         y2={yLow}
                         stroke={isUp ? "#34d399" : "#f87171"}
-                        strokeWidth="1.5"
+                        strokeWidth="1.25"
                         className="group-hover/candle:stroke-white transition-colors"
                       />
 
@@ -731,9 +874,9 @@ export default function StandardUserDashboard({
                         height={Math.max(2.5, Math.abs(yOpen - yClose))}
                         fill={isUp ? "#10b981" : "#ef4444"}
                         stroke={isUp ? "#34d399" : "#f87171"}
-                        strokeWidth="1"
+                        strokeWidth="0.75"
                         rx="1.5"
-                        className="group-hover/candle:brightness-125 group-hover/candle:stroke-white transition-all"
+                        className="group-hover/candle:brightness-125 group-hover/candle:stroke-white transition-all duration-150"
                       />
 
                       {/* Hover capture block */}
@@ -741,17 +884,127 @@ export default function StandardUserDashboard({
                         x={cx - bodyWidth}
                         y="0"
                         width={bodyWidth * 2}
-                        height="180"
+                        height="200"
                         fill="transparent"
                       />
                     </g>
                   );
                 })}
+
+                {/* Interactive Tooltip showing exact OHLC values on hover */}
+                {hoveredCandle && (() => {
+                  const hIndex = candles.indexOf(hoveredCandle);
+                  const cx = 15 + (hIndex / (candles.length - 1)) * 320;
+                  const isLeftHalf = hIndex < candles.length / 2;
+                  
+                  // Position tooltip box horizontally. If left half, show on right; if right half, show on left.
+                  const tx = isLeftHalf ? cx + 12 : cx - 127;
+                  
+                  // Position tooltip box vertically, bounding it within safe limits of the SVG canvas height.
+                  const cy = getY(hoveredCandle.close);
+                  const ty = Math.max(10, Math.min(115, cy - 37));
+                  
+                  const isUp = hoveredCandle.close >= hoveredCandle.open;
+                  
+                  return (
+                    <g transform={`translate(${tx}, ${ty})`} pointerEvents="none" className="transition-all duration-75">
+                      {/* Tooltip Background Card with rounded corners, backdrop feel, and color-coded indicator border */}
+                      <rect 
+                        width="115" 
+                        height="74" 
+                        rx="8" 
+                        fill="#090d16" 
+                        fillOpacity="0.96" 
+                        stroke={isUp ? "#10b981" : "#ef4444"} 
+                        strokeWidth="1.25" 
+                      />
+                      
+                      {/* Header text */}
+                      <text x="8" y="14" fill="#64748b" fontSize="7" fontWeight="900" fontFamily="monospace" letterSpacing="0.5">
+                        CANDLE DETAILS
+                      </text>
+                      <text x="107" y="14" fill={isUp ? "#34d399" : "#f87171"} fontSize="7" fontWeight="900" fontFamily="monospace" textAnchor="end">
+                        {isUp ? "▲ BULLISH" : "▼ BEARISH"}
+                      </text>
+                      
+                      {/* Divider */}
+                      <line x1="8" y1="18" x2="107" y2="18" stroke="#1e293b" strokeWidth="1" />
+                      
+                      {/* Open Row */}
+                      <text x="8" y="28" fill="#94a3b8" fontSize="7" fontFamily="monospace" fontWeight="bold">OPEN:</text>
+                      <text x="107" y="28" fill="#f1f5f9" fontSize="7" fontFamily="monospace" fontWeight="900" textAnchor="end">
+                        ${hoveredCandle.open.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
+                      </text>
+
+                      {/* High Row */}
+                      <text x="8" y="38" fill="#94a3b8" fontSize="7" fontFamily="monospace" fontWeight="bold">HIGH:</text>
+                      <text x="107" y="38" fill="#34d399" fontSize="7" fontFamily="monospace" fontWeight="900" textAnchor="end">
+                        ${hoveredCandle.high.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
+                      </text>
+
+                      {/* Low Row */}
+                      <text x="8" y="48" fill="#94a3b8" fontSize="7" fontFamily="monospace" fontWeight="bold">LOW:</text>
+                      <text x="107" y="48" fill="#f87171" fontSize="7" fontFamily="monospace" fontWeight="900" textAnchor="end">
+                        ${hoveredCandle.low.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
+                      </text>
+
+                      {/* Close Row */}
+                      <text x="8" y="58" fill="#94a3b8" fontSize="7" fontFamily="monospace" fontWeight="bold">CLOSE:</text>
+                      <text x="107" y="58" fill="#f1f5f9" fontSize="7" fontFamily="monospace" fontWeight="900" textAnchor="end">
+                        ${hoveredCandle.close.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
+                      </text>
+
+                      {/* Simulated Volume Row */}
+                      <text x="8" y="68" fill="#64748b" fontSize="6.5" fontFamily="monospace" fontWeight="bold">SIM VOLUME:</text>
+                      <text x="107" y="68" fill="#94a3b8" fontSize="6.5" fontFamily="monospace" fontWeight="bold" textAnchor="end">
+                        {(15 + (Math.sin(hIndex * 1.5) + 1.2) * 20).toFixed(2)}k USDT
+                      </text>
+                    </g>
+                  );
+                })()}
               </svg>
 
+              {/* Dynamic Floating Price Tag Bubble on right aligned with the live price line */}
+              <div 
+                className="absolute right-1 text-[8px] font-mono font-bold select-none pointer-events-none transition-all duration-300 px-1.5 py-0.5 rounded shadow-lg flex items-center gap-1 border border-slate-700/50"
+                style={{ 
+                  top: `${getY(liveCoin.price)}px`, 
+                  transform: 'translateY(-50%)',
+                  backgroundColor: liveCoin.change24h >= 0 ? 'rgba(6, 78, 59, 0.95)' : 'rgba(127, 29, 29, 0.95)',
+                  borderColor: liveCoin.change24h >= 0 ? '#10b981' : '#ef4444',
+                  color: '#ffffff'
+                }}
+              >
+                <span className="relative flex h-1 w-1">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-1 w-1 bg-white"></span>
+                </span>
+                <span>${liveCoin.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}</span>
+              </div>
+
               {/* Chart Labels */}
-              <div className="absolute top-1 left-2 text-[9px] text-zinc-600 font-bold font-mono">High: ${max.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
-              <div className="absolute bottom-1 left-2 text-[9px] text-zinc-600 font-bold font-mono">Low: ${min.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
+              <div className="absolute top-1 left-2 text-[9px] text-zinc-500 font-bold font-mono bg-slate-950/80 px-1.5 py-0.5 rounded border border-slate-900">
+                High: ${max.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </div>
+              <div className="absolute bottom-1 left-2 text-[9px] text-zinc-500 font-bold font-mono bg-slate-950/80 px-1.5 py-0.5 rounded border border-slate-900">
+                Low: ${min.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </div>
+            </div>
+          </div>
+
+          {/* High Fidelity Financial Statistics Grid Card */}
+          <div className="grid grid-cols-2 gap-2.5 select-none">
+            <div className="bg-slate-950/50 border border-slate-850 p-3.5 rounded-2xl flex flex-col justify-between">
+              <span className="text-[8px] text-zinc-500 font-extrabold uppercase tracking-wider block">24h Volume</span>
+              <span className="text-sm font-mono font-bold text-zinc-200 mt-1 block">
+                {vol24h}
+              </span>
+            </div>
+            <div className="bg-slate-950/50 border border-slate-850 p-3.5 rounded-2xl flex flex-col justify-between">
+              <span className="text-[8px] text-zinc-500 font-extrabold uppercase tracking-wider block">Market Capitalization</span>
+              <span className="text-sm font-mono font-bold text-zinc-200 mt-1 block">
+                {mcap24h}
+              </span>
             </div>
           </div>
 
@@ -780,7 +1033,7 @@ export default function StandardUserDashboard({
             </div>
 
             {/* BUY / SELL Switch tabs */}
-            <div className="grid grid-cols-2 bg-slate-950 p-1 border border-slate-850 rounded-xl">
+            <div className="grid grid-cols-2 bg-slate-950 p-1 border border-slate-850 rounded-xl gap-1">
               <button
                 type="button"
                 onClick={() => {
@@ -789,8 +1042,8 @@ export default function StandardUserDashboard({
                 }}
                 className={`py-2 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer ${
                   quickTradeType === 'BUY'
-                    ? 'bg-emerald-500 text-slate-950 shadow-md'
-                    : 'text-zinc-400 hover:text-white'
+                    ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/10'
+                    : 'bg-emerald-950/20 text-emerald-400 border border-emerald-900/10 hover:bg-emerald-900/20 hover:text-emerald-300'
                 }`}
               >
                 BUY {liveCoin.symbol}
@@ -803,8 +1056,8 @@ export default function StandardUserDashboard({
                 }}
                 className={`py-2 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer ${
                   quickTradeType === 'SELL'
-                    ? 'bg-red-500 text-white shadow-md'
-                    : 'text-zinc-400 hover:text-white'
+                    ? 'bg-red-500 text-white shadow-md shadow-red-500/10'
+                    : 'bg-red-950/20 text-red-400 border border-red-900/10 hover:bg-red-900/20 hover:text-red-300'
                 }`}
               >
                 SELL {liveCoin.symbol}
@@ -849,7 +1102,11 @@ export default function StandardUserDashboard({
                     setQuickTradeAmount(e.target.value);
                     setTradeMessage(null);
                   }}
-                  className="w-full p-3.5 pr-20 bg-slate-950 border border-slate-800 rounded-2xl text-xs focus:outline-none focus:border-emerald-500 text-white font-mono"
+                  className={`w-full p-3.5 pr-20 bg-slate-950 border rounded-2xl text-xs focus:outline-none text-white font-mono transition-all ${
+                    quickTradeType === 'BUY'
+                      ? 'border-slate-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20'
+                      : 'border-slate-800 focus:border-red-500 focus:ring-1 focus:ring-red-500/20'
+                  }`}
                 />
                 <span className="absolute right-4 top-3.5 text-xs text-zinc-500 font-bold font-mono uppercase">{liveCoin.symbol}</span>
               </div>
