@@ -43,8 +43,8 @@ export const getCoinLogoUrl = (symbol: string): string => {
     BNB: 'https://assets.coingecko.com/coins/images/825/large/bnb-icon2_2x.png',
     XRP: 'https://assets.coingecko.com/coins/images/44/large/xrp-symbol-white-128.png',
     WLD: 'https://assets.coingecko.com/coins/images/31075/large/worldcoin.jpeg',
-    TRX: 'https://assets.coingecko.com/coins/images/1094/large/tron.png',
-    DOGE: 'https://assets.coingecko.com/coins/images/75/large/dogecoin.png'
+    TRX: 'https://cryptologos.cc/logos/tron-trx-logo.png',
+    DOGE: 'https://cryptologos.cc/logos/dogecoin-doge-logo.png'
   };
   return mapping[sym] || `https://raw.githubusercontent.com/spothq/cryptocurrency-icons/master/128/color/${sym.toLowerCase()}.png`;
 };
