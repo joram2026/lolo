@@ -564,7 +564,18 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                 <div>
                   <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Total Earned</span>
                   <div className="mt-1 flex items-baseline gap-1">
-                    <span className="text-2xl font-bold text-emerald-400 font-mono">{(referredUsers.length * 0.5).toFixed(2)}</span>
+                    <span className="text-2xl font-bold text-emerald-400 font-mono">
+                      {(() => {
+                        let total = 0;
+                        for (let i = 1; i <= referredUsers.length; i++) {
+                          if (i >= 20) total += 0.70;
+                          else if (i >= 10) total += 0.60;
+                          else if (i >= 5) total += 0.55;
+                          else total += 0.50;
+                        }
+                        return total.toFixed(2);
+                      })()}
+                    </span>
                     <span className="text-xs text-zinc-400 font-bold">USDT</span>
                   </div>
                 </div>
@@ -583,16 +594,114 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
               </div>
             </div>
 
-            {/* Motivational text */}
-            <div className="bg-emerald-500/5 border border-emerald-500/10 rounded-2xl p-4 text-xs text-zinc-300 leading-relaxed space-y-1.5">
-              <div className="flex items-center gap-1.5 text-emerald-400 font-bold">
-                <Sparkles size={14} />
-                <span>The more you share, the more you earn!</span>
-              </div>
-              <p className="text-zinc-400">
-                There is absolutely no limit to how many friends you can invite. Share your link on social networks, crypto groups, or directly with your friends, and watch your balance grow instantly with each signup!
-              </p>
-            </div>
+            {/* Tier Milestone Progress Track */}
+            {(() => {
+              const count = referredUsers.length;
+              
+              // Define intervals/milestones
+              // Starter (0), Bronze (5), Silver (10), Gold (20)
+              let progressPercent = 0;
+              if (count >= 20) {
+                progressPercent = 100;
+              } else if (count >= 10) {
+                progressPercent = 66.6 + ((count - 10) / 10) * 33.4;
+              } else if (count >= 5) {
+                progressPercent = 33.3 + ((count - 5) / 5) * 33.3;
+              } else {
+                progressPercent = (count / 5) * 33.3;
+              }
+
+              return (
+                <div className="bg-slate-800/40 border border-slate-700/60 rounded-2xl p-5 space-y-6">
+                  <div className="flex justify-between items-center">
+                    <div className="space-y-0.5">
+                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Your Referral Tier</span>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-sm font-bold px-2 py-0.5 rounded-full ${
+                          count >= 20 ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
+                          count >= 10 ? 'bg-slate-300/10 text-slate-300 border border-slate-300/20' :
+                          count >= 5 ? 'bg-orange-500/10 text-orange-400 border border-orange-500/20' :
+                          'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                        }`}>
+                          {count >= 20 ? 'Gold Tier' : count >= 10 ? 'Silver Tier' : count >= 5 ? 'Bronze Tier' : 'Starter Tier'}
+                        </span>
+                        <span className="text-xs text-zinc-400 font-medium">
+                          {count >= 20 ? 'Max Tier reached!' : 
+                           count >= 10 ? `${20 - count} more for Gold` : 
+                           count >= 5 ? `${10 - count} more for Silver` : 
+                           `${5 - count} more for Bronze`}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Current Commission</span>
+                      <span className="text-sm font-bold text-emerald-400 font-mono">
+                        {count >= 20 ? '0.70 USDT' : count >= 10 ? '0.60 USDT' : count >= 5 ? '0.55 USDT' : '0.50 USDT'} / ref
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* The Progress Bar Line */}
+                  <div className="relative pt-2 pb-10">
+                    {/* Track Background */}
+                    <div className="h-2 w-full bg-slate-900 rounded-full overflow-hidden">
+                      {/* Active Progress */}
+                      <div 
+                        className="h-full bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-400 rounded-full transition-all duration-500"
+                        style={{ width: `${progressPercent}%` }}
+                      />
+                    </div>
+
+                    {/* Milestones nodes */}
+                    <div className="absolute top-0 left-0 w-full h-full">
+                      {/* Node 1: Starter */}
+                      <div className="absolute left-[0%] -translate-x-1/2 flex flex-col items-center">
+                        <div className="w-5 h-5 rounded-full border-2 flex items-center justify-center text-[9px] font-bold z-10 border-emerald-400 bg-slate-900 text-emerald-400">
+                          ✓
+                        </div>
+                        <span className="text-[9px] font-bold text-zinc-400 mt-1.5">Starter</span>
+                        <span className="text-[8px] text-zinc-500 font-mono">0.50 USDT</span>
+                      </div>
+
+                      {/* Node 2: Bronze */}
+                      <div className="absolute left-[33.3%] -translate-x-1/2 flex flex-col items-center">
+                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center text-[9px] font-bold z-10 ${
+                          count >= 5 ? 'border-emerald-400 bg-slate-900 text-emerald-400' : 'border-slate-700 bg-slate-800 text-zinc-500'
+                        }`}>
+                          {count >= 5 ? '✓' : '5'}
+                        </div>
+                        <span className={`text-[9px] font-bold mt-1.5 ${count >= 5 ? 'text-zinc-300' : 'text-zinc-500'}`}>Bronze</span>
+                        <span className="text-[8px] text-zinc-500 font-mono">0.55 USDT</span>
+                      </div>
+
+                      {/* Node 3: Silver */}
+                      <div className="absolute left-[66.6%] -translate-x-1/2 flex flex-col items-center">
+                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center text-[9px] font-bold z-10 ${
+                          count >= 10 ? 'border-emerald-400 bg-slate-900 text-emerald-400' : 'border-slate-700 bg-slate-800 text-zinc-500'
+                        }`}>
+                          {count >= 10 ? '✓' : '10'}
+                        </div>
+                        <span className={`text-[9px] font-bold mt-1.5 ${count >= 10 ? 'text-zinc-300' : 'text-zinc-500'}`}>Silver</span>
+                        <span className="text-[8px] text-zinc-500 font-mono">0.60 USDT</span>
+                      </div>
+
+                      {/* Node 4: Gold */}
+                      <div className="absolute left-[100%] -translate-x-1/2 flex flex-col items-center">
+                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center text-[9px] font-bold z-10 ${
+                          count >= 20 ? 'border-amber-400 bg-slate-900 text-amber-400' : 'border-slate-700 bg-slate-800 text-zinc-500'
+                        }`}>
+                          {count >= 20 ? '★' : '20'}
+                        </div>
+                        <span className={`text-[9px] font-bold mt-1.5 ${count >= 20 ? 'text-amber-400' : 'text-zinc-500'}`}>Gold</span>
+                        <span className="text-[8px] text-zinc-500 font-mono">0.70 USDT</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+           
 
             <div className="bg-slate-800/40 border border-slate-700 rounded-2xl p-4 space-y-4">
               {/* Referral Code Box */}

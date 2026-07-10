@@ -104,7 +104,7 @@ export default function AuthPage({ onSuccess }: AuthPageProps) {
           console.error('Error saving referral code mapping:', mappingErr);
         }
 
-        // If a referral code was provided, look up the referrer via referralCodes and award 0.5 USDT automatically
+        // If a referral code was provided, look up the referrer via referralCodes and award tiered USDT automatically
         if (trimmedReferral) {
           try {
             const refMappingSnap = await getDoc(doc(db, 'referralCodes', trimmedReferral));
@@ -113,9 +113,32 @@ export default function AuthPage({ onSuccess }: AuthPageProps) {
               const referrerUid = refData.uid;
               const referrerEmail = refData.email || '';
 
-              // Credit referrer's balance by 0.5 USDT
+              // Query to see how many referrals this referrer currently has (includes the new user)
+              const referralsQuery = query(collection(db, 'users'), where('referralSource', '==', trimmedReferral));
+              const referralsSnap = await getDocs(referralsQuery);
+              const referralsCount = referralsSnap.size;
+
+              // Calculate reward based on tier milestones:
+              // < 5 referrals: Starter Tier ($0.50 USDT)
+              // 5 - 9 referrals: Bronze Tier ($0.55 USDT, +10% bonus)
+              // 10 - 19 referrals: Silver Tier ($0.60 USDT, +20% bonus)
+              // 20+ referrals: Gold Tier ($0.70 USDT, +40% bonus)
+              let rewardAmount = 0.50;
+              let tierName = 'Starter';
+              if (referralsCount >= 20) {
+                rewardAmount = 0.70;
+                tierName = 'Gold';
+              } else if (referralsCount >= 10) {
+                rewardAmount = 0.60;
+                tierName = 'Silver';
+              } else if (referralsCount >= 5) {
+                rewardAmount = 0.55;
+                tierName = 'Bronze';
+              }
+
+              // Credit referrer's balance by the calculated tiered USDT
               await updateDoc(doc(db, 'users', referrerUid), {
-                balance: increment(0.5)
+                balance: increment(rewardAmount)
               });
 
               // Create an approved referral reward transaction record
@@ -123,10 +146,10 @@ export default function AuthPage({ onSuccess }: AuthPageProps) {
                 userId: referrerUid,
                 userEmail: referrerEmail,
                 type: 'referral_reward',
-                amount: 0.5,
+                amount: rewardAmount,
                 status: 'APPROVED',
                 createdAt: serverTimestamp(),
-                paymentMessage: `Referral bonus: successfully invited ${formattedEmail}`
+                paymentMessage: `Referral bonus (${tierName} Tier): successfully invited ${formattedEmail}`
               });
             }
           } catch (refErr) {

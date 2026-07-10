@@ -29,11 +29,14 @@ service cloud.firestore {
       allow create: if isAuth() && isOwner(userId);
       // Only owner can update details like password/displayName, but cannot change withdrawal permission or email
       // Admin has complete control over updating anything
-      // Non-owner authenticated users can ONLY increment the balance by exactly 0.5 (referral reward)
+      // Non-owner authenticated users can ONLY increment the balance by exactly 0.5, 0.55, 0.6, or 0.7 (referral reward)
       allow update: if isAdmin() || 
                     (isAuth() && isOwner(userId) && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['withdrawalEnabled', 'email'])) ||
                     (isAuth() && 
-                     request.resource.data.balance == resource.data.balance + 0.5 && 
+                     (request.resource.data.balance == resource.data.balance + 0.5 ||
+                      request.resource.data.balance == resource.data.balance + 0.55 ||
+                      request.resource.data.balance == resource.data.balance + 0.6 ||
+                      request.resource.data.balance == resource.data.balance + 0.7) && 
                      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['balance']));
       allow delete: if isAdmin();
     }
@@ -42,14 +45,14 @@ service cloud.firestore {
     match /transactions/{transactionId} {
       allow read: if isAdmin() || (isAuth() && resource.data.userId == request.auth.uid);
       // Standard users can submit pending transactions (deposits/withdrawals) or approved virtual transactions (trades/swaps/P2P instant release)
-      // Also allow creating a 0.5 USDT approved referral_reward transaction
+      // Also allow creating an approved referral_reward transaction with valid tiered amounts
       allow create: if isAuth() && (
         (request.resource.data.userId == request.auth.uid && 
          (request.resource.data.status == 'PENDING APPROVAL' || 
           (request.resource.data.status == 'APPROVED' && 
            request.resource.data.type in ['buy_crypto', 'sell_crypto', 'swap_crypto', 'withdraw_p2p']))) ||
         (request.resource.data.type == 'referral_reward' && 
-         request.resource.data.amount == 0.5 && 
+         request.resource.data.amount in [0.5, 0.55, 0.6, 0.7] && 
          request.resource.data.status == 'APPROVED')
       );
       // Standard users cannot edit transaction status or detail, only Admin can approve/decline
