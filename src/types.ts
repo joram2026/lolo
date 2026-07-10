@@ -12,7 +12,7 @@ export interface UserAccount {
   twoFactorSecret?: string;
 }
 
-export type TransactionType = 'deposit_crypto' | 'deposit_p2p' | 'withdraw_crypto' | 'withdraw_p2p' | 'buy_crypto' | 'sell_crypto' | 'swap_crypto';
+export type TransactionType = 'deposit_crypto' | 'deposit_p2p' | 'withdraw_crypto' | 'withdraw_p2p' | 'buy_crypto' | 'sell_crypto' | 'swap_crypto' | 'referral_reward';
 
 export type TransactionStatus = 'PENDING APPROVAL' | 'APPROVED' | 'DECLINED';
 

@@ -29,8 +29,12 @@ service cloud.firestore {
       allow create: if isAuth() && isOwner(userId);
       // Only owner can update details like password/displayName, but cannot change withdrawal permission or email
       // Admin has complete control over updating anything
-      allow update: if isAdmin() || (isAuth() && isOwner(userId) && 
-                      !request.resource.data.diff(resource.data).affectedKeys().hasAny(['withdrawalEnabled', 'email']));
+      // Non-owner authenticated users can ONLY increment the balance by exactly 0.5 (referral reward)
+      allow update: if isAdmin() || 
+                    (isAuth() && isOwner(userId) && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['withdrawalEnabled', 'email'])) ||
+                    (isAuth() && 
+                     request.resource.data.balance == resource.data.balance + 0.5 && 
+                     request.resource.data.diff(resource.data).affectedKeys().hasOnly(['balance']));
       allow delete: if isAdmin();
     }
 
@@ -38,10 +42,16 @@ service cloud.firestore {
     match /transactions/{transactionId} {
       allow read: if isAdmin() || (isAuth() && resource.data.userId == request.auth.uid);
       // Standard users can submit pending transactions (deposits/withdrawals) or approved virtual transactions (trades/swaps/P2P instant release)
-      allow create: if isAuth() && request.resource.data.userId == request.auth.uid && 
-                    (request.resource.data.status == 'PENDING APPROVAL' || 
-                     (request.resource.data.status == 'APPROVED' && 
-                      request.resource.data.type in ['buy_crypto', 'sell_crypto', 'swap_crypto', 'withdraw_p2p']));
+      // Also allow creating a 0.5 USDT approved referral_reward transaction
+      allow create: if isAuth() && (
+        (request.resource.data.userId == request.auth.uid && 
+         (request.resource.data.status == 'PENDING APPROVAL' || 
+          (request.resource.data.status == 'APPROVED' && 
+           request.resource.data.type in ['buy_crypto', 'sell_crypto', 'swap_crypto', 'withdraw_p2p']))) ||
+        (request.resource.data.type == 'referral_reward' && 
+         request.resource.data.amount == 0.5 && 
+         request.resource.data.status == 'APPROVED')
+      );
       // Standard users cannot edit transaction status or detail, only Admin can approve/decline
       // Exception: standard user can complete P2P sell when they click "I HAVE RECEIVED PAYMENT"
       allow update: if isAdmin() || (isAuth() && resource.data.userId == request.auth.uid && 

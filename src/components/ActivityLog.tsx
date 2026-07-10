@@ -4,7 +4,7 @@ import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { Transaction } from '../types';
 import { 
   ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Clock, CheckCircle2, XCircle, 
-  ChevronDown, ChevronUp, Filter, RefreshCw, Calendar, ListFilter
+  ChevronDown, ChevronUp, Filter, RefreshCw, Calendar, ListFilter, Gift
 } from 'lucide-react';
 
 enum OperationType {
@@ -155,6 +155,14 @@ export default function ActivityLog({ userId }: ActivityLogProps) {
 
   const getTxTypeInfo = (type: string) => {
     switch (type) {
+      case 'referral_reward':
+        return {
+          label: 'Referral Reward',
+          isCredit: true,
+          colorClass: 'text-emerald-400',
+          bgClass: 'bg-emerald-500/10 border-emerald-500/15 text-emerald-400',
+          icon: <Gift size={16} />
+        };
       case 'deposit_crypto':
         return {
           label: 'Crypto Deposit',

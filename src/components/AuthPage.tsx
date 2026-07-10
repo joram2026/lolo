@@ -5,7 +5,7 @@ import {
   createUserWithEmailAndPassword, 
   sendPasswordResetEmail 
 } from 'firebase/auth';
-import { doc, setDoc, serverTimestamp, getDoc } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp, getDoc, collection, query, where, getDocs, updateDoc, increment, addDoc } from 'firebase/firestore';
 import { Shield, Mail, Lock, User, Sparkles, AlertCircle, RefreshCw, Eye, EyeOff } from 'lucide-react';
 
 interface AuthPageProps {
@@ -71,18 +71,60 @@ export default function AuthPage({ onSuccess }: AuthPageProps) {
         const userCredential = await createUserWithEmailAndPassword(auth, formattedEmail, password);
         const user = userCredential.user;
 
-        // Initialize user document in firestore with starting values
+        // Generate dynamic unique referral code for the new user
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+        let generatedCode = '';
+        for (let i = 0; i < 5; i++) {
+          generatedCode += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+
+        const trimmedReferral = referral.trim();
+
+        // Initialize user document in firestore with starting values and the unique referral code
         const docRef = doc(db, 'users', user.uid);
         await setDoc(docRef, {
           uid: user.uid,
           email: formattedEmail,
           displayName: displayName.trim() || formattedEmail.split('@')[0],
           balance: 0.0, // Initial wallet balance starts at $0
-          referralSource: referral.trim(),
+          referralSource: trimmedReferral,
+          uniqueCode: generatedCode,
           createdAt: serverTimestamp(),
           withdrawalEnabled: true, // withdrawal allowed by default
           walletPassword: '' // Blank password initially
         });
+
+        // If a referral code was provided, look up the referrer and award 0.5 USDT automatically
+        if (trimmedReferral) {
+          try {
+            const referrerQuery = query(collection(db, 'users'), where('uniqueCode', '==', trimmedReferral));
+            const querySnapshot = await getDocs(referrerQuery);
+            if (!querySnapshot.empty) {
+              const referrerDoc = querySnapshot.docs[0];
+              const referrerUid = referrerDoc.id;
+              const referrerEmail = referrerDoc.data().email || '';
+
+              // Credit referrer's balance by 0.5 USDT
+              await updateDoc(doc(db, 'users', referrerUid), {
+                balance: increment(0.5)
+              });
+
+              // Create an approved referral reward transaction record
+              await addDoc(collection(db, 'transactions'), {
+                userId: referrerUid,
+                userEmail: referrerEmail,
+                type: 'referral_reward',
+                amount: 0.5,
+                status: 'APPROVED',
+                createdAt: serverTimestamp(),
+                paymentMessage: `Referral bonus: successfully invited ${formattedEmail}`
+              });
+            }
+          } catch (refErr) {
+            console.error('Error auto-crediting referral reward:', refErr);
+            // Non-blocking, registration succeeds anyway
+          }
+        }
 
         onSuccess();
       } else {

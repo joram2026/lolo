@@ -521,9 +521,67 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
           </div>
 
           <div id="referral-program-section" className="space-y-4 text-left">
-            <p className="text-xs text-zinc-400 leading-relaxed">
-              Invite your friends to join LOLO Crypto using your unique referral code or link and earn rewards together!
-            </p>
+            {/* Promo / Motivation Banner */}
+            <div className="bg-gradient-to-br from-emerald-500/20 via-slate-800/80 to-slate-800 border border-emerald-500/30 rounded-2xl p-4 relative overflow-hidden">
+              <div className="absolute top-0 right-0 p-3 opacity-15">
+                <Gift className="text-emerald-400" size={80} />
+              </div>
+              <div className="space-y-1 relative z-10">
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] font-bold uppercase tracking-wider border border-emerald-500/20">
+                  <Sparkles size={11} className="animate-pulse" /> Limited Time Event
+                </div>
+                <h3 className="text-base font-bold text-white pt-1">Earn 0.50 USDT per Invite!</h3>
+                <p className="text-xs text-zinc-300 leading-relaxed max-w-[85%]">
+                  Get paid instantly when your friends register using your link or code. Unlimited rewards, credited directly to your account.
+                </p>
+                <div className="flex gap-4 pt-3 text-[11px] text-zinc-400 font-medium">
+                  <div className="flex items-center gap-1">
+                    <CheckCircle2 size={12} className="text-emerald-400" />
+                    <span>Instant Credit</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <CheckCircle2 size={12} className="text-emerald-400" />
+                    <span>Zero Caps</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Referral Earnings & Stats Card */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-slate-800/40 border border-slate-700/60 rounded-2xl p-4 flex flex-col justify-between">
+                <div>
+                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Total Earned</span>
+                  <div className="mt-1 flex items-baseline gap-1">
+                    <span className="text-2xl font-bold text-emerald-400 font-mono">{(referredUsers.length * 0.5).toFixed(2)}</span>
+                    <span className="text-xs text-zinc-400 font-bold">USDT</span>
+                  </div>
+                </div>
+                <p className="text-[10px] text-zinc-500 mt-2">Paid directly to your balance</p>
+              </div>
+
+              <div className="bg-slate-800/40 border border-slate-700/60 rounded-2xl p-4 flex flex-col justify-between">
+                <div>
+                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Successful Invites</span>
+                  <div className="mt-1 flex items-baseline gap-1">
+                    <span className="text-2xl font-bold text-white font-mono">{referredUsers.length}</span>
+                    <span className="text-xs text-zinc-500 font-bold ml-1">friends</span>
+                  </div>
+                </div>
+                <p className="text-[10px] text-zinc-500 mt-2">Keep growing your circle!</p>
+              </div>
+            </div>
+
+            {/* Motivational text */}
+            <div className="bg-emerald-500/5 border border-emerald-500/10 rounded-2xl p-4 text-xs text-zinc-300 leading-relaxed space-y-1.5">
+              <div className="flex items-center gap-1.5 text-emerald-400 font-bold">
+                <Sparkles size={14} />
+                <span>The more you share, the more you earn!</span>
+              </div>
+              <p className="text-zinc-400">
+                There is absolutely no limit to how many friends you can invite. Share your link on social networks, crypto groups, or directly with your friends, and watch your balance grow instantly with each signup!
+              </p>
+            </div>
 
             <div className="bg-slate-800/40 border border-slate-700 rounded-2xl p-4 space-y-4">
               {/* Referral Code Box */}
