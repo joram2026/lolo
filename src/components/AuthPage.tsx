@@ -84,7 +84,36 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
         navigate('/signup', true);
 
         // Handle Registration
-        const userCredential = await createUserWithEmailAndPassword(auth, formattedEmail, password);
+        let userCredential;
+        try {
+          userCredential = await createUserWithEmailAndPassword(auth, formattedEmail, password);
+        } catch (regErr: any) {
+          if (regErr.code === 'auth/email-already-in-use') {
+            // Check if the user document actually exists in Firestore
+            const usersRef = collection(db, 'users');
+            const q = query(usersRef, where('email', '==', formattedEmail));
+            const querySnap = await getDocs(q);
+
+            if (querySnap.empty) {
+              // The Firestore document was deleted by the admin, but the user still exists in Firebase Auth!
+              // Let's try to sign them in with the password they typed.
+              try {
+                userCredential = await signInWithEmailAndPassword(auth, formattedEmail, password);
+              } catch (loginErr: any) {
+                if (loginErr.code === 'auth/wrong-password' || loginErr.code === 'auth/invalid-credential') {
+                  throw new Error('This email has an existing login credential. Since your previous profile was cleared by an admin, please sign in with your original password to restore your profile, or use the "Forgot Password" page to reset your password first.');
+                } else {
+                  throw loginErr;
+                }
+              }
+            } else {
+              throw regErr;
+            }
+          } else {
+            throw regErr;
+          }
+        }
+
         const user = userCredential.user;
 
         // Generate dynamic unique referral code for the new user
