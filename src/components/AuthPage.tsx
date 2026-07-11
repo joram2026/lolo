@@ -15,22 +15,9 @@ interface AuthPageProps {
 }
 
 export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
-  const [isSignUp, setIsSignUp] = useState(false);
-  const [isReset, setIsReset] = useState(false);
-
-  // Sync view states with the URL path
-  useEffect(() => {
-    if (path === '/signup') {
-      setIsSignUp(true);
-      setIsReset(false);
-    } else if (path === '/reset') {
-      setIsSignUp(false);
-      setIsReset(true);
-    } else {
-      setIsSignUp(false);
-      setIsReset(false);
-    }
-  }, [path]);
+  // Derive view states directly from the URL path prop to prevent desynchronization
+  const isSignUp = path === '/signup';
+  const isReset = path === '/reset';
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -53,10 +40,12 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
     const refCode = params.get('ref') || params.get('code');
     if (refCode) {
       setReferral(refCode);
-      setIsSignUp(true);
+      if (path !== '/signup') {
+        navigate('/signup');
+      }
       setSuccessMsg(`Welcome! Referral code "${refCode}" has been successfully pre-filled.`);
     }
-  }, []);
+  }, [path, navigate]);
 
   const handleVerify2faLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -82,7 +71,7 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
         // Handle Password Reset
         await sendPasswordResetEmail(auth, formattedEmail);
         setSuccessMsg('A password reset link has been sent to your email.');
-        setIsReset(false);
+        navigate('/login');
       } else if (isSignUp) {
         // Handle Registration
         const userCredential = await createUserWithEmailAndPassword(auth, formattedEmail, password);
