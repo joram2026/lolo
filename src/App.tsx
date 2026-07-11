@@ -26,13 +26,13 @@ export default function App() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
-  const navigate = (newPath: string) => {
-    const currentSearch = window.location.search;
+  const navigate = (newPath: string, clearSearch = false) => {
+    const currentSearch = clearSearch ? '' : window.location.search;
     const target = newPath + currentSearch;
-    if (window.location.pathname !== newPath) {
+    if (window.location.pathname !== newPath || clearSearch) {
       window.history.pushState(null, '', target);
-      setPath(newPath);
     }
+    setPath(newPath);
   };
 
   // Track Firebase Auth State changes
@@ -55,7 +55,7 @@ export default function App() {
     const params = new URLSearchParams(window.location.search);
     const hasReferral = params.has('ref') || params.has('code');
 
-    if (hasReferral && user) {
+    if (hasReferral && user && path !== '/signup' && path !== '/login') {
       // If a referral link is opened but a session is active, sign out first
       // so the user is correctly shown the signup page.
       signOut(auth).then(() => {
@@ -91,7 +91,7 @@ export default function App() {
         '/tx_success'
       ];
       if (!validPaths.includes(path)) {
-        navigate('/dashboard');
+        navigate('/dashboard', true);
       }
     }
   }, [user, initializing, path]);
@@ -135,7 +135,7 @@ export default function App() {
   }
 
   // 3. Standard User Account Flows
-  const showDashboard = ['/dashboard', '/wallet', '/trade', '/history'].includes(path);
+  const showDashboard = ['/dashboard', '/wallet', '/trade', '/history', '/login', '/signup'].includes(path);
 
   return (
     <div id="standard-user-app" className="bg-slate-900 min-h-screen">
