@@ -99,7 +99,7 @@ export default function App() {
     }
     const hasReferral = !!refValue;
 
-    if (hasReferral && user && path !== '/signup' && path !== '/login') {
+    if (hasReferral && user) {
       // If a referral link is opened but a session is active, sign out first
       // so the user is correctly shown the signup page.
       signOut(auth).then(() => {

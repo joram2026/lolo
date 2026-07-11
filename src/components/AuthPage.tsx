@@ -11,7 +11,7 @@ import { Shield, Mail, Lock, User, Sparkles, AlertCircle, RefreshCw, Eye, EyeOff
 interface AuthPageProps {
   onSuccess: () => void;
   path: string;
-  navigate: (path: string) => void;
+  navigate: (path: string, clearSearch?: boolean) => void;
 }
 
 export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
@@ -80,6 +80,9 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
         setSuccessMsg('A password reset link has been sent to your email.');
         navigate('/login');
       } else if (isSignUp) {
+        // Clear referral/code parameters from the URL before signing in to prevent immediate automatic sign-out
+        navigate('/signup', true);
+
         // Handle Registration
         const userCredential = await createUserWithEmailAndPassword(auth, formattedEmail, password);
         const user = userCredential.user;
