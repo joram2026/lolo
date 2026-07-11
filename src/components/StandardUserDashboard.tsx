@@ -8,7 +8,7 @@ import {
   TrendingUp, TrendingDown, ArrowUpRight, ArrowDownLeft, Search, 
   User, LogOut, ArrowRightLeft, ShieldCheck, Activity, Wallet, 
   HelpCircle, RefreshCw, Coins, ArrowRight, MessageSquare, AlertCircle,
-  History, ArrowLeft, X
+  History, ArrowLeft, X, ChevronDown
 } from 'lucide-react';
 
 interface StandardUserDashboardProps {
@@ -75,6 +75,86 @@ export function CoinIcon({ symbol, className = "w-9 h-9" }: CoinIconProps) {
         onError={() => setFailed(true)}
         className="w-full h-full object-cover"
       />
+    </div>
+  );
+}
+
+interface CustomCoinSelectProps {
+  value: string;
+  onChange: (value: string) => void;
+  coins: CryptoPrice[];
+}
+
+function CustomCoinSelect({ value, onChange, coins }: CustomCoinSelectProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const selectedCoin = coins.find(c => c.symbol === value) || coins[0];
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleOutsideClick = () => {
+      setIsOpen(false);
+    };
+    window.addEventListener('click', handleOutsideClick);
+    return () => window.removeEventListener('click', handleOutsideClick);
+  }, [isOpen]);
+
+  return (
+    <div className="relative select-none" onClick={(e) => e.stopPropagation()}>
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full flex items-center justify-between p-3.5 bg-slate-950 border border-slate-850 rounded-2xl text-xs text-white font-bold cursor-pointer hover:border-emerald-500/50 hover:bg-slate-900/40 transition-all focus:outline-none focus:border-emerald-500"
+      >
+        <div className="flex items-center gap-2.5">
+          <CoinIcon symbol={selectedCoin.symbol} className="w-5 h-5 rounded-md" />
+          <div className="flex flex-col items-start leading-none gap-1">
+            <span className="text-zinc-100 font-extrabold text-xs">{selectedCoin.symbol}</span>
+            <span className="text-[9px] text-zinc-500 font-bold">{selectedCoin.name}</span>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-zinc-400 font-mono text-xs">
+            ${selectedCoin.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
+          </span>
+          <ChevronDown size={14} className={`text-zinc-500 transition-transform duration-200 ${isOpen ? 'rotate-180 text-emerald-400' : ''}`} />
+        </div>
+      </button>
+
+      {isOpen && (
+        <div className="absolute left-0 right-0 mt-1.5 max-h-60 overflow-y-auto bg-slate-950 border border-slate-850 rounded-2xl shadow-2xl z-50 scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent animate-fade-in">
+          <div className="p-1.5 space-y-1">
+            {coins.map((coin) => {
+              const isSelected = coin.symbol === value;
+              return (
+                <button
+                  key={coin.symbol}
+                  type="button"
+                  onClick={() => {
+                    onChange(coin.symbol);
+                    setIsOpen(false);
+                  }}
+                  className={`w-full flex items-center justify-between p-2.5 rounded-xl text-xs font-bold transition-all text-left ${
+                    isSelected 
+                      ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
+                      : 'text-zinc-300 hover:bg-slate-900/60 hover:text-white'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <CoinIcon symbol={coin.symbol} className="w-5 h-5 rounded-md" />
+                    <div className="flex flex-col leading-none gap-1">
+                      <span className={isSelected ? "text-emerald-400" : "text-zinc-200"}>{coin.symbol}</span>
+                      <span className="text-[9px] text-zinc-500 font-bold">{coin.name}</span>
+                    </div>
+                  </div>
+                  <span className="font-mono text-zinc-400 text-xs">
+                    ${coin.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1543,19 +1623,14 @@ export default function StandardUserDashboard({
                       Balance: {getCoinHolding(tradeFrom)} {tradeFrom}
                     </span>
                   </div>
-                  <select
-                    id="trade-from-picker"
+                  <CustomCoinSelect
                     value={tradeFrom}
-                    onChange={(e) => {
-                      setTradeFrom(e.target.value);
+                    onChange={(val) => {
+                      setTradeFrom(val);
                       setSwapMessage(null);
                     }}
-                    className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-xs focus:outline-none focus:border-emerald-500 text-white font-bold cursor-pointer"
-                  >
-                    {cryptoPrices.map(c => (
-                      <option key={c.symbol} value={c.symbol}>{c.symbol} - {c.name} (${c.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })})</option>
-                    ))}
-                  </select>
+                    coins={cryptoPrices}
+                  />
                 </div>
 
                 {/* To Asset */}
@@ -1566,19 +1641,14 @@ export default function StandardUserDashboard({
                       Balance: {getCoinHolding(tradeTo)} {tradeTo}
                     </span>
                   </div>
-                  <select
-                    id="trade-to-picker"
+                  <CustomCoinSelect
                     value={tradeTo}
-                    onChange={(e) => {
-                      setTradeTo(e.target.value);
+                    onChange={(val) => {
+                      setTradeTo(val);
                       setSwapMessage(null);
                     }}
-                    className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-xs focus:outline-none focus:border-emerald-500 text-white font-bold cursor-pointer"
-                  >
-                    {cryptoPrices.map(c => (
-                      <option key={c.symbol} value={c.symbol}>{c.symbol} - {c.name} (${c.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })})</option>
-                    ))}
-                  </select>
+                    coins={cryptoPrices}
+                  />
                 </div>
 
                 {/* Amount to convert */}
