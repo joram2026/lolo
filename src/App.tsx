@@ -58,14 +58,15 @@ export default function App() {
   }, []);
 
   const navigate = (newPath: string, clearSearch = false) => {
-    const currentSearch = clearSearch ? '' : window.location.search;
     const cleanPath = newPath.startsWith('/') ? newPath : '/' + newPath;
+    const currentSearch = clearSearch ? '' : window.location.search;
+    const targetUrl = '/' + currentSearch + `#${cleanPath}`;
     
-    if (clearSearch && currentSearch) {
-      window.history.replaceState(null, '', '/');
+    if (clearSearch || cleanPath === '/dashboard' || cleanPath === '/login' || cleanPath === '/signup') {
+      window.history.replaceState(null, '', targetUrl);
+    } else {
+      window.history.pushState(null, '', targetUrl);
     }
-    
-    window.location.hash = `#${cleanPath}`;
     setPath(cleanPath);
   };
 
@@ -160,7 +161,7 @@ export default function App() {
 
   // 1. Unauthenticated State
   if (!user) {
-    return <AuthPage onSuccess={() => navigate('/dashboard')} path={path} navigate={navigate} />;
+    return <AuthPage onSuccess={() => navigate('/dashboard', true)} path={path} navigate={navigate} />;
   }
 
   // 2. Admin Authentication Bypass (love@gmail.com)
@@ -169,7 +170,7 @@ export default function App() {
   }
 
   // 3. Standard User Account Flows
-  const showDashboard = ['/dashboard', '/wallet', '/trade', '/history', '/login', '/signup'].includes(path);
+  const showDashboard = ['/dashboard', '/wallet', '/trade', '/history'].includes(path);
 
   return (
     <div id="standard-user-app" className="bg-slate-900 min-h-screen">
