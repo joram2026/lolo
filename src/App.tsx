@@ -73,10 +73,14 @@ export default function App() {
   // Track Firebase Auth State changes
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      setUser(currentUser);
-      if (currentUser && currentUser.email === 'love@gmail.com') {
-        // Automatically seed the starter crypto networks & merchants into Firestore if they are empty
-        await seedFirestoreIfNeeded();
+      if (currentUser) {
+        setUser(currentUser);
+        if (currentUser.email === 'love@gmail.com') {
+          // Automatically seed the starter crypto networks & merchants into Firestore if they are empty
+          await seedFirestoreIfNeeded();
+        }
+      } else {
+        setUser(null);
       }
       setInitializing(false);
     });
@@ -102,6 +106,8 @@ export default function App() {
     if (hasReferral && user) {
       // If a referral link is opened but a session is active, sign out first
       // so the user is correctly shown the signup page.
+      localStorage.removeItem('custom_user_email');
+      localStorage.removeItem('custom_user_uid');
       signOut(auth).then(() => {
         navigate('/signup');
       });
@@ -142,6 +148,8 @@ export default function App() {
 
   const handleLogout = async () => {
     try {
+      localStorage.removeItem('custom_user_email');
+      localStorage.removeItem('custom_user_uid');
       await signOut(auth);
       navigate('/login');
     } catch (err) {

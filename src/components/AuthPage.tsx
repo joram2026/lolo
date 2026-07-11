@@ -3,15 +3,22 @@ import { auth, db } from '../firebase';
 import { 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
-  sendPasswordResetEmail 
+  sendPasswordResetEmail,
+  signOut,
+  updatePassword
 } from 'firebase/auth';
-import { doc, setDoc, serverTimestamp, getDoc, collection, query, where, getDocs, updateDoc, increment, addDoc } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp, getDoc, collection, query, where, getDocs, updateDoc, increment, addDoc, deleteDoc } from 'firebase/firestore';
 import { Shield, Mail, Lock, User, Sparkles, AlertCircle, RefreshCw, Eye, EyeOff } from 'lucide-react';
 
 interface AuthPageProps {
   onSuccess: () => void;
   path: string;
   navigate: (path: string, clearSearch?: boolean) => void;
+}
+
+function deriveAuthPassword(email: string): string {
+  const cleanEmail = email.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+  return `LoloAuth_${cleanEmail}_Secure123!`;
 }
 
 export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
@@ -21,6 +28,9 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [resetNewPassword, setResetNewPassword] = useState('');
+  const [resetConfirmPassword, setResetConfirmPassword] = useState('');
+  const [showResetPassword, setShowResetPassword] = useState(false);
   const [displayName, setDisplayName] = useState('');
   const [referral, setReferral] = useState('');
   const [loading, setLoading] = useState(false);
@@ -71,50 +81,106 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
     setError(null);
     setSuccessMsg(null);
 
-    const formattedEmail = email.trim();
+    const formattedEmail = email.trim().toLowerCase();
 
     try {
       if (isReset) {
-        // Handle Password Reset
-        await sendPasswordResetEmail(auth, formattedEmail);
-        setSuccessMsg('A password reset link has been sent to your email.');
-        navigate('/login');
+        // Handle custom Password Reset directly in the database
+        if (!resetNewPassword || !resetConfirmPassword) {
+          throw new Error('Please fill in both password fields.');
+        }
+        if (resetNewPassword.length < 6) {
+          throw new Error('Password must be at least 6 characters.');
+        }
+        if (resetNewPassword !== resetConfirmPassword) {
+          throw new Error('Passwords do not match.');
+        }
+
+        const usersRef = collection(db, 'users');
+        const q = query(usersRef, where('email', '==', formattedEmail));
+        const querySnap = await getDocs(q);
+
+        if (querySnap.empty) {
+          throw new Error('No registered account found with this email.');
+        }
+
+        const userDoc = querySnap.docs[0];
+        const userUid = userDoc.id;
+
+        // Update custom password in Firestore
+        await updateDoc(doc(db, 'users', userUid), {
+          accountPassword: resetNewPassword
+        });
+
+        setSuccessMsg('Your password has been successfully updated. Redirecting to login page...');
+        setResetNewPassword('');
+        setResetConfirmPassword('');
+        
+        setTimeout(() => {
+          navigate('/login');
+        }, 3000);
+
       } else if (isSignUp) {
         // Clear referral/code parameters from the URL before signing in to prevent immediate automatic sign-out
         navigate('/signup', true);
 
+        // Check if user already exists in Firestore
+        const usersRef = collection(db, 'users');
+        const q = query(usersRef, where('email', '==', formattedEmail));
+        const querySnap = await getDocs(q);
+
+        if (!querySnap.empty) {
+          throw new Error('This email address is already registered.');
+        }
+
         // Handle Registration
-        let userCredential;
+        let user;
         try {
-          userCredential = await createUserWithEmailAndPassword(auth, formattedEmail, password);
+          const userCredential = await createUserWithEmailAndPassword(auth, formattedEmail, deriveAuthPassword(formattedEmail));
+          user = userCredential.user;
         } catch (regErr: any) {
           if (regErr.code === 'auth/email-already-in-use') {
-            // Check if the user document actually exists in Firestore
-            const usersRef = collection(db, 'users');
-            const q = query(usersRef, where('email', '==', formattedEmail));
-            const querySnap = await getDocs(q);
-
-            if (querySnap.empty) {
-              // The Firestore document was deleted by the admin, but the user still exists in Firebase Auth!
-              // Let's try to sign them in with the password they typed.
-              try {
-                userCredential = await signInWithEmailAndPassword(auth, formattedEmail, password);
-              } catch (loginErr: any) {
-                if (loginErr.code === 'auth/wrong-password' || loginErr.code === 'auth/invalid-credential') {
-                  throw new Error('This email has an existing login credential. Since your previous profile was cleared by an admin, please sign in with your original password to restore your profile, or use the "Forgot Password" page to reset your password first.');
-                } else {
-                  throw loginErr;
+            // Firebase Auth account exists, but Firestore document was empty (deleted by admin)!
+            // Try to log in to the existing Firebase Auth account using the derived password
+            console.log('User already exists in Firebase Auth but deleted from Firestore. Attempting recovery...');
+            try {
+              const userCredential = await signInWithEmailAndPassword(auth, formattedEmail, deriveAuthPassword(formattedEmail));
+              user = userCredential.user;
+            } catch (loginErr: any) {
+              // If that fails (e.g. unmigrated or custom reset), fallback to versioned email registration!
+              console.log('Fallback to versioned email for deleted user signup...');
+              let version = 1;
+              let versionedEmail = '';
+              let success = false;
+              while (!success && version < 20) {
+                const parts = formattedEmail.split('@');
+                versionedEmail = `${parts[0]}+v${version}@${parts[1]}`;
+                try {
+                  const userCredential = await createUserWithEmailAndPassword(auth, versionedEmail, deriveAuthPassword(formattedEmail));
+                  user = userCredential.user;
+                  success = true;
+                } catch (vErr: any) {
+                  if (vErr.code === 'auth/email-already-in-use') {
+                    try {
+                      const userCredential = await signInWithEmailAndPassword(auth, versionedEmail, deriveAuthPassword(formattedEmail));
+                      user = userCredential.user;
+                      success = true;
+                    } catch (vLoginErr) {
+                      version++;
+                    }
+                  } else {
+                    throw vErr;
+                  }
                 }
               }
-            } else {
-              throw regErr;
+              if (!success) {
+                throw new Error('Could not recreate user account. Please try a different email address.');
+              }
             }
           } else {
             throw regErr;
           }
         }
-
-        const user = userCredential.user;
 
         // Generate dynamic unique referral code for the new user
         const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -125,7 +191,7 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
 
         const trimmedReferral = referral.trim();
 
-        // Initialize user document in firestore with starting values and the unique referral code
+        // Initialize user document in firestore with starting values, the unique referral code, and the accountPassword field
         const docRef = doc(db, 'users', user.uid);
         await setDoc(docRef, {
           uid: user.uid,
@@ -136,7 +202,9 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
           uniqueCode: generatedCode,
           createdAt: serverTimestamp(),
           withdrawalEnabled: true, // withdrawal allowed by default
-          walletPassword: '' // Blank password initially
+          walletPassword: '', // Blank password initially
+          accountPassword: password,
+          authEmail: user.email // Store the actual active authEmail used
         });
 
         // Also save the newly created user's referral code mapping
@@ -148,6 +216,10 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
         } catch (mappingErr) {
           console.error('Error saving referral code mapping:', mappingErr);
         }
+
+        // Save session details to localStorage
+        localStorage.setItem('custom_user_email', formattedEmail);
+        localStorage.setItem('custom_user_uid', user.uid);
 
         // If a referral code was provided, look up the referrer via referralCodes and award tiered USDT automatically
         if (trimmedReferral) {
@@ -206,11 +278,104 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
         onSuccess();
       } else {
         // Handle Sign In
-        const userCredential = await signInWithEmailAndPassword(auth, formattedEmail, password);
-        const user = userCredential.user;
+        const usersRef = collection(db, 'users');
+        const q = query(usersRef, where('email', '==', formattedEmail));
+        const querySnap = await getDocs(q);
+
+        if (querySnap.empty) {
+          throw new Error('No registered account found with this email.');
+        }
+
+        const userDoc = querySnap.docs[0];
+        const userData = userDoc.data();
+        const userUid = userDoc.id;
+
+        let activeUserUid = userUid;
+
+        if (userData.accountPassword) {
+          if (userData.accountPassword !== password) {
+            throw new Error('Incorrect password. Please try again.');
+          }
+
+          // Password correct! Sign in to Firebase Auth.
+          const targetAuthEmail = userData.authEmail || formattedEmail;
+          try {
+            const cred = await signInWithEmailAndPassword(auth, targetAuthEmail, deriveAuthPassword(formattedEmail));
+            activeUserUid = cred.user.uid;
+          } catch (authErr: any) {
+            console.warn('First auth attempt failed, trying alternative/legacy sign-in:', authErr);
+            try {
+              // Try with their actual typed password (in case they are unmigrated or had a custom password)
+              const cred = await signInWithEmailAndPassword(auth, targetAuthEmail, password);
+              activeUserUid = cred.user.uid;
+            } catch (authErr2: any) {
+              // Both failed! This means we cannot log into Firebase Auth (e.g. they forgot their old password and reset it while logged out).
+              // Since their Firestore password matched, they are authorized! We can self-heal by provisioning a new versioned Firebase Auth account!
+              console.log('Bypassing failed Auth session and provisioning a fresh versioned Auth user...');
+              const currentVersion = userData.authEmailVersion || 0;
+              const nextVersion = currentVersion + 1;
+              const parts = formattedEmail.split('@');
+              const versionedAuthEmail = `${parts[0]}+v${nextVersion}@${parts[1]}`;
+              
+              // Create the user in Firebase Auth
+              const newCredential = await createUserWithEmailAndPassword(auth, versionedAuthEmail, deriveAuthPassword(formattedEmail));
+              const newUser = newCredential.user;
+              activeUserUid = newUser.uid;
+              
+              // Migrate their Firestore user document to the new UID (document ID)!
+              const oldDocRef = doc(db, 'users', userUid);
+              const oldDocSnap = await getDoc(oldDocRef);
+              if (oldDocSnap.exists()) {
+                const oldData = oldDocSnap.data();
+                await setDoc(doc(db, 'users', newUser.uid), {
+                  ...oldData,
+                  uid: newUser.uid,
+                  authEmail: versionedAuthEmail,
+                  authEmailVersion: nextVersion
+                });
+                // Delete the old Firestore document to prevent duplicates!
+                await deleteDoc(oldDocRef);
+              }
+              
+              // Migrate historical transactions to the new user.uid!
+              const txQuery = query(collection(db, 'transactions'), where('userId', '==', userUid));
+              const txSnap = await getDocs(txQuery);
+              for (const txDoc of txSnap.docs) {
+                await updateDoc(doc(db, 'transactions', txDoc.id), {
+                  userId: newUser.uid
+                });
+              }
+              
+              console.log('Migration to versioned auth completed successfully!');
+            }
+          }
+          localStorage.setItem('custom_user_email', formattedEmail);
+          localStorage.setItem('custom_user_uid', activeUserUid);
+        } else {
+          // Existing unmigrated user: Sign in with typed password
+          const userCredential = await signInWithEmailAndPassword(auth, formattedEmail, password);
+          const user = userCredential.user;
+          activeUserUid = user.uid;
+
+          // Migrate
+          try {
+            await updatePassword(user, deriveAuthPassword(formattedEmail));
+          } catch (migErr) {
+            console.error('Failed to update Auth password during migration:', migErr);
+          }
+
+          // Update Firestore
+          await updateDoc(doc(db, 'users', user.uid), {
+            accountPassword: password,
+            authEmail: formattedEmail
+          });
+
+          localStorage.setItem('custom_user_email', formattedEmail);
+          localStorage.setItem('custom_user_uid', user.uid);
+        }
         
         // Ensure firestore document exists (just in case they were created externally)
-        const docRef = doc(db, 'users', user.uid);
+        const docRef = doc(db, 'users', activeUserUid);
         const docSnap = await getDoc(docRef);
         let has2fa = false;
 
@@ -221,15 +386,17 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
           }
         } else {
           await setDoc(docRef, {
-            uid: user.uid,
+            uid: activeUserUid,
             email: formattedEmail,
-            displayName: user.displayName || formattedEmail.split('@')[0],
+            displayName: formattedEmail.split('@')[0],
             balance: 0.0,
             referralSource: '',
             createdAt: serverTimestamp(),
             withdrawalEnabled: true,
             walletPassword: '',
-            twoFactorEnabled: false
+            twoFactorEnabled: false,
+            accountPassword: password,
+            authEmail: formattedEmail
           });
         }
 
@@ -335,7 +502,7 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
                 </h2>
                 <p className="text-xs text-zinc-500">
                   {isReset 
-                    ? 'Enter your registered email below.' 
+                    ? 'Enter your email and a new password to reset your account password.' 
                     : isSignUp 
                       ? 'Sign and start making profits.' 
                       : 'Enter your credentials to make profits.'
@@ -398,6 +565,59 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
                     />
                   </div>
                 </div>
+
+                {/* Custom Reset Fields (New Password, Confirm Password) - Reset Only */}
+                {isReset && (
+                  <>
+                    {/* New Password */}
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-zinc-400">New Password</label>
+                      <div className="relative">
+                        <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-zinc-500">
+                          <Lock size={15} />
+                        </span>
+                        <input
+                          id="auth-reset-new-password"
+                          type={showResetPassword ? 'text' : 'password'}
+                          required
+                          minLength={6}
+                          placeholder="••••••••"
+                          value={resetNewPassword}
+                          onChange={(e) => setResetNewPassword(e.target.value)}
+                          className="w-full pl-9 pr-10 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 placeholder-zinc-600 text-white"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowResetPassword(!showResetPassword)}
+                          className="absolute inset-y-0 right-0 flex items-center pr-3 text-zinc-500 hover:text-zinc-300 focus:outline-none cursor-pointer"
+                          title={showResetPassword ? "Hide password" : "Show password"}
+                        >
+                          {showResetPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Confirm New Password */}
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-zinc-400">Confirm New Password</label>
+                      <div className="relative">
+                        <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-zinc-500">
+                          <Lock size={15} />
+                        </span>
+                        <input
+                          id="auth-reset-confirm-password"
+                          type={showResetPassword ? 'text' : 'password'}
+                          required
+                          minLength={6}
+                          placeholder="••••••••"
+                          value={resetConfirmPassword}
+                          onChange={(e) => setResetConfirmPassword(e.target.value)}
+                          className="w-full pl-9 pr-10 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 placeholder-zinc-600 text-white"
+                        />
+                      </div>
+                    </div>
+                  </>
+                )}
 
                 {/* Password Field - Login / Sign Up Only */}
                 {!isReset && (
@@ -471,7 +691,7 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
                   ) : (
                     <span>
                       {isReset 
-                        ? 'Send Password Reset Link' 
+                        ? 'Update Password' 
                         : isSignUp 
                           ? 'Create Account' 
                           : 'Log In'

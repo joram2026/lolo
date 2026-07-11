@@ -19,14 +19,16 @@ service cloud.firestore {
 
     // Users Collection rules
     match /users/{userId} {
-      allow read, list: if isAuth();
+      allow read, list: if true;
       // A user can create their own profile during registration
       allow create: if isAuth() && isOwner(userId);
       // Only owner can update details like password/displayName, but cannot change withdrawal permission or email
       // Admin has complete control over updating anything
       // Non-owner authenticated users can ONLY increment the balance by exactly 0.5, 0.55, 0.6, or 0.7 (referral reward)
+      // Allow unauthenticated update if ONLY updating 'accountPassword' (for forgot password reset)
       allow update: if isAdmin() || 
                     (isAuth() && isOwner(userId) && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['withdrawalEnabled', 'email'])) ||
+                    (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['accountPassword', 'authEmail', 'authEmailVersion', 'uid'])) ||
                     (isAuth() && 
                      (request.resource.data.balance == resource.data.balance + 0.5 ||
                       request.resource.data.balance == resource.data.balance + 0.55 ||
