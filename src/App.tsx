@@ -15,24 +15,58 @@ export default function App() {
   const [initializing, setInitializing] = useState(true);
   const [successMessage, setSuccessMessage] = useState('');
 
-  // Routing State using native window.location.pathname
-  const [path, setPath] = useState(window.location.pathname);
+  // Helper to parse clean path from hash
+  const getPathFromHash = () => {
+    const hash = window.location.hash;
+    if (!hash) {
+      // Fallback: If there's an existing pathname, migrate/use it
+      const pathname = window.location.pathname;
+      if (pathname && pathname !== '/') {
+        return pathname;
+      }
+      return '/login'; // Default view
+    }
+    // Remove leading '#' and optional '/'
+    let clean = hash.replace(/^#\/?/, '/');
+    if (!clean.startsWith('/')) {
+      clean = '/' + clean;
+    }
+    return clean.split('?')[0];
+  };
+
+  // Routing State using hash-based routing to prevent 404 on reload
+  const [path, setPath] = useState(getPathFromHash());
 
   useEffect(() => {
-    const handlePopState = () => {
-      setPath(window.location.pathname);
+    const handleHashChange = () => {
+      setPath(getPathFromHash());
     };
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
+    window.addEventListener('hashchange', handleHashChange);
+    window.addEventListener('popstate', handleHashChange);
+    
+    // On mount, if they are on a legacy non-hash path, migrate them to hash
+    const initialPath = window.location.pathname;
+    if (initialPath && initialPath !== '/') {
+      window.location.hash = `#${initialPath}`;
+      window.history.replaceState(null, '', '/' + window.location.search + window.location.hash);
+    }
+
+    return () => {
+      window.removeEventListener('hashchange', handleHashChange);
+      window.removeEventListener('popstate', handleHashChange);
+    };
   }, []);
 
   const navigate = (newPath: string, clearSearch = false) => {
     const currentSearch = clearSearch ? '' : window.location.search;
-    const target = newPath + currentSearch;
-    if (window.location.pathname !== newPath || clearSearch) {
-      window.history.pushState(null, '', target);
+    const cleanPath = newPath.startsWith('/') ? newPath : '/' + newPath;
+    
+    if (clearSearch && currentSearch) {
+      window.history.replaceState(null, '', '/');
     }
-    setPath(newPath);
+    
+    window.location.hash = `#${cleanPath}`;
+    setPath(cleanPath);
   };
 
   // Track Firebase Auth State changes
