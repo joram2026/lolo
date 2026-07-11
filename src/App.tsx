@@ -10,13 +10,30 @@ import WithdrawalWorkflow from './components/WithdrawalWorkflow';
 import { seedFirestoreIfNeeded } from './seedData';
 import { Sparkles, ArrowLeft, CheckCircle2, ShieldCheck, Heart } from 'lucide-react';
 
-type UserView = 'dashboard' | 'profile' | 'deposit' | 'withdraw' | 'tx_success';
-
 export default function App() {
   const [user, setUser] = useState<any | null>(null);
   const [initializing, setInitializing] = useState(true);
-  const [currentView, setCurrentView] = useState<UserView>('dashboard');
   const [successMessage, setSuccessMessage] = useState('');
+
+  // Routing State using native window.location.pathname
+  const [path, setPath] = useState(window.location.pathname);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      setPath(window.location.pathname);
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  const navigate = (newPath: string) => {
+    const currentSearch = window.location.search;
+    const target = newPath + currentSearch;
+    if (window.location.pathname !== newPath) {
+      window.history.pushState(null, '', target);
+      setPath(newPath);
+    }
+  };
 
   // Track Firebase Auth State changes
   useEffect(() => {
@@ -31,10 +48,49 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
+  // Sync redirection rules based on authentication state and current path
+  useEffect(() => {
+    if (initializing) return;
+
+    const params = new URLSearchParams(window.location.search);
+    const hasReferral = params.has('ref') || params.has('code');
+
+    if (!user) {
+      // Unauthenticated state: only allow /login, /signup, /reset
+      if (path !== '/login' && path !== '/signup' && path !== '/reset') {
+        if (hasReferral) {
+          navigate('/signup');
+        } else {
+          navigate('/login');
+        }
+      }
+    } else if (user.email === 'love@gmail.com') {
+      // Admin: only allow /admin
+      if (path !== '/admin') {
+        navigate('/admin');
+      }
+    } else {
+      // Standard authenticated user paths
+      const validPaths = [
+        '/dashboard',
+        '/wallet',
+        '/trade',
+        '/history',
+        '/profile',
+        '/deposit',
+        '/withdraw',
+        '/tx_success'
+      ];
+      if (!validPaths.includes(path)) {
+        navigate('/dashboard');
+      }
+    }
+  }, [user, initializing, path]);
+
   const handleLogout = async () => {
     try {
       await signOut(auth);
-      setCurrentView('dashboard');
+      navigate('/login');
     } catch (err) {
       console.error('Logout error:', err);
     }
@@ -42,7 +98,7 @@ export default function App() {
 
   const handleTxSuccess = (msg: string) => {
     setSuccessMessage(msg);
-    setCurrentView('tx_success');
+    navigate('/tx_success');
   };
 
   if (initializing) {
@@ -61,7 +117,7 @@ export default function App() {
 
   // 1. Unauthenticated State
   if (!user) {
-    return <AuthPage onSuccess={() => setCurrentView('dashboard')} />;
+    return <AuthPage onSuccess={() => navigate('/dashboard')} path={path} navigate={navigate} />;
   }
 
   // 2. Admin Authentication Bypass (love@gmail.com)
@@ -70,43 +126,47 @@ export default function App() {
   }
 
   // 3. Standard User Account Flows
+  const showDashboard = ['/dashboard', '/wallet', '/trade', '/history'].includes(path);
+
   return (
     <div id="standard-user-app" className="bg-slate-900 min-h-screen">
       
-      {currentView === 'dashboard' && (
+      {showDashboard && (
         <StandardUserDashboard
           user={user}
           onLogout={handleLogout}
-          onOpenProfile={() => setCurrentView('profile')}
-          onOpenDeposit={() => setCurrentView('deposit')}
-          onOpenWithdraw={() => setCurrentView('withdraw')}
+          onOpenProfile={() => navigate('/profile')}
+          onOpenDeposit={() => navigate('/deposit')}
+          onOpenWithdraw={() => navigate('/withdraw')}
+          path={path}
+          navigate={navigate}
         />
       )}
 
-      {currentView === 'profile' && (
+      {path === '/profile' && (
         <ProfileView
           user={user}
-          onBack={() => setCurrentView('dashboard')}
+          onBack={() => navigate('/dashboard')}
         />
       )}
 
-      {currentView === 'deposit' && (
+      {path === '/deposit' && (
         <DepositWorkflow
           user={user}
-          onBack={() => setCurrentView('dashboard')}
+          onBack={() => navigate('/dashboard')}
           onSuccess={() => handleTxSuccess('Your deposit request has been submitted to the Admin Escrow Queue for verification.')}
         />
       )}
 
-      {currentView === 'withdraw' && (
+      {path === '/withdraw' && (
         <WithdrawalWorkflow
           user={user}
-          onBack={() => setCurrentView('dashboard')}
+          onBack={() => navigate('/dashboard')}
           onSuccess={() => handleTxSuccess('Your withdrawal request has been placed in the queue or processed successfully.')}
         />
       )}
 
-      {currentView === 'tx_success' && (
+      {path === '/tx_success' && (
         <div id="success-screen-container" className="min-h-screen max-w-sm mx-auto flex flex-col items-center justify-center p-6 bg-slate-900 text-center font-sans">
           <div className="w-16 h-16 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center mb-5 shadow-lg shadow-emerald-500/5">
             <CheckCircle2 size={36} />
@@ -128,7 +188,7 @@ export default function App() {
 
           <button
             id="back-to-wallet-dashboard"
-            onClick={() => setCurrentView('dashboard')}
+            onClick={() => navigate('/dashboard')}
             className="w-full flex items-center justify-center gap-1.5 py-3 bg-gradient-to-r from-emerald-600 to-teal-500 text-white hover:from-emerald-500 hover:to-teal-400 rounded-xl text-xs font-bold transition-all shadow-md mt-8 cursor-pointer font-sans"
           >
             <ArrowLeft size={14} />

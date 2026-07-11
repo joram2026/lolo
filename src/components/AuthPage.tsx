@@ -10,11 +10,28 @@ import { Shield, Mail, Lock, User, Sparkles, AlertCircle, RefreshCw, Eye, EyeOff
 
 interface AuthPageProps {
   onSuccess: () => void;
+  path: string;
+  navigate: (path: string) => void;
 }
 
-export default function AuthPage({ onSuccess }: AuthPageProps) {
+export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
   const [isSignUp, setIsSignUp] = useState(false);
   const [isReset, setIsReset] = useState(false);
+
+  // Sync view states with the URL path
+  useEffect(() => {
+    if (path === '/signup') {
+      setIsSignUp(true);
+      setIsReset(false);
+    } else if (path === '/reset') {
+      setIsSignUp(false);
+      setIsReset(true);
+    } else {
+      setIsSignUp(false);
+      setIsReset(false);
+    }
+  }, [path]);
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
@@ -363,7 +380,7 @@ export default function AuthPage({ onSuccess }: AuthPageProps) {
                         <button
                           id="auth-forgot-password"
                           type="button"
-                          onClick={() => { setIsReset(true); setError(null); }}
+                          onClick={() => { navigate('/reset'); setError(null); }}
                           className="text-[11px] font-medium text-emerald-400 hover:underline"
                         >
                           Forgot?
@@ -442,7 +459,7 @@ export default function AuthPage({ onSuccess }: AuthPageProps) {
                 {isReset ? (
                   <button
                     id="auth-back-to-login"
-                    onClick={() => { setIsReset(false); setError(null); }}
+                    onClick={() => { navigate('/login'); setError(null); }}
                     className="text-xs font-semibold text-zinc-400 hover:text-white hover:underline"
                   >
                     Back to Sign In
@@ -452,7 +469,7 @@ export default function AuthPage({ onSuccess }: AuthPageProps) {
                     {isSignUp ? 'Already have an account?' : "Don't have an account?"}{' '}
                     <button
                       id="auth-toggle-btn"
-                      onClick={() => { setIsSignUp(!isSignUp); setError(null); }}
+                      onClick={() => { navigate(isSignUp ? '/login' : '/signup'); setError(null); }}
                       className="text-xs font-bold text-emerald-400 hover:underline"
                     >
                       {isSignUp ? 'Sign In' : 'Sign Up'}

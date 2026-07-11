@@ -17,6 +17,8 @@ interface StandardUserDashboardProps {
   onOpenProfile: () => void;
   onOpenDeposit: () => void;
   onOpenWithdraw: () => void;
+  path: string;
+  navigate: (path: string) => void;
 }
 
 const STATIC_CRYPTO: CryptoPrice[] = [
@@ -240,7 +242,9 @@ export default function StandardUserDashboard({
   onLogout, 
   onOpenProfile, 
   onOpenDeposit, 
-  onOpenWithdraw 
+  onOpenWithdraw,
+  path,
+  navigate
 }: StandardUserDashboardProps) {
   
   // Real-time state
@@ -261,6 +265,28 @@ export default function StandardUserDashboard({
 
   // Bottom Sticky Nav Tab
   const [activeTab, setActiveTab] = useState<'home' | 'wallet' | 'trade' | 'history'>('home');
+  
+  // Sync bottom tab selection with current path
+  useEffect(() => {
+    if (path === '/wallet') {
+      setActiveTab('wallet');
+    } else if (path === '/trade') {
+      setActiveTab('trade');
+    } else if (path === '/history') {
+      setActiveTab('history');
+    } else {
+      setActiveTab('home');
+    }
+  }, [path]);
+
+  const handleTabChange = (tabId: 'home' | 'wallet' | 'trade' | 'history') => {
+    setActiveTab(tabId);
+    if (tabId === 'home') {
+      navigate('/dashboard');
+    } else {
+      navigate(`/${tabId}`);
+    }
+  };
   
   // UI States
   const [searchQuery, setSearchQuery] = useState('');
@@ -1745,7 +1771,7 @@ export default function StandardUserDashboard({
             <button
               key={tab.id}
               id={`nav-tab-btn-${tab.id}`}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => handleTabChange(tab.id)}
               className={`flex flex-col items-center gap-1 py-1.5 px-3 rounded-xl transition-all cursor-pointer ${
                 isSelected ? 'text-emerald-400 bg-emerald-500/5' : 'text-zinc-500 hover:text-zinc-300'
               }`}
