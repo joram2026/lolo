@@ -87,8 +87,17 @@ export default function App() {
   useEffect(() => {
     if (initializing) return;
 
-    const params = new URLSearchParams(window.location.search);
-    const hasReferral = params.has('ref') || params.has('code');
+    // Parse query params checking both search and hash
+    const searchParams = new URLSearchParams(window.location.search);
+    let refValue = searchParams.get('ref') || searchParams.get('code');
+    if (!refValue) {
+      const hashIndex = window.location.hash.indexOf('?');
+      if (hashIndex !== -1) {
+        const hashParams = new URLSearchParams(window.location.hash.substring(hashIndex));
+        refValue = hashParams.get('ref') || hashParams.get('code');
+      }
+    }
+    const hasReferral = !!refValue;
 
     if (hasReferral && user && path !== '/signup' && path !== '/login') {
       // If a referral link is opened but a session is active, sign out first

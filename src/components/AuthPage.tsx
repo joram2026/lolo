@@ -36,8 +36,15 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
 
   // Check URL parameters for referral codes
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const refCode = params.get('ref') || params.get('code');
+    const searchParams = new URLSearchParams(window.location.search);
+    let refCode = searchParams.get('ref') || searchParams.get('code');
+    if (!refCode) {
+      const hashIndex = window.location.hash.indexOf('?');
+      if (hashIndex !== -1) {
+        const hashParams = new URLSearchParams(window.location.hash.substring(hashIndex));
+        refCode = hashParams.get('ref') || hashParams.get('code');
+      }
+    }
     if (refCode) {
       setReferral(refCode);
       if (path !== '/signup') {
