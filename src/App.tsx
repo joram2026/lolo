@@ -55,6 +55,15 @@ export default function App() {
     const params = new URLSearchParams(window.location.search);
     const hasReferral = params.has('ref') || params.has('code');
 
+    if (hasReferral && user) {
+      // If a referral link is opened but a session is active, sign out first
+      // so the user is correctly shown the signup page.
+      signOut(auth).then(() => {
+        navigate('/signup');
+      });
+      return;
+    }
+
     if (!user) {
       // Unauthenticated state: only allow /login, /signup, /reset
       if (path !== '/login' && path !== '/signup' && path !== '/reset') {
