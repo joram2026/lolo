@@ -290,7 +290,25 @@ export default function StandardUserDashboard({
   
   // UI States
   const [searchQuery, setSearchQuery] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [userLoaded, setUserLoaded] = useState(false);
+  const [pricesLoaded, setPricesLoaded] = useState(false);
+  const [isUsingFallbackPrices, setIsUsingFallbackPrices] = useState(false);
+  const [pricesLoadError, setPricesLoadError] = useState<string | null>(null);
+
+  const loading = !userLoaded || (!pricesLoaded && !isUsingFallbackPrices);
+
+  // Safety timeout to avoid getting stuck if Firestore prices fetch is slow or blocked
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!pricesLoaded) {
+        console.warn("Crypto prices fetch timed out. Falling back to default offline prices.");
+        setIsUsingFallbackPrices(true);
+        setPricesLoadError("Network latency detected. Displaying offline rates.");
+      }
+    }, 2500); // 2.5 seconds timeout
+
+    return () => clearTimeout(timer);
+  }, [pricesLoaded]);
 
   // Quick Trade state (simulation in trade tab)
   const [tradeFrom, setTradeFrom] = useState('BTC');
@@ -305,10 +323,10 @@ export default function StandardUserDashboard({
       if (snapshot.exists()) {
         setProfile(snapshot.data() as UserAccount);
       }
-      setLoading(false);
+      setUserLoaded(true);
     }, (err) => {
       console.error("Error listening to user doc:", err);
-      setLoading(false);
+      setUserLoaded(true);
     });
 
     const txCol = collection(db, 'transactions');
@@ -331,9 +349,17 @@ export default function StandardUserDashboard({
         // Sort according to standard order
         fetched.sort((a, b) => order.indexOf(a.symbol) - order.indexOf(b.symbol));
         setCryptoPrices(fetched);
+        setPricesLoaded(true);
+        setIsUsingFallbackPrices(false);
+        setPricesLoadError(null);
+      } else {
+        setIsUsingFallbackPrices(true);
+        setPricesLoadError("No live prices found in database. Using default offline rates.");
       }
     }, (err) => {
       console.error("Error listening to crypto prices:", err);
+      setIsUsingFallbackPrices(true);
+      setPricesLoadError("Failed to fetch live prices from server. Using offline rates.");
     });
 
     return () => {
@@ -1311,6 +1337,15 @@ export default function StandardUserDashboard({
         </div>
       ) : (
         <main className="max-w-md mx-auto px-4 mt-5 space-y-6">
+          {pricesLoadError && (
+            <div className="flex items-start gap-2.5 p-3.5 bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-2xl text-[11px] font-medium leading-relaxed shadow-lg animate-fade-in">
+              <AlertCircle size={15} className="shrink-0 mt-0.5 text-amber-400" />
+              <div className="flex-1">
+                <span className="font-bold">Offline Rates Active: </span>
+                {pricesLoadError}
+              </div>
+            </div>
+          )}
           
           {/* TAB 1: HOME */}
           {activeTab === 'home' && (
