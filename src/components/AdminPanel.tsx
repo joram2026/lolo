@@ -9,7 +9,7 @@ import { UserAccount, Transaction, CryptoNetwork, P2PMerchant, CryptoPrice } fro
 import { fetchLivePriceFromBinance, fetchAllLivePrices } from '../utils/cryptoApi';
 import { 
   Users, CheckCircle2, XCircle, Settings, ShieldAlert, Key, 
-  Trash2, ToggleLeft, ToggleRight, Loader, ZoomIn, Plus, Edit, Check, Eye, Star, Mail, RefreshCw, X, FileText, Coins
+  Trash2, ToggleLeft, ToggleRight, Loader, ZoomIn, Plus, Edit, Check, Eye, Star, Mail, RefreshCw, X, FileText, Coins, TrendingUp
 } from 'lucide-react';
 
 const STATIC_CRYPTO: Record<string, { name: string; price: number }> = {
@@ -71,6 +71,7 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
   const [networks, setNetworks] = useState<CryptoNetwork[]>([]);
   const [merchants, setMerchants] = useState<P2PMerchant[]>([]);
   const [cryptoPricesList, setCryptoPricesList] = useState<CryptoPrice[]>([]);
+  const [investmentsList, setInvestmentsList] = useState<any[]>([]);
   const pricesListRef = useRef<CryptoPrice[]>([]);
 
   // Keep ref in sync to avoid stale closures in the auto-sync interval
@@ -79,6 +80,10 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
   }, [cryptoPricesList]);
   const [editingPriceSymbol, setEditingPriceSymbol] = useState<string | null>(null);
   const [priceForm, setPriceForm] = useState<{ price: string; change24h: string }>({ price: '', change24h: '' });
+
+  // Crypto MMF rate settings states
+  const [editingRateSymbol, setEditingRateSymbol] = useState<string | null>(null);
+  const [rateInput, setRateInput] = useState<string>('');
 
   // Selected details for inspection/modals
   const [selectedEvidence, setSelectedEvidence] = useState<string | null>(null);
@@ -285,6 +290,10 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
         DOGE: { name: 'DOGE Coin', price: 0.38, change24h: 2.15 }
       };
 
+      const defaultRates: Record<string, number> = {
+        USDT: 2.5, USDC: 2.5, BTC: 3.5, ETH: 4.0, SOL: 6.0, BNB: 4.5, XRP: 3.0, WLD: 5.0, TRX: 3.5, DOGE: 7.0
+      };
+
       const missingSymbols = requiredSymbols.filter(sym => !prList.some(cp => cp.symbol === sym));
       if (missingSymbols.length > 0) {
         const batch = writeBatch(db);
@@ -295,7 +304,8 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
             price: defaultInfo[sym].price,
             change24h: defaultInfo[sym].change24h,
             mode: 'live',
-            lastSyncedAt: new Date().toISOString()
+            lastSyncedAt: new Date().toISOString(),
+            investmentRate: defaultRates[sym] || 5.0
           };
           batch.set(doc(db, 'crypto_prices', sym), cp);
           prList.push(cp);
@@ -303,10 +313,26 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
         await batch.commit();
       }
 
+      // Ensure all loaded prices have a rate
+      prList = prList.map(cp => {
+        if (cp.investmentRate === undefined) {
+          cp.investmentRate = defaultRates[cp.symbol] || 5.0;
+        }
+        return cp;
+      });
+
       // Filter and sort
       prList = prList.filter(cp => requiredSymbols.includes(cp.symbol));
       prList.sort((a, b) => requiredSymbols.indexOf(a.symbol) - requiredSymbols.indexOf(b.symbol));
       setCryptoPricesList(prList);
+
+      // Fetch Investments
+      const invSnap = await getDocs(collection(db, 'investments'));
+      const invList = invSnap.docs.map(d => ({
+        id: d.id,
+        ...d.data()
+      }));
+      setInvestmentsList(invList);
 
     } catch (err: any) {
       console.error("Error loading admin data: ", err);
@@ -741,7 +767,7 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
         change24h: isNaN(changeVal) ? 0 : changeVal,
         mode: 'custom',
         lastSyncedAt: new Date().toISOString()
-      });
+      }, { merge: true });
       showFeedback('success', `Live price of ${symbol} updated to custom $${priceVal.toLocaleString()} (${changeVal || 0}%).`);
       setEditingPriceSymbol(null);
       await loadAllData(true);
@@ -762,7 +788,7 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
         change24h: apiResult.change24h,
         mode: 'live',
         lastSyncedAt: new Date().toISOString()
-      });
+      }, { merge: true });
       showFeedback('success', `Successfully set ${symbol} to Live Market mode: $${apiResult.price.toLocaleString()} (${apiResult.change24h}%).`);
       await loadAllData(true);
     } catch (err: any) {
@@ -780,7 +806,7 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
         change24h: currentChange,
         mode: 'custom',
         lastSyncedAt: new Date().toISOString()
-      });
+      }, { merge: true });
       setEditingPriceSymbol(symbol);
       setPriceForm({ price: currentPrice.toString(), change24h: currentChange.toString() });
       showFeedback('success', `${symbol} switched to Custom Controlled mode. Edit values below.`);
@@ -788,6 +814,26 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
     } catch (err: any) {
       console.error(err);
       showFeedback('error', `Failed to set ${symbol} to Custom mode: ` + err.message);
+    }
+  };
+
+  const handleSaveInvestmentRate = async (symbol: string) => {
+    const rateVal = parseFloat(rateInput);
+    if (isNaN(rateVal) || rateVal < 0) {
+      alert('Please enter a valid investment rate.');
+      return;
+    }
+    try {
+      const coinRef = doc(db, 'crypto_prices', symbol);
+      await updateDoc(coinRef, {
+        investmentRate: rateVal
+      });
+      showFeedback('success', `MMF Investment Rate for ${symbol} updated to ${rateVal}%.`);
+      setEditingRateSymbol(null);
+      await loadAllData(true);
+    } catch (err: any) {
+      console.error(err);
+      showFeedback('error', 'Failed to update investment rate: ' + err.message);
     }
   };
 
@@ -816,7 +862,7 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
             change24h: apiVal.change24h,
             mode: 'live',
             lastSyncedAt: new Date().toISOString()
-          });
+          }, { merge: true });
           syncedCount++;
         }
       });
@@ -963,7 +1009,7 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                       className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4"
                     >
                       <div className="space-y-1">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center flex-wrap gap-2">
                           <span className="text-xs font-black text-zinc-100">{u.displayName || 'No Name'}</span>
                           {u.email === 'love@gmail.com' && (
                             <span className="text-[9px] bg-red-500/20 text-red-400 border border-red-500/30 px-1 rounded uppercase font-bold">Admin</span>
@@ -971,6 +1017,18 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                           {!u.withdrawalEnabled && (
                             <span className="text-[9px] bg-amber-500/10 border border-amber-500/20 text-amber-400 px-1.5 rounded font-semibold uppercase">Withdraw Restricted</span>
                           )}
+                          {(() => {
+                            const activeUserInvs = investmentsList.filter(inv => inv.userId === u.uid && inv.status === 'active');
+                            if (activeUserInvs.length > 0) {
+                              return (
+                                <span className="text-[9px] bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-1.5 py-0.5 rounded-full font-bold flex items-center gap-1">
+                                  <span className="w-1.2 h-1.2 rounded-full bg-emerald-400 animate-pulse" />
+                                  {activeUserInvs.length} Active MMF
+                                </span>
+                              );
+                            }
+                            return null;
+                          })()}
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 text-[11px] text-zinc-400 font-mono">
                           <div><span className="text-zinc-500 font-sans font-medium">Email:</span> {u.email}</div>
@@ -1005,6 +1063,48 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                             </div>
                           </div>
                         )}
+
+                        {/* MMF Investments Display */}
+                        {(() => {
+                          const userInvestments = investmentsList.filter(inv => inv.userId === u.uid && inv.status === 'active');
+                          if (userInvestments.length === 0) return null;
+                          return (
+                            <div className="mt-3 pt-2.5 border-t border-zinc-800/60 max-w-xl">
+                              <span className="text-[10px] text-zinc-500 font-extrabold uppercase tracking-wider block mb-1.5 flex items-center gap-1">
+                                <Coins size={12} className="text-emerald-400" />
+                                Active MMF Investment Portfolios ({userInvestments.length})
+                              </span>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1">
+                                {userInvestments.map((inv: any) => {
+                                  const unlockDate = inv.unlockAt?.toDate ? inv.unlockAt.toDate().toLocaleDateString() : (inv.unlockAt ? new Date(inv.unlockAt).toLocaleDateString() : 'N/A');
+                                  return (
+                                    <div 
+                                      key={inv.id} 
+                                      className="p-2.5 rounded-xl border text-[10px] font-mono flex flex-col justify-between gap-1 bg-emerald-950/15 border-emerald-500/20 text-emerald-300"
+                                    >
+                                      <div className="flex justify-between items-center">
+                                        <span className="font-bold text-zinc-200">{inv.amount} {inv.coinSymbol}</span>
+                                        <span className="text-[8px] font-black uppercase tracking-wider px-1 py-0.25 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 animate-pulse">
+                                          {inv.status}
+                                        </span>
+                                      </div>
+                                      <div className="flex justify-between items-center text-[9px] text-zinc-500 mt-1">
+                                        <span>Rate: {inv.dailyRate}% Daily</span>
+                                        {inv.autoInvest && (
+                                          <span className="text-teal-400 font-bold">Auto-invest</span>
+                                        )}
+                                      </div>
+                                      <div className="text-[8px] text-zinc-600 border-t border-zinc-800/40 pt-1 mt-0.5 flex justify-between">
+                                        <span>End Date:</span>
+                                        <span>{unlockDate}</span>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </div>
 
                       <div className="flex flex-col items-end gap-2 shrink-0 border-t border-zinc-800/80 md:border-0 pt-3 md:pt-0">
@@ -1503,6 +1603,86 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                                 id={`cancel-price-btn-${cp.symbol}`}
                                 onClick={() => setEditingPriceSymbol(null)}
                                 className="px-1.5 py-1 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 text-[9px] rounded transition-colors cursor-pointer"
+                              >
+                                X
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Crypto MMF Investment Rates Controller */}
+              <div id="crypto-mmf-rates-controller" className="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-800/80 pb-3">
+                  <div className="flex items-center gap-2">
+                    <TrendingUp className="text-emerald-400" size={16} />
+                    <div>
+                      <h3 className="text-xs font-black text-zinc-300 uppercase tracking-wider">Crypto MMF Investment Rates</h3>
+                      <p className="text-[10px] text-zinc-500 font-semibold mt-0.5">Define the daily investment profit percentage rate for each cryptocurrency coin.</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                  {cryptoPricesList.map((cp) => {
+                    const isEditingRate = editingRateSymbol === cp.symbol;
+                    const dailyRate = cp.investmentRate ?? 5.0;
+
+                    return (
+                      <div key={`rate-${cp.symbol}`} className="bg-zinc-950 p-3.5 rounded-2xl border border-zinc-900/60 flex flex-col justify-between space-y-3 relative overflow-hidden">
+                        <div className="absolute top-0 left-0 right-0 h-[2px] bg-emerald-500/50" />
+                        
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <span className="text-[10px] text-zinc-500 font-bold block">{cp.name}</span>
+                            <span className="text-xs font-black text-zinc-200 font-mono tracking-wider">{cp.symbol}</span>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-[9px] text-zinc-500 block">Daily Yield</span>
+                            <span className="text-sm font-black text-emerald-400 font-mono">{dailyRate}%</span>
+                          </div>
+                        </div>
+
+                        {!isEditingRate ? (
+                          <button
+                            id={`edit-rate-btn-${cp.symbol}`}
+                            onClick={() => {
+                              setEditingRateSymbol(cp.symbol);
+                              setRateInput(dailyRate.toString());
+                            }}
+                            className="w-full py-2 bg-zinc-900 hover:bg-zinc-850 text-zinc-300 hover:text-white font-bold text-[10px] rounded-xl border border-zinc-800 transition-colors cursor-pointer"
+                          >
+                            Edit Rate
+                          </button>
+                        ) : (
+                          <div className="space-y-2 pt-2 border-t border-zinc-900/80">
+                            <div className="space-y-1">
+                              <label className="text-[9px] text-zinc-500 font-semibold block">Daily % Rate</label>
+                              <input
+                                id={`input-rate-${cp.symbol}`}
+                                type="number"
+                                step="any"
+                                value={rateInput}
+                                onChange={(e) => setRateInput(e.target.value)}
+                                className="w-full px-2 py-1 bg-zinc-900 border border-zinc-800 rounded text-[11px] text-white font-mono focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                              />
+                            </div>
+                            <div className="flex gap-1">
+                              <button
+                                id={`save-rate-btn-${cp.symbol}`}
+                                onClick={() => handleSaveInvestmentRate(cp.symbol)}
+                                className="flex-1 py-1 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-black text-[9px] rounded transition-colors cursor-pointer"
+                              >
+                                Save
+                              </button>
+                              <button
+                                id={`cancel-rate-btn-${cp.symbol}`}
+                                onClick={() => setEditingRateSymbol(null)}
+                                className="px-2 py-1 bg-zinc-900 hover:bg-zinc-850 text-zinc-400 text-[9px] rounded transition-colors cursor-pointer"
                               >
                                 X
                               </button>

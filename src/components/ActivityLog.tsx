@@ -4,7 +4,7 @@ import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { Transaction } from '../types';
 import { 
   ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Clock, CheckCircle2, XCircle, 
-  ChevronDown, ChevronUp, Filter, RefreshCw, Calendar, ListFilter, Gift
+  ChevronDown, ChevronUp, Filter, RefreshCw, Calendar, ListFilter, Gift, TrendingUp
 } from 'lucide-react';
 
 enum OperationType {
@@ -58,13 +58,14 @@ const FILTER_OPTIONS = [
   { value: 'sell', label: 'Sell Crypto' },
   { value: 'swap', label: 'Swap & Convert' },
   { value: 'referral', label: 'Referral Rewards' },
+  { value: 'investments', label: 'Crypto MMF' },
 ] as const;
 
 export default function ActivityLog({ userId }: ActivityLogProps) {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<'all' | 'deposits' | 'withdrawals' | 'buy' | 'sell' | 'swap' | 'referral'>('all');
+  const [filter, setFilter] = useState<'all' | 'deposits' | 'withdrawals' | 'buy' | 'sell' | 'swap' | 'referral' | 'investments'>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState(false);
 
@@ -122,6 +123,7 @@ export default function ActivityLog({ userId }: ActivityLogProps) {
     const isSell = tx.type === 'sell_crypto';
     const isSwap = tx.type === 'swap_crypto';
     const isReferral = tx.type === 'referral_reward';
+    const isInvestment = tx.type === 'invested' || tx.type === 'investment_earning';
 
     if (filter === 'deposits') return isDeposit;
     if (filter === 'withdrawals') return isWithdrawal;
@@ -129,6 +131,7 @@ export default function ActivityLog({ userId }: ActivityLogProps) {
     if (filter === 'sell') return isSell;
     if (filter === 'swap') return isSwap;
     if (filter === 'referral') return isReferral;
+    if (filter === 'investments') return isInvestment;
     
     // For 'all' filter, show everything
     return true;
@@ -221,6 +224,22 @@ export default function ActivityLog({ userId }: ActivityLogProps) {
           colorClass: 'text-[#a78bfa]', // purple-400
           bgClass: 'bg-purple-500/10 border-purple-500/15 text-[#a78bfa]',
           icon: <ArrowRightLeft size={16} />
+        };
+      case 'invested':
+        return {
+          label: 'MMF Invested',
+          isCredit: false,
+          colorClass: 'text-amber-500',
+          bgClass: 'bg-amber-500/10 border-amber-500/15 text-amber-500',
+          icon: <TrendingUp size={16} />
+        };
+      case 'investment_earning':
+        return {
+          label: 'MMF Earning',
+          isCredit: true,
+          colorClass: 'text-emerald-400',
+          bgClass: 'bg-emerald-500/10 border-emerald-500/15 text-emerald-400',
+          icon: <TrendingUp size={16} />
         };
       default:
         const isDeposit = type.startsWith('deposit');

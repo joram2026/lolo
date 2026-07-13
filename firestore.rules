@@ -47,7 +47,7 @@ service cloud.firestore {
         (request.resource.data.userId == request.auth.uid && 
          (request.resource.data.status == 'PENDING APPROVAL' || 
           (request.resource.data.status == 'APPROVED' && 
-           request.resource.data.type in ['buy_crypto', 'sell_crypto', 'swap_crypto', 'withdraw_p2p']))) ||
+           request.resource.data.type in ['buy_crypto', 'sell_crypto', 'swap_crypto', 'withdraw_p2p', 'invested', 'investment_earning']))) ||
         (request.resource.data.type == 'referral_reward' && 
          request.resource.data.amount in [0.5, 0.55, 0.6, 0.7] && 
          request.resource.data.status == 'APPROVED')
@@ -83,6 +83,14 @@ service cloud.firestore {
     match /crypto_prices/{symbol} {
       allow read: if isAuth();
       allow write: if isAdmin();
+    }
+
+    // Investments configuration rules
+    match /investments/{investmentId} {
+      allow read: if isAdmin() || (isAuth() && resource.data.userId == request.auth.uid);
+      allow create: if isAuth() && request.resource.data.userId == request.auth.uid;
+      allow update: if isAdmin() || (isAuth() && resource.data.userId == request.auth.uid);
+      allow delete: if isAdmin();
     }
   }
 }

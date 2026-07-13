@@ -12,7 +12,7 @@ export interface UserAccount {
   twoFactorSecret?: string;
 }
 
-export type TransactionType = 'deposit_crypto' | 'deposit_p2p' | 'withdraw_crypto' | 'withdraw_p2p' | 'buy_crypto' | 'sell_crypto' | 'swap_crypto' | 'referral_reward';
+export type TransactionType = 'deposit_crypto' | 'deposit_p2p' | 'withdraw_crypto' | 'withdraw_p2p' | 'buy_crypto' | 'sell_crypto' | 'swap_crypto' | 'referral_reward' | 'invested' | 'investment_earning';
 
 export type TransactionStatus = 'PENDING APPROVAL' | 'APPROVED' | 'DECLINED';
 
@@ -30,6 +30,8 @@ export interface Transaction {
   network?: string; // TRC20, ERC20, etc.
   address?: string; // destination wallet address or merchant details
   merchantName?: string;
+  coinSymbol?: string; // for MMF or specific coin transactions
+  coinAmount?: number; // for MMF or specific coin transactions
 }
 
 export interface CryptoNetwork {
@@ -56,6 +58,7 @@ export interface CryptoPrice {
   change24h: number;
   mode?: 'live' | 'custom';
   lastSyncedAt?: string;
+  investmentRate?: number; // Daily MMF investment rate in %
 }
 
 export interface NewsItem {

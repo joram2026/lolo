@@ -8,7 +8,7 @@ import {
   TrendingUp, TrendingDown, ArrowUpRight, ArrowDownLeft, Search, 
   User, LogOut, ArrowRightLeft, ShieldCheck, Activity, Wallet, 
   HelpCircle, RefreshCw, Coins, ArrowRight, MessageSquare, AlertCircle,
-  History, ArrowLeft, X, ChevronDown
+  History, ArrowLeft, X, ChevronDown, Check
 } from 'lucide-react';
 
 interface StandardUserDashboardProps {
@@ -250,6 +250,17 @@ export default function StandardUserDashboard({
   // Real-time state
   const [profile, setProfile] = useState<UserAccount | null>(null);
   const [userTransactions, setUserTransactions] = useState<Transaction[]>([]);
+
+  // Crypto MMF Investment states
+  const [activeInvestments, setActiveInvestments] = useState<any[]>([]);
+  const [tradeMode, setTradeMode] = useState<'swap' | 'mmf'>('swap');
+  const [mmfSubView, setMmfSubView] = useState<'main' | 'list' | 'form'>('main');
+  const [selectedCoinForInvestment, setSelectedCoinForInvestment] = useState<CryptoPrice | null>(null);
+  const [investmentAmount, setInvestmentAmount] = useState<string>('');
+  const [autoInvestToggle, setAutoInvestToggle] = useState<boolean>(false);
+  const [investmentLoading, setInvestmentLoading] = useState<boolean>(false);
+  const [investmentError, setInvestmentError] = useState<string | null>(null);
+  const [investmentSuccess, setInvestmentSuccess] = useState<string | null>(null);
   
   // Live fluctuating crypto prices state
   const [cryptoPrices, setCryptoPrices] = useState<CryptoPrice[]>(STATIC_CRYPTO);
@@ -305,7 +316,7 @@ export default function StandardUserDashboard({
         setIsUsingFallbackPrices(true);
         setPricesLoadError("Network latency detected. Displaying offline rates.");
       }
-    }, 2500); // 2.5 seconds timeout
+    }, 10000); // 10 seconds timeout
 
     return () => clearTimeout(timer);
   }, [pricesLoaded]);
@@ -362,10 +373,18 @@ export default function StandardUserDashboard({
       setPricesLoadError("Failed to fetch live prices from server. Using offline rates.");
     });
 
+    const invCol = collection(db, 'investments');
+    const invQuery = query(invCol, where('userId', '==', user.uid));
+    const unsubscribeInvestments = onSnapshot(invQuery, (snapshot) => {
+      const invs = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as any));
+      setActiveInvestments(invs);
+    });
+
     return () => {
       unsubscribeUser();
       unsubscribeTx();
       unsubscribePrices();
+      unsubscribeInvestments();
     };
   }, [user.uid]);
 
@@ -455,6 +474,181 @@ export default function StandardUserDashboard({
     }
     return 0;
   };
+
+  const getLockedAmount = (symbol: string): number => {
+    return activeInvestments
+      .filter(inv => inv.coinSymbol === symbol && inv.status === 'active')
+      .reduce((sum, inv) => sum + inv.amount, 0);
+  };
+
+  const handleInitiateInvestment = async () => {
+    if (!selectedCoinForInvestment) return;
+    setInvestmentError(null);
+    setInvestmentSuccess(null);
+
+    const amountVal = parseFloat(investmentAmount);
+    if (isNaN(amountVal) || amountVal <= 0) {
+      setInvestmentError("Please enter a valid amount to invest.");
+      return;
+    }
+
+    const currentHolding = getCoinHolding(selectedCoinForInvestment.symbol);
+    const lockedAmount = getLockedAmount(selectedCoinForInvestment.symbol);
+    const unlockedHolding = currentHolding - lockedAmount;
+
+    if (unlockedHolding < amountVal) {
+      setInvestmentError(`Insufficient unlocked ${selectedCoinForInvestment.symbol} balance. You hold ${currentHolding} but ${lockedAmount} is already locked in MMF.`);
+      return;
+    }
+
+    setInvestmentLoading(true);
+
+    try {
+      const unlockTime = new Date();
+      unlockTime.setHours(unlockTime.getHours() + 24);
+
+      // Create investment document
+      await addDoc(collection(db, 'investments'), {
+        userId: user.uid,
+        userEmail: user.email,
+        coinSymbol: selectedCoinForInvestment.symbol,
+        amount: amountVal,
+        dailyRate: selectedCoinForInvestment.investmentRate ?? 5.0,
+        status: 'active',
+        autoInvest: autoInvestToggle,
+        createdAt: new Date(),
+        unlockAt: unlockTime
+      });
+
+      // Create transaction record: invested
+      await addDoc(collection(db, 'transactions'), {
+        userId: user.uid,
+        userEmail: user.email,
+        type: 'invested',
+        amount: parseFloat((amountVal * selectedCoinForInvestment.price).toFixed(2)),
+        coinSymbol: selectedCoinForInvestment.symbol,
+        coinAmount: amountVal,
+        status: 'APPROVED',
+        createdAt: new Date(),
+        paymentMessage: `Crypto MMF Invested: Locked ${amountVal} ${selectedCoinForInvestment.symbol} at ${selectedCoinForInvestment.investmentRate ?? 5.0}% daily yield.`
+      });
+
+      setInvestmentSuccess(`Successfully invested ${amountVal} ${selectedCoinForInvestment.symbol} in MMF! Your funds are locked for 1 day.`);
+      setInvestmentAmount('');
+      setMmfSubView('main');
+    } catch (err: any) {
+      console.error(err);
+      setInvestmentError("Failed to initiate investment: " + err.message);
+    } finally {
+      setInvestmentLoading(false);
+    }
+  };
+
+  const handleToggleAutoInvest = async (invId: string, currentVal: boolean) => {
+    try {
+      setInvestmentError(null);
+      setInvestmentSuccess(null);
+      const invRef = doc(db, 'investments', invId);
+      await updateDoc(invRef, {
+        autoInvest: !currentVal
+      });
+      setInvestmentSuccess(`Successfully ${!currentVal ? 'enabled' : 'disabled'} auto-invest for this investment!`);
+    } catch (err: any) {
+      console.error(err);
+      setInvestmentError("Failed to update auto-invest setting: " + err.message);
+    }
+  };
+
+  // Check and auto-matured active investments in real-time
+  useEffect(() => {
+    if (!profile || activeInvestments.length === 0) return;
+
+    const checkMaturity = async () => {
+      const now = new Date();
+      const matured = activeInvestments.filter(inv => {
+        if (inv.status !== 'active' || !inv.unlockAt) return false;
+        const unlockDate = inv.unlockAt.toDate ? inv.unlockAt.toDate() : new Date(inv.unlockAt);
+        return unlockDate <= now;
+      });
+
+      if (matured.length === 0) return;
+
+      try {
+        for (const inv of matured) {
+          const coinInfo = cryptoPrices.find(c => c.symbol === inv.coinSymbol);
+          const coinPrice = coinInfo?.price || 1.0;
+          const profit = inv.amount * (inv.dailyRate / 100);
+
+          let newBalance = profile.balance || 0;
+          const currentHoldings = profile.holdings || {};
+          const newHoldings = { ...currentHoldings };
+
+          if (inv.coinSymbol === 'USDT') {
+            newBalance += profit;
+          } else {
+            newHoldings[inv.coinSymbol] = (currentHoldings[inv.coinSymbol] || 0) + profit;
+          }
+
+          const userRef = doc(db, 'users', user.uid);
+          await updateDoc(userRef, {
+            balance: parseFloat(newBalance.toFixed(2)),
+            holdings: newHoldings
+          });
+
+          const oldInvRef = doc(db, 'investments', inv.id);
+          await updateDoc(oldInvRef, {
+            status: 'completed'
+          });
+
+          await addDoc(collection(db, 'transactions'), {
+            userId: user.uid,
+            userEmail: user.email,
+            type: 'investment_earning',
+            amount: parseFloat((profit * coinPrice).toFixed(2)),
+            coinSymbol: inv.coinSymbol,
+            coinAmount: parseFloat(profit.toFixed(6)),
+            status: 'APPROVED',
+            createdAt: new Date(),
+            paymentMessage: `Crypto MMF Earnings: Received +${parseFloat(profit.toFixed(6))} ${inv.coinSymbol} daily profit yield.`
+          });
+
+          if (inv.autoInvest) {
+            const newPrincipal = inv.amount + profit;
+            const unlockTime = new Date();
+            unlockTime.setHours(unlockTime.getHours() + 24);
+
+            await addDoc(collection(db, 'investments'), {
+              userId: user.uid,
+              userEmail: user.email,
+              coinSymbol: inv.coinSymbol,
+              amount: parseFloat(newPrincipal.toFixed(6)),
+              dailyRate: inv.dailyRate,
+              status: 'active',
+              autoInvest: true,
+              createdAt: new Date(),
+              unlockAt: unlockTime
+            });
+
+            await addDoc(collection(db, 'transactions'), {
+              userId: user.uid,
+              userEmail: user.email,
+              type: 'invested',
+              amount: parseFloat((newPrincipal * coinPrice).toFixed(2)),
+              coinSymbol: inv.coinSymbol,
+              coinAmount: parseFloat(newPrincipal.toFixed(6)),
+              status: 'APPROVED',
+              createdAt: new Date(),
+              paymentMessage: `Crypto MMF Auto-Rollover: Reinvested ${parseFloat(newPrincipal.toFixed(6))} ${inv.coinSymbol} into MMF portfolio.`
+            });
+          }
+        }
+      } catch (err) {
+        console.error("Auto maturity execution error:", err);
+      }
+    };
+
+    checkMaturity();
+  }, [activeInvestments, profile, cryptoPrices]);
 
   const ASSET_ALLOCATION_DEFS = [
     { symbol: 'USDT', color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' },
@@ -585,9 +779,11 @@ export default function StandardUserDashboard({
         setTradeLoading(false);
       }
     } else {
-      if (coinHolding < amount) {
+      const lockedAmount = getLockedAmount(symbol);
+      const unlockedHolding = coinHolding - lockedAmount;
+      if (unlockedHolding < amount) {
         setTradeMessage({ 
-          text: `Insufficient ${symbol} balance. You hold ${coinHolding} ${symbol} but tried to sell ${amount} ${symbol}.`, 
+          text: `Insufficient unlocked ${symbol} balance. You hold ${coinHolding} ${symbol} (${lockedAmount} ${symbol} is currently locked in Crypto MMF Investments) but tried to sell ${amount} ${symbol}.`, 
           isError: true 
         });
         setTradeLoading(false);
@@ -658,10 +854,12 @@ export default function StandardUserDashboard({
     const toCoin = cryptoPrices.find(c => c.symbol === tradeTo);
 
     const fromHolding = getCoinHolding(tradeFrom);
+    const lockedAmount = getLockedAmount(tradeFrom);
+    const unlockedHolding = fromHolding - lockedAmount;
 
-    if (fromHolding < amt) {
+    if (unlockedHolding < amt) {
       setSwapMessage({
-        text: `Insufficient ${tradeFrom} balance. You hold ${fromHolding} ${tradeFrom} but tried to swap ${amt} ${tradeFrom}.`,
+        text: `Insufficient unlocked ${tradeFrom} balance. You hold ${fromHolding} ${tradeFrom} (${lockedAmount} ${tradeFrom} is currently locked in Crypto MMF Investments) but tried to swap ${amt} ${tradeFrom}.`,
         isError: true
       });
       setSwapLoading(false);
@@ -1666,121 +1864,456 @@ export default function StandardUserDashboard({
 
           {/* TAB 3: TRADE SIMULATOR */}
           {activeTab === 'trade' && (
-            <div className="bg-slate-800 border border-slate-700/80 rounded-3xl p-5 space-y-5 animate-fade-in">
-              <div>
-                <h3 className="text-sm font-black text-zinc-300 tracking-tight flex items-center gap-1.5">
-                  <ArrowRightLeft size={16} className="text-emerald-400" />
-                  Quick Converter Simulator
-                </h3>
-                <p className="text-xs text-zinc-500 mt-0.5">Learn stablecoin rates and instantly swap between token balances.</p>
+            <div className="space-y-5">
+              {/* Trade Mode Selector */}
+              <div className="grid grid-cols-2 bg-slate-950 p-1 border border-slate-850 rounded-2xl gap-1 select-none">
+                <button
+                  type="button"
+                  id="trade-mode-swap-btn"
+                  onClick={() => {
+                    setTradeMode('swap');
+                    setInvestmentError(null);
+                    setInvestmentSuccess(null);
+                  }}
+                  className={`py-2.5 text-[10px] font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                    tradeMode === 'swap'
+                      ? 'bg-gradient-to-tr from-emerald-600 to-teal-500 text-slate-950 shadow-md shadow-emerald-500/15'
+                      : 'bg-transparent text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  <ArrowRightLeft size={14} />
+                  Quick Converter
+                </button>
+                <button
+                  type="button"
+                  id="trade-mode-mmf-btn"
+                  onClick={() => {
+                    setTradeMode('mmf');
+                    setMmfSubView('main');
+                    setInvestmentError(null);
+                    setInvestmentSuccess(null);
+                  }}
+                  className={`py-2.5 text-[10px] font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                    tradeMode === 'mmf'
+                      ? 'bg-gradient-to-tr from-emerald-600 to-teal-500 text-slate-950 shadow-md shadow-emerald-500/15'
+                      : 'bg-transparent text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  <Coins size={14} />
+                  MMF Investment
+                </button>
               </div>
 
-              <div className="space-y-4">
-                {/* From Asset */}
-                <div className="space-y-1.5">
-                  <div className="flex justify-between items-center select-none">
-                    <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">From Asset</label>
-                    <span className="text-[10px] text-zinc-400 font-bold font-mono">
-                      Balance: {getCoinHolding(tradeFrom)} {tradeFrom}
-                    </span>
+              {/* swap mode */}
+              {tradeMode === 'swap' ? (
+                <div className="bg-slate-800 border border-slate-700/80 rounded-3xl p-5 space-y-5 animate-fade-in">
+                  <div>
+                    <h3 className="text-sm font-black text-zinc-300 tracking-tight flex items-center gap-1.5">
+                      <ArrowRightLeft size={16} className="text-emerald-400" />
+                      Quick Converter Simulator
+                    </h3>
+                    <p className="text-xs text-zinc-500 mt-0.5">Learn stablecoin rates and instantly swap between token balances.</p>
                   </div>
-                  <CustomCoinSelect
-                    value={tradeFrom}
-                    onChange={(val) => {
-                      setTradeFrom(val);
-                      setSwapMessage(null);
-                    }}
-                    coins={cryptoPrices}
-                  />
-                </div>
 
-                {/* To Asset */}
-                <div className="space-y-1.5">
-                  <div className="flex justify-between items-center select-none">
-                    <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">To Asset</label>
-                    <span className="text-[10px] text-zinc-400 font-bold font-mono">
-                      Balance: {getCoinHolding(tradeTo)} {tradeTo}
-                    </span>
-                  </div>
-                  <CustomCoinSelect
-                    value={tradeTo}
-                    onChange={(val) => {
-                      setTradeTo(val);
-                      setSwapMessage(null);
-                    }}
-                    coins={cryptoPrices}
-                  />
-                </div>
+                  <div className="space-y-4">
+                    {/* From Asset */}
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between items-center select-none">
+                        <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">From Asset</label>
+                        <span className="text-[10px] text-zinc-400 font-bold font-mono">
+                          Balance: {getCoinHolding(tradeFrom)} {tradeFrom}
+                        </span>
+                      </div>
+                      <CustomCoinSelect
+                        value={tradeFrom}
+                        onChange={(val) => {
+                          setTradeFrom(val);
+                          setSwapMessage(null);
+                        }}
+                        coins={cryptoPrices}
+                      />
+                    </div>
 
-                {/* Amount to convert */}
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Amount to convert</label>
-                  <div className="relative">
-                    <input
-                      id="trade-amount-input"
-                      type="number"
-                      placeholder="e.g. 0.5"
-                      value={tradeAmount}
-                      onChange={(e) => {
-                        setTradeAmount(e.target.value);
-                        setSwapMessage(null);
-                      }}
-                      className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-xs focus:outline-none focus:border-emerald-500 text-white font-mono"
-                    />
+                    {/* To Asset */}
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between items-center select-none">
+                        <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">To Asset</label>
+                        <span className="text-[10px] text-zinc-400 font-bold font-mono">
+                          Balance: {getCoinHolding(tradeTo)} {tradeTo}
+                        </span>
+                      </div>
+                      <CustomCoinSelect
+                        value={tradeTo}
+                        onChange={(val) => {
+                          setTradeTo(val);
+                          setSwapMessage(null);
+                        }}
+                        coins={cryptoPrices}
+                      />
+                    </div>
+
+                    {/* Amount to convert */}
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Amount to convert</label>
+                      <div className="relative">
+                        <input
+                          id="trade-amount-input"
+                          type="number"
+                          placeholder="e.g. 0.5"
+                          value={tradeAmount}
+                          onChange={(e) => {
+                            setTradeAmount(e.target.value);
+                            setSwapMessage(null);
+                          }}
+                          className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-xs focus:outline-none focus:border-emerald-500 text-white font-mono"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setTradeAmount(getCoinHolding(tradeFrom).toString())}
+                          className="absolute right-2.5 top-2 px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-lg hover:bg-emerald-500/20 cursor-pointer"
+                        >
+                          MAX
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Output conversion */}
+                    {tradeResult !== null && (
+                      <div className="bg-slate-950 p-4 border border-slate-850 rounded-2xl flex flex-col gap-1 items-center justify-center relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-16 h-16 bg-emerald-500/5 rounded-full blur-xl" />
+                        <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider select-none">Live Conversion Value</span>
+                        <span className="text-xl font-black text-emerald-400 font-mono">
+                          {tradeResult} <span className="text-xs text-zinc-400 font-normal">{tradeTo}</span>
+                        </span>
+                        <span className="text-[9px] text-zinc-600 font-semibold mt-0.5 select-none">Dynamic rate applied</span>
+                      </div>
+                    )}
+
+                    {/* Messages feedback */}
+                    {swapMessage && (
+                      <div className={`p-3.5 rounded-xl border text-xs flex items-start gap-2.5 ${
+                        swapMessage.isError 
+                          ? 'bg-red-500/10 border-red-500/20 text-red-400' 
+                          : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                      }`}>
+                        <AlertCircle size={15} className="mt-0.5 shrink-0" />
+                        <span className="leading-relaxed font-medium">{swapMessage.text}</span>
+                      </div>
+                    )}
+
+                    {/* Execution Button */}
                     <button
                       type="button"
-                      onClick={() => setTradeAmount(getCoinHolding(tradeFrom).toString())}
-                      className="absolute right-2.5 top-2 px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-lg hover:bg-emerald-500/20 cursor-pointer"
+                      disabled={swapLoading || !tradeAmount || parseFloat(tradeAmount) <= 0}
+                      onClick={handleSwapConvert}
+                      className="w-full py-3.5 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-slate-950 font-black text-xs uppercase tracking-wider shadow-lg shadow-emerald-500/10 active:scale-[0.985] transition-all disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center gap-1.5 cursor-pointer"
                     >
-                      MAX
+                      {swapLoading ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin"></div>
+                          <span>Processing Conversion...</span>
+                        </>
+                      ) : (
+                        <>
+                          <ArrowRightLeft size={14} />
+                          <span>Execute Instant Swap</span>
+                        </>
+                      )}
                     </button>
                   </div>
                 </div>
+              ) : (
+                /* mmf investment mode */
+                <div className="bg-slate-800 border border-slate-700/80 rounded-3xl p-5 space-y-5 animate-fade-in">
+                  {mmfSubView === 'main' && (
+                    <div className="space-y-5">
+                      <div>
+                        <h3 className="text-sm font-black text-zinc-300 tracking-tight flex items-center gap-1.5">
+                          <Coins size={16} className="text-emerald-400" />
+                          Crypto MMF Investment
+                        </h3>
+                        <p className="text-[11px] text-zinc-500 mt-0.5">High-yield short term locked investments</p>
+                      </div>
 
-                {/* Output conversion */}
-                {tradeResult !== null && (
-                  <div className="bg-slate-950 p-4 border border-slate-850 rounded-2xl flex flex-col gap-1 items-center justify-center relative overflow-hidden">
-                    <div className="absolute top-0 right-0 w-16 h-16 bg-emerald-500/5 rounded-full blur-xl" />
-                    <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider select-none">Live Conversion Value</span>
-                    <span className="text-xl font-black text-emerald-400 font-mono">
-                      {tradeResult} <span className="text-xs text-zinc-400 font-normal">{tradeTo}</span>
-                    </span>
-                    <span className="text-[9px] text-zinc-600 font-semibold mt-0.5 select-none">Dynamic rate applied</span>
-                  </div>
-                )}
+                      {/* Display Alert Message feedback */}
+                      {investmentSuccess && (
+                        <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-xl text-xs flex gap-2">
+                          <Check size={14} className="shrink-0 mt-0.5" />
+                          <span>{investmentSuccess}</span>
+                        </div>
+                      )}
+                      {investmentError && (
+                        <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl text-xs flex gap-2">
+                          <AlertCircle size={14} className="shrink-0 mt-0.5" />
+                          <span>{investmentError}</span>
+                        </div>
+                      )}
 
-                {/* Messages feedback */}
-                {swapMessage && (
-                  <div className={`p-3.5 rounded-xl border text-xs flex items-start gap-2.5 ${
-                    swapMessage.isError 
-                      ? 'bg-red-500/10 border-red-500/20 text-red-400' 
-                      : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
-                  }`}>
-                    <AlertCircle size={15} className="mt-0.5 shrink-0" />
-                    <span className="leading-relaxed font-medium">{swapMessage.text}</span>
-                  </div>
-                )}
+                      {/* Coins Cards Grid */}
+                      <div className="grid grid-cols-1 gap-3">
+                        {cryptoPrices.map(coin => {
+                          const userHolding = getCoinHolding(coin.symbol);
+                          const locked = getLockedAmount(coin.symbol);
+                          const unlocked = Math.max(0, userHolding - locked);
+                          const dailyRate = coin.investmentRate ?? 5.0;
 
-                {/* Execution Button */}
-                <button
-                  type="button"
-                  disabled={swapLoading || !tradeAmount || parseFloat(tradeAmount) <= 0}
-                  onClick={handleSwapConvert}
-                  className="w-full py-3.5 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-slate-950 font-black text-xs uppercase tracking-wider shadow-lg shadow-emerald-500/10 active:scale-[0.985] transition-all disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center gap-1.5 cursor-pointer"
-                >
-                  {swapLoading ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin"></div>
-                      <span>Processing Conversion...</span>
-                    </>
-                  ) : (
-                    <>
-                      <ArrowRightLeft size={14} />
-                      <span>Execute Instant Swap</span>
-                    </>
+                          return (
+                            <div 
+                              key={coin.symbol}
+                              className="bg-slate-950/45 border border-slate-850 hover:border-slate-800 p-4 rounded-2xl flex justify-between items-center transition-all group"
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center p-1.5 shadow-inner">
+                                  <img 
+                                    src={getCoinLogoUrl(coin.symbol)} 
+                                    alt={coin.name} 
+                                    className="w-full h-full object-contain rounded-full"
+                                    referrerPolicy="no-referrer"
+                                  />
+                                </div>
+                                <div>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="font-bold text-xs text-zinc-200">{coin.name}</span>
+                                    <span className="text-[9px] font-bold font-mono text-zinc-500 px-1.5 py-0.25 bg-slate-900 border border-slate-800 rounded">{coin.symbol}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2 mt-1">
+                                    <span className="text-[10px] text-emerald-400 font-extrabold flex items-center gap-0.5 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded-md">
+                                      {dailyRate}% daily
+                                    </span>
+                                    <span className="text-[9px] text-zinc-500 font-bold">Lock: 1 Day</span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="text-right flex flex-col items-end gap-1.5">
+                                {userHolding > 0 && (
+                                  <span className="text-[9px] text-zinc-400 font-bold font-mono">
+                                    Holdings: {unlocked.toFixed(4)} {coin.symbol}
+                                    {locked > 0 && <span className="text-amber-500 font-bold"> (+{locked.toFixed(2)} locked)</span>}
+                                  </span>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedCoinForInvestment(coin);
+                                    setInvestmentAmount('');
+                                    setAutoInvestToggle(false);
+                                    setMmfSubView('form');
+                                    setInvestmentError(null);
+                                    setInvestmentSuccess(null);
+                                  }}
+                                  className="px-4 py-2 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-slate-950 text-xs font-extrabold shadow-md shadow-emerald-500/5 active:scale-95 transition-all cursor-pointer"
+                                >
+                                  Invest
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Display Active/Completed Investments */}
+                      {activeInvestments.length > 0 && (
+                        <div className="space-y-3 pt-4 border-t border-slate-850">
+                          <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
+                            <History size={12} className="text-zinc-400" />
+                            MMF Investment History
+                          </h4>
+                          <div className="space-y-2.5 max-h-[300px] overflow-y-auto pr-1">
+                            {activeInvestments.map((inv: any) => {
+                              const createdDate = inv.createdAt?.toDate ? inv.createdAt.toDate().toLocaleDateString() : new Date(inv.createdAt).toLocaleDateString();
+                              const unlockDate = inv.unlockAt?.toDate ? inv.unlockAt.toDate().toLocaleDateString() : new Date(inv.unlockAt).toLocaleDateString();
+                              const isCompleted = inv.status === 'completed';
+
+                              return (
+                                <div 
+                                  key={inv.id} 
+                                  className={`p-3.5 rounded-xl border flex justify-between items-center text-xs font-mono select-none ${
+                                    isCompleted 
+                                      ? 'bg-slate-900/30 border-slate-850 text-zinc-500' 
+                                      : 'bg-emerald-950/10 border-emerald-500/10 text-emerald-300'
+                                  }`}
+                                >
+                                  <div>
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="font-bold text-[11px] text-zinc-200">{inv.amount} {inv.coinSymbol}</span>
+                                      <span className="text-[9px] px-1 py-0.25 rounded bg-slate-950 border border-slate-850 text-emerald-400 font-bold">{inv.dailyRate}% Daily</span>
+                                    </div>
+                                    <div className="text-[9px] text-zinc-500 mt-1 flex flex-wrap items-center gap-2">
+                                      <span>End: {unlockDate}</span>
+                                      {!isCompleted ? (
+                                        <button
+                                          type="button"
+                                          onClick={() => handleToggleAutoInvest(inv.id, inv.autoInvest)}
+                                          className={`text-[9px] font-bold px-1.5 py-0.5 rounded cursor-pointer transition-all flex items-center gap-1 ${
+                                            inv.autoInvest 
+                                              ? 'bg-teal-500/15 text-teal-400 border border-teal-500/30 hover:bg-teal-500/25' 
+                                              : 'bg-zinc-850 text-zinc-400 border border-zinc-750 hover:bg-zinc-800'
+                                          }`}
+                                        >
+                                          <span className={`w-1.5 h-1.5 rounded-full ${inv.autoInvest ? 'bg-teal-400 animate-pulse' : 'bg-zinc-500'}`} />
+                                          Auto: {inv.autoInvest ? 'ON' : 'OFF'}
+                                        </button>
+                                      ) : (
+                                        inv.autoInvest && <span className="text-teal-400 font-extrabold text-[8px] px-1 py-0.25 rounded bg-teal-500/10 border border-teal-500/20">● Auto-invested</span>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  <div className="text-right">
+                                    <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.75 rounded-md ${
+                                      isCompleted 
+                                        ? 'bg-zinc-800/30 text-zinc-500' 
+                                        : 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'
+                                    }`}>
+                                      {inv.status}
+                                    </span>
+                                    <div className="text-[9px] text-zinc-500 mt-1">
+                                      Yield: +{(inv.amount * (inv.dailyRate / 100)).toFixed(4)} {inv.coinSymbol}
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   )}
-                </button>
-              </div>
+
+                  {mmfSubView === 'form' && selectedCoinForInvestment && (
+                    <div className="space-y-5 animate-fade-in">
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setMmfSubView('main')}
+                          className="p-1.5 rounded-lg hover:bg-slate-900 border border-transparent hover:border-slate-800 text-zinc-400 hover:text-white transition-all cursor-pointer"
+                        >
+                          <ArrowLeft size={16} />
+                        </button>
+                        <div>
+                          <h4 className="text-xs font-black text-zinc-300 uppercase tracking-wider">Configure MMF Investment</h4>
+                          <p className="text-[10px] text-zinc-500 mt-0.5">Define your high-yield asset allocation</p>
+                        </div>
+                      </div>
+
+                      {/* Chosen Coin Summary Card */}
+                      <div className="p-4 bg-slate-950/60 border border-slate-850 rounded-2xl flex justify-between items-center">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-slate-900 border border-slate-850 flex items-center justify-center p-1.5">
+                            <img 
+                              src={getCoinLogoUrl(selectedCoinForInvestment.symbol)} 
+                              alt={selectedCoinForInvestment.name} 
+                              className="w-full h-full object-contain rounded-full"
+                              referrerPolicy="no-referrer"
+                            />
+                          </div>
+                          <div>
+                            <span className="font-bold text-xs text-zinc-200 block">{selectedCoinForInvestment.name} MMF</span>
+                            <span className="text-[10px] text-emerald-400 font-extrabold block mt-0.5">
+                              Rate: {selectedCoinForInvestment.investmentRate ?? 5.0}% daily yield
+                            </span>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-[9px] text-zinc-500 font-bold uppercase block">Holdings Unlocked</span>
+                          <span className="text-xs font-bold font-mono text-zinc-200 mt-0.5 block">
+                            {(getCoinHolding(selectedCoinForInvestment.symbol) - getLockedAmount(selectedCoinForInvestment.symbol)).toFixed(4)} {selectedCoinForInvestment.symbol}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Form Controls */}
+                      <div className="space-y-4">
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block">Investment Amount</label>
+                          <div className="relative">
+                            <input
+                              id="investment-amount-input"
+                              type="number"
+                              placeholder="e.g. 50"
+                              value={investmentAmount}
+                              onChange={(e) => {
+                                setInvestmentAmount(e.target.value);
+                                setInvestmentError(null);
+                                setInvestmentSuccess(null);
+                              }}
+                              className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-xs focus:outline-none focus:border-emerald-500 text-white font-mono"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const maxVal = Math.max(0, getCoinHolding(selectedCoinForInvestment.symbol) - getLockedAmount(selectedCoinForInvestment.symbol));
+                                setInvestmentAmount(maxVal.toString());
+                              }}
+                              className="absolute right-2.5 top-2 px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-lg hover:bg-emerald-500/20 cursor-pointer"
+                            >
+                              MAX
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Profit preview calculator */}
+                        {parseFloat(investmentAmount) > 0 && (
+                          <div className="bg-slate-950/40 border border-slate-850 p-3 rounded-xl flex justify-between items-center select-none">
+                            <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Estimated 1D profit</span>
+                            <span className="text-xs font-bold font-mono text-emerald-400">
+                              +{(parseFloat(investmentAmount) * ((selectedCoinForInvestment.investmentRate ?? 5.0) / 100)).toFixed(4)} {selectedCoinForInvestment.symbol}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Auto-Invest option toggle */}
+                        <div className="p-3.5 bg-slate-950/40 border border-slate-850 rounded-2xl flex justify-between items-center select-none">
+                          <div className="max-w-[80%]">
+                            <span className="text-[11px] font-bold text-zinc-200 block">Daily Auto-Invest Option</span>
+                            <span className="text-[9px] text-zinc-500 leading-relaxed block mt-0.5">
+                              Automatically reinvest principal and profit daily for compounding high yields.
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setAutoInvestToggle(!autoInvestToggle)}
+                            className={`w-9 h-5 rounded-full p-0.5 transition-colors duration-200 ease-in-out cursor-pointer flex items-center ${
+                              autoInvestToggle ? 'bg-emerald-500 justify-end' : 'bg-slate-800 justify-start border border-slate-700'
+                            }`}
+                          >
+                            <span className="w-4 h-4 rounded-full bg-slate-950 shadow-md"></span>
+                          </button>
+                        </div>
+
+                        {/* Feedback messages */}
+                        {investmentError && (
+                          <div className="p-3.5 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl text-xs flex gap-2">
+                            <AlertCircle size={15} className="shrink-0 mt-0.5" />
+                            <span>{investmentError}</span>
+                          </div>
+                        )}
+
+                        {/* Invest Submit button */}
+                        <button
+                          type="button"
+                          disabled={investmentLoading || !investmentAmount || parseFloat(investmentAmount) <= 0}
+                          onClick={handleInitiateInvestment}
+                          className="w-full py-3.5 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-slate-950 font-black text-xs uppercase tracking-wider shadow-lg shadow-emerald-500/10 active:scale-[0.985] transition-all disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
+                          {investmentLoading ? (
+                            <>
+                              <div className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin"></div>
+                              <span>Locking Funds...</span>
+                            </>
+                          ) : (
+                            <>
+                              <ShieldCheck size={14} />
+                              <span>Authorize Investment</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}          {/* TAB 4: HISTORY */}
           {activeTab === 'history' && (
