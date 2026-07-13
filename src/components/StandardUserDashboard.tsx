@@ -1498,9 +1498,26 @@ export default function StandardUserDashboard({
           <button 
             id="profile-toggle-btn"
             onClick={onOpenProfile}
-            className="w-10 h-10 rounded-full bg-slate-800 border border-slate-700 hover:border-slate-600 transition-colors flex items-center justify-center text-zinc-300 hover:text-white"
+            className="w-12 h-12 rounded-full bg-gradient-to-tr from-emerald-400 via-teal-500 to-indigo-500 p-[1.5px] hover:scale-105 active:scale-95 transition-all duration-300 shadow-[0_0_12px_rgba(16,185,129,0.15)] hover:shadow-[0_0_16px_rgba(16,185,129,0.3)] group cursor-pointer relative"
           >
-            <User size={18} />
+            <div className="w-full h-full rounded-full bg-slate-900 flex items-center justify-center text-emerald-400 group-hover:text-white transition-all relative overflow-hidden">
+              <div className="absolute z-10">
+                <User size={14} className="group-hover:scale-110 transition-transform duration-300" />
+              </div>
+              <svg viewBox="0 0 100 100" className="absolute inset-0 w-full h-full animate-[spin_12s_linear_infinite] group-hover:animate-[spin_6s_linear_infinite] transition-all duration-500 pointer-events-none">
+                <defs>
+                  <path
+                    id="dashboardHeaderProfileCirclePath"
+                    d="M 50,50 m -36,0 a 36,36 0 1,1 72,0 a 36,36 0 1,1 -72,0"
+                  />
+                </defs>
+                <text className="text-[9.5px] font-black uppercase tracking-[0.16em] fill-emerald-400/70 group-hover:fill-emerald-300 transition-colors">
+                  <textPath href="#dashboardHeaderProfileCirclePath" startOffset="0%">
+                    PROFILE • PROFILE • PROFILE 
+                  </textPath>
+                </text>
+              </svg>
+            </div>
           </button>
           <div>
             <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block">Logged In</span>
@@ -1511,19 +1528,14 @@ export default function StandardUserDashboard({
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Secured network icon */}
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-bold text-[10px] uppercase">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-            Sim-Net
-          </div>
-          
           <button
             id="dashboard-logout-btn"
             onClick={onLogout}
-            className="p-2 rounded-full bg-slate-800 border border-slate-700 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+            className="px-3 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/25 text-rose-400 hover:text-rose-300 text-[10px] font-black uppercase tracking-wider rounded-xl transition-all active:scale-95 cursor-pointer flex items-center gap-1.5"
             title="Log Out"
           >
-            <LogOut size={16} />
+            <LogOut size={11} />
+            <span>LOG OUT</span>
           </button>
         </div>
       </header>
