@@ -41,7 +41,7 @@ export default function DepositWorkflow({ user, onBack, onSuccess }: DepositWork
   const [selectedMerchant, setSelectedMerchant] = useState<P2PMerchant | null>(null);
   const [amountShillings, setAmountShillings] = useState<string>('');
   const [calculatedUSD, setCalculatedUSD] = useState<number>(0);
-  const [p2pTxId] = useState<string>(() => 'LOLO-P2P-' + Math.floor(1000000 + Math.random() * 9000000));
+  const [p2pTxId] = useState<string>(() => 'ARBITRAGE-P2P-' + Math.floor(1000000 + Math.random() * 9000000));
   const [p2pMessage, setP2pMessage] = useState<string>('');
 
   const [loading, setLoading] = useState<boolean>(false);
@@ -124,7 +124,7 @@ export default function DepositWorkflow({ user, onBack, onSuccess }: DepositWork
     setError(null);
 
     try {
-      const txId = 'LOLO-CRYPTO-' + Math.floor(1000000 + Math.random() * 9000000);
+      const txId = 'ARBITRAGE-CRYPTO-' + Math.floor(1000000 + Math.random() * 9000000);
       const usdVal = parseFloat(amountUSD);
       
       const newTx: Omit<Transaction, 'id'> = {
@@ -676,7 +676,7 @@ export default function DepositWorkflow({ user, onBack, onSuccess }: DepositWork
                     <span className="font-mono font-bold text-zinc-100">{parseFloat(amountShillings).toLocaleString()} Shs</span>
                   </div>
                   <div className="flex justify-between items-center text-xs border-b border-slate-700/60 pb-2">
-                    <span className="text-zinc-500">Transaction ID (LOLO Ref)</span>
+                    <span className="text-zinc-500">Transaction ID (ARBITRAGE Ref)</span>
                     <span className="font-mono font-bold text-zinc-400 text-[10px]">{p2pTxId}</span>
                   </div>
                 </div>

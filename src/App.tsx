@@ -165,8 +165,8 @@ export default function App() {
   if (initializing) {
     return (
       <div id="app-loading-screen" className="min-h-screen bg-slate-900 flex flex-col items-center justify-center gap-4 text-zinc-100 font-sans">
-        <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-400 text-slate-950 font-black text-lg flex items-center justify-center animate-bounce shadow-xl shadow-emerald-500/10 tracking-widest">
-          LOLO
+        <div className="px-4 h-12 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-400 text-slate-950 font-black text-xs flex items-center justify-center animate-bounce shadow-xl shadow-emerald-500/10 tracking-widest">
+          ARBITRAGE
         </div>
         <div className="flex flex-col items-center gap-1.5">
           <div className="w-6 h-6 border-3 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>

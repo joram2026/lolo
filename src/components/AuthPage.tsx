@@ -430,10 +430,10 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
         
         {/* Brand Banner */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-400 text-white font-black text-2xl shadow-xl shadow-emerald-500/15 mb-3 tracking-widest uppercase">
-            LOLO
+          <div className="inline-flex items-center justify-center px-4 h-14 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-400 text-slate-950 font-black text-xs shadow-xl shadow-emerald-500/15 mb-3 tracking-widest uppercase">
+            ARBITRAGE
           </div>
-          <h1 className="text-2xl font-black text-zinc-100 tracking-tight">LOLO Crypto</h1>
+          <h1 className="text-2xl font-black text-zinc-100 tracking-tight">ARBITRAGE Crypto</h1>
           <p className="text-xs text-zinc-400 mt-1 max-w-[260px] mx-auto">
             Start earning from crypto with the most favourable rates.
           </p>

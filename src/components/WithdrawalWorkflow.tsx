@@ -42,7 +42,7 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess }: Withdraw
   const [merchants, setMerchants] = useState<P2PMerchant[]>([]);
   const [selectedMerchant, setSelectedMerchant] = useState<P2PMerchant | null>(null);
   const [p2pUSDAmount, setP2pUSDAmount] = useState<string>('');
-  const [p2pTxId] = useState<string>(() => 'LOLO-SELL-' + Math.floor(1000000 + Math.random() * 9000000));
+  const [p2pTxId] = useState<string>(() => 'ARBITRAGE-SELL-' + Math.floor(1000000 + Math.random() * 9000000));
 
   const [loading, setLoading] = useState<boolean>(false);
   const [submitting, setSubmitting] = useState<boolean>(false);

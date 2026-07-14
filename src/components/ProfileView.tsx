@@ -6,7 +6,7 @@ import { updateProfile } from 'firebase/auth';
 import { 
   Shield, Key, Sparkles, User, Gift, Check, ArrowLeft, AlertCircle, 
   Smartphone, Copy, CheckCircle2, QrCode, Power, Lock, ShieldAlert,
-  ChevronRight, HelpCircle, MessageSquare, Send
+  ChevronRight, HelpCircle, MessageSquare, Send, Download, Laptop
 } from 'lucide-react';
 
 interface ProfileViewProps {
@@ -22,7 +22,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Active sub-page state
-  const [activeSubPage, setActiveSubPage] = useState<'menu' | 'personal' | 'referral' | 'pin' | '2fa' | 'support'>('menu');
+  const [activeSubPage, setActiveSubPage] = useState<'menu' | 'personal' | 'referral' | 'pin' | '2fa' | 'support' | 'mobile_app'>('menu');
 
   // New PIN States
   const [newPin, setNewPin] = useState('');
@@ -68,7 +68,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
 
   const handleCopyReferral = () => {
     const code = (profile as any)?.uniqueCode || '';
-    const referralLink = `https://lolo-navy.vercel.app/#/signup?ref=${code}`;
+    const referralLink = `${window.location.origin}/#/signup?ref=${code}`;
     navigator.clipboard.writeText(referralLink);
     setCopiedReferral(true);
     setTimeout(() => setCopiedReferral(false), 2500);
@@ -439,6 +439,30 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                 <ChevronRight size={16} className="text-zinc-500 group-hover:text-zinc-300 transition-colors" />
               </div>
             </button>
+
+            {/* Mobile App & Android Sync */}
+            <button
+              id="nav-mobile-app"
+              onClick={() => { setActiveSubPage('mobile_app'); setMessage(null); }}
+              className="w-full bg-gradient-to-r from-slate-850 to-slate-800/60 border border-emerald-500/30 hover:border-emerald-400/60 hover:bg-slate-850/90 p-4 rounded-2xl flex items-center gap-4 transition-all cursor-pointer group shadow-[0_0_12px_rgba(16,185,129,0.06)]"
+            >
+              <div className="w-10 h-10 rounded-xl bg-emerald-500/15 flex items-center justify-center text-emerald-400 shrink-0 group-hover:scale-105 transition-all">
+                <Smartphone size={18} />
+              </div>
+              <div className="flex-1 min-w-0 text-left">
+                <h4 className="text-sm font-bold text-zinc-100 flex items-center gap-1.5">
+                  Mobile App (Android/iOS)
+                  <span className="text-[8px] bg-emerald-400/15 text-emerald-400 border border-emerald-500/20 px-1 rounded-full font-extrabold uppercase tracking-wider animate-pulse">Sync</span>
+                </h4>
+                <p className="text-[11px] text-zinc-400 mt-0.5 leading-tight">Install on your Android home screen in 5 seconds</p>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+                  Ready
+                </span>
+                <ChevronRight size={16} className="text-emerald-400 group-hover:translate-x-0.5 transition-transform" />
+              </div>
+            </button>
           </div>
         </div>
       )}
@@ -740,7 +764,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                 </label>
                 <div className="flex gap-2 items-center bg-slate-900 border border-slate-700/60 p-2.5 rounded-xl font-mono text-xs">
                   <span className="text-zinc-300 font-medium select-all truncate flex-1">
-                    https://lolo-navy.vercel.app/#/signup?ref={(profile as any)?.uniqueCode || ''}
+                    {window.location.origin}/#/signup?ref={(profile as any)?.uniqueCode || ''}
                   </span>
                   <button
                     type="button"
@@ -1123,7 +1147,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                   <span className="text-[10px] font-black text-zinc-500 uppercase tracking-wider block">1. Scan Google Authenticator QR Code</span>
                   <div className="flex justify-center p-3 bg-white rounded-xl max-w-[170px] mx-auto shadow-inner">
                     <img 
-                      src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(`otpauth://totp/LOLO:${profile?.email || user.email}?secret=${temp2faSecret}&issuer=LOLO%20Crypto%20Escrow`)}`}
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(`otpauth://totp/ARBITRAGE:${profile?.email || user.email}?secret=${temp2faSecret}&issuer=ARBITRAGE%20Crypto%20Escrow`)}`}
                       alt="2FA QR Code"
                       className="w-36 h-36"
                       referrerPolicy="no-referrer"
@@ -1259,7 +1283,129 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
               <ShieldAlert size={18} className="text-emerald-400 shrink-0 mt-0.5" />
               <div>
                 <strong className="text-zinc-300 block mb-1">Official Protection Notice</strong>
-                LOLO Support agents will never ask for your Google Authenticator 2FA secret, account passwords, or secure wallet PINs. Never share these credentials with anyone.
+                ARBITRAGE Support agents will never ask for your Google Authenticator 2FA secret, account passwords, or secure wallet PINs. Never share these credentials with anyone.
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Subpage: Mobile App Installation & Sync */}
+      {activeSubPage === 'mobile_app' && (
+        <div className="space-y-6">
+          {/* Header */}
+          <div className="flex items-center gap-3">
+            <button 
+              id="mobile-app-back-btn"
+              onClick={() => { setActiveSubPage('menu'); }}
+              className="p-2 rounded-full bg-slate-800 border border-slate-700 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+            >
+              <ArrowLeft size={18} />
+            </button>
+            <div className="text-left">
+              <h2 className="text-xl font-bold tracking-tight text-white flex items-center gap-2">
+                Mobile Application Setup
+                <span className="text-[9px] bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">Active Sync</span>
+              </h2>
+              <p className="text-xs text-zinc-500">Access ARBITRAGE as a high-fidelity standalone Android & iOS App</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-left">
+            {/* Left Column: Instant PWA Install (For general users) */}
+            <div className="bg-slate-800/30 border border-slate-800 hover:border-slate-700/80 p-5 rounded-2xl space-y-4 transition-all">
+              <div className="flex justify-between items-center">
+                <span className="text-[10px] bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider flex items-center gap-1">
+                  <Sparkles size={10} /> Instant Installation
+                </span>
+                <span className="text-[10px] font-mono text-zinc-500">No Play Store Required</span>
+              </div>
+              
+              <div>
+                <h3 className="text-sm font-bold text-zinc-100 flex items-center gap-1.5">
+                  <Smartphone size={16} className="text-emerald-400" />
+                  Install as PWA Home App
+                </h3>
+                <p className="text-xs text-zinc-400 mt-1.5 leading-relaxed">
+                  ARBITRAGE is engineered as a modern Progressive Web App (PWA). You can install it on your mobile device as a standalone application in less than 5 seconds.
+                </p>
+              </div>
+
+              <div className="space-y-3.5 pt-1.5 border-t border-slate-700/40">
+                <h4 className="text-[10px] font-extrabold text-emerald-400 uppercase tracking-widest">How to Install on Android (Chrome):</h4>
+                <ol className="space-y-2.5 text-xs text-zinc-300 pl-4 list-decimal marker:text-emerald-500/60 marker:font-bold">
+                  <li>Open the ARBITRAGE website link in <strong className="text-white">Google Chrome</strong>.</li>
+                  <li>Tap the menu button <strong className="text-zinc-100 font-mono">(⋮)</strong> in the top-right corner of the browser.</li>
+                  <li>Select <strong className="text-white">"Add to Home screen"</strong> or <strong className="text-white">"Install App"</strong>.</li>
+                  <li>Confirm the installation. The ARBITRAGE app icon will immediately appear in your launcher and home screen!</li>
+                </ol>
+              </div>
+
+              <div className="space-y-3.5 pt-1.5 border-t border-slate-700/40">
+                <h4 className="text-[10px] font-extrabold text-teal-400 uppercase tracking-widest">How to Install on iOS (Safari):</h4>
+                <ol className="space-y-2.5 text-xs text-zinc-300 pl-4 list-decimal marker:text-teal-500/60 marker:font-bold">
+                  <li>Open the ARBITRAGE website in <strong className="text-white">Safari</strong>.</li>
+                  <li>Tap the <strong className="text-white">Share</strong> button (square icon with up arrow) in the bottom navigation bar.</li>
+                  <li>Scroll down and tap <strong className="text-white">"Add to Home Screen"</strong>.</li>
+                  <li>Name the shortcut and tap Add. You can now launch the app full-screen from your home screen!</li>
+                </ol>
+              </div>
+
+              <div className="pt-3 border-t border-slate-700/40 bg-emerald-500/5 p-3 rounded-xl border border-emerald-500/10 text-[11px] text-emerald-300/90 leading-relaxed flex items-start gap-2">
+                <CheckCircle2 size={14} className="text-emerald-400 shrink-0 mt-0.5" />
+                <span>
+                  <strong>Full Database Sync:</strong> The installed app syncs in real-time with the central database. Deposits, investments, profile updates, and active 2FA passcodes remain fully active on all platforms.
+                </span>
+              </div>
+            </div>
+
+            {/* Right Column: Native Android APK Build (For developers/administrators) */}
+            <div className="bg-slate-800/30 border border-slate-800 hover:border-slate-700/80 p-5 rounded-2xl space-y-4 transition-all flex flex-col justify-between">
+              <div className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <span className="text-[10px] bg-sky-500/10 border border-sky-500/30 text-sky-400 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider flex items-center gap-1">
+                    <Laptop size={10} /> Native Compile Option
+                  </span>
+                  <span className="text-[10px] font-mono text-zinc-500">Android Studio Ready</span>
+                </div>
+
+                <div>
+                  <h3 className="text-sm font-bold text-zinc-100 flex items-center gap-1.5">
+                    <Download size={16} className="text-sky-400" />
+                    Package as Native Android APK
+                  </h3>
+                  <p className="text-xs text-zinc-400 mt-1.5 leading-relaxed">
+                    This project has been pre-configured with <strong className="text-zinc-200">Ionic Capacitor</strong>. Administrators can build a fully signed native Android APK to upload to the Google Play Store or distribute as a standalone download.
+                  </p>
+                </div>
+
+                <div className="space-y-3 pt-1.5 border-t border-slate-700/40 font-mono text-[10px]">
+                  <h4 className="text-[10px] font-extrabold text-sky-400 uppercase tracking-widest font-sans">Capacitor Build Steps:</h4>
+                  <div className="bg-slate-950 p-3 rounded-xl border border-slate-850 space-y-2 text-zinc-400 select-all leading-relaxed">
+                    <p className="text-zinc-500"># 1. Build the web app assets</p>
+                    <p className="text-emerald-400">npm run build</p>
+                    <p className="text-zinc-500"># 2. Add Android platform (if first time)</p>
+                    <p className="text-emerald-400">npx cap add android</p>
+                    <p className="text-zinc-500"># 3. Synchronize assets to native build</p>
+                    <p className="text-emerald-400">npx cap sync</p>
+                    <p className="text-zinc-500"># 4. Compile APK in Android Studio</p>
+                    <p className="text-emerald-400">npx cap open android</p>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block">Target Package Identifier</span>
+                  <div className="bg-slate-900 border border-slate-850 p-2.5 rounded-xl font-mono text-[10px] text-zinc-300">
+                    com.arbitrage.app
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-3 border-t border-slate-700/40 bg-sky-500/5 p-3 rounded-xl border border-sky-500/10 text-[11px] text-sky-300/90 leading-relaxed flex items-start gap-2">
+                <Shield size={14} className="text-sky-400 shrink-0 mt-0.5" />
+                <span>
+                  <strong>Safe Credentials:</strong> When built as an APK, Capacitor uses a secure webview mapping directly to the live Firebase Auth Domain, allowing safe 2FA and transaction processes.
+                </span>
               </div>
             </div>
           </div>
