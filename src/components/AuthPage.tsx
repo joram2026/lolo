@@ -44,7 +44,7 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
 
   const [showPassword, setShowPassword] = useState(false);
 
-  // Check URL parameters for referral codes
+  // Check URL parameters and localStorage for referral codes
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search);
     let refCode = searchParams.get('ref') || searchParams.get('code');
@@ -55,6 +55,13 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
         refCode = hashParams.get('ref') || hashParams.get('code');
       }
     }
+    
+    if (refCode) {
+      localStorage.setItem('pending_referral_code', refCode);
+    } else {
+      refCode = localStorage.getItem('pending_referral_code') || '';
+    }
+
     if (refCode) {
       setReferral(refCode);
       if (path !== '/signup') {
@@ -275,6 +282,7 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
           }
         }
 
+        localStorage.removeItem('pending_referral_code');
         onSuccess();
       } else {
         // Handle Sign In
