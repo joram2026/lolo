@@ -68,7 +68,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
 
   const handleCopyReferral = () => {
     const code = (profile as any)?.uniqueCode || '';
-    const referralLink = `${window.location.origin}/#/signup?ref=${code}`;
+    const referralLink = `https://lolo-navy.vercel.app/#/signup?ref=${code}`;
     navigator.clipboard.writeText(referralLink);
     setCopiedReferral(true);
     setTimeout(() => setCopiedReferral(false), 2500);
@@ -764,7 +764,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                 </label>
                 <div className="flex gap-2 items-center bg-slate-900 border border-slate-700/60 p-2.5 rounded-xl font-mono text-xs">
                   <span className="text-zinc-300 font-medium select-all truncate flex-1">
-                    {window.location.origin}/#/signup?ref={(profile as any)?.uniqueCode || ''}
+                    https://lolo-navy.vercel.app/#/signup?ref={(profile as any)?.uniqueCode || ''}
                   </span>
                   <button
                     type="button"
