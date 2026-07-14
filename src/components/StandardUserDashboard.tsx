@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { db } from '../firebase';
 import { doc, getDoc, onSnapshot, collection, query, where, getDocs, updateDoc, addDoc } from 'firebase/firestore';
 import { UserAccount, Transaction, CryptoPrice } from '../types';
@@ -253,6 +253,7 @@ export default function StandardUserDashboard({
 
   // Crypto MMF Investment states
   const [activeInvestments, setActiveInvestments] = useState<any[]>([]);
+  const processingInvestmentsRef = useRef<Set<string>>(new Set());
   const [tradeMode, setTradeMode] = useState<'swap' | 'mmf'>('swap');
   const [mmfSubView, setMmfSubView] = useState<'main' | 'list' | 'form'>('main');
   const [selectedCoinForInvestment, setSelectedCoinForInvestment] = useState<CryptoPrice | null>(null);
@@ -565,41 +566,53 @@ export default function StandardUserDashboard({
 
     const checkMaturity = async () => {
       const now = new Date();
+      // Filter out matured active investments that are NOT already in the processing ref
       const matured = activeInvestments.filter(inv => {
         if (inv.status !== 'active' || !inv.unlockAt) return false;
+        if (processingInvestmentsRef.current.has(inv.id)) return false;
         const unlockDate = inv.unlockAt.toDate ? inv.unlockAt.toDate() : new Date(inv.unlockAt);
         return unlockDate <= now;
       });
 
       if (matured.length === 0) return;
 
+      // Instantly mark them in the ref so they won't get picked up by any rapid triggers / re-renders
+      matured.forEach(inv => processingInvestmentsRef.current.add(inv.id));
+
       try {
+        // Initialize running state variables starting from the latest known profile state,
+        // so that concurrent updates to multiple matured investments in the same loop
+        // accumulate correctly without overwriting each other.
+        let runningBalance = profile.balance || 0;
+        const runningHoldings = { ...(profile.holdings || {}) };
+
         for (const inv of matured) {
           const coinInfo = cryptoPrices.find(c => c.symbol === inv.coinSymbol);
           const coinPrice = coinInfo?.price || 1.0;
           const profit = inv.amount * (inv.dailyRate / 100);
 
-          let newBalance = profile.balance || 0;
-          const currentHoldings = profile.holdings || {};
-          const newHoldings = { ...currentHoldings };
-
           if (inv.coinSymbol === 'USDT') {
-            newBalance += profit;
+            runningBalance += profit;
           } else {
-            newHoldings[inv.coinSymbol] = (currentHoldings[inv.coinSymbol] || 0) + profit;
+            runningHoldings[inv.coinSymbol] = (runningHoldings[inv.coinSymbol] || 0) + profit;
           }
 
-          const userRef = doc(db, 'users', user.uid);
-          await updateDoc(userRef, {
-            balance: parseFloat(newBalance.toFixed(2)),
-            holdings: newHoldings
-          });
-
+          // 1. FIRST, update the investment status in Firestore to 'completed'.
+          // This ensures that any subsequent subscriptions/snapshots instantly read this investment
+          // as inactive/completed and prevent any other concurrent components or loops from triggering.
           const oldInvRef = doc(db, 'investments', inv.id);
           await updateDoc(oldInvRef, {
             status: 'completed'
           });
 
+          // 2. Update the user profile with the accumulated running balance & holdings
+          const userRef = doc(db, 'users', user.uid);
+          await updateDoc(userRef, {
+            balance: parseFloat(runningBalance.toFixed(2)),
+            holdings: runningHoldings
+          });
+
+          // 3. Document the earning payout in transactions
           await addDoc(collection(db, 'transactions'), {
             userId: user.uid,
             userEmail: user.email,
@@ -612,6 +625,7 @@ export default function StandardUserDashboard({
             paymentMessage: `Crypto MMF Earnings: Received +${parseFloat(profit.toFixed(6))} ${inv.coinSymbol} daily profit yield.`
           });
 
+          // 4. Handle auto-rollover reinvestment if requested
           if (inv.autoInvest) {
             const newPrincipal = inv.amount + profit;
             const unlockTime = new Date();
@@ -644,6 +658,8 @@ export default function StandardUserDashboard({
         }
       } catch (err) {
         console.error("Auto maturity execution error:", err);
+        // Clean up from the ref upon a catastrophic error so it can retry later if necessary
+        matured.forEach(inv => processingInvestmentsRef.current.delete(inv.id));
       }
     };
 

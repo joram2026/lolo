@@ -165,8 +165,14 @@ export default function App() {
   if (initializing) {
     return (
       <div id="app-loading-screen" className="min-h-screen bg-slate-900 flex flex-col items-center justify-center gap-4 text-zinc-100 font-sans">
-        <div className="px-4 h-12 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-400 text-slate-950 font-black text-xs flex items-center justify-center animate-bounce shadow-xl shadow-emerald-500/10 tracking-widest">
-          ARBITRAGE
+        <div className="relative w-20 h-20 rounded-3xl bg-slate-950 border border-emerald-500/30 p-2 shadow-2xl shadow-emerald-500/10 flex items-center justify-center overflow-hidden animate-pulse mb-1">
+          <img 
+            src="/icon.svg" 
+            alt="ARBITRAGE" 
+            className="w-full h-full object-contain"
+            referrerPolicy="no-referrer"
+          />
+          <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/5 to-transparent pointer-events-none"></div>
         </div>
         <div className="flex flex-col items-center gap-1.5">
           <div className="w-6 h-6 border-3 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>

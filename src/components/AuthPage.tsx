@@ -438,8 +438,20 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
         
         {/* Brand Banner */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center px-4 h-14 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-400 text-slate-950 font-black text-xs shadow-xl shadow-emerald-500/15 mb-3 tracking-widest uppercase">
-            ARBITRAGE
+          <div className="inline-flex items-center justify-center mb-4 relative group">
+            {/* Pulsing ambient glow behind icon */}
+            <div className="absolute inset-0 bg-emerald-500/20 rounded-full blur-xl group-hover:bg-emerald-500/30 transition-all duration-700 animate-pulse"></div>
+            {/* Premium Icon Ring */}
+            <div className="relative w-20 h-20 rounded-3xl bg-slate-950 border border-emerald-500/30 p-2 shadow-2xl shadow-emerald-500/10 flex items-center justify-center overflow-hidden">
+              <img 
+                src="/icon.svg" 
+                alt="ARBITRAGE" 
+                className="w-full h-full object-contain transform group-hover:scale-105 transition-transform duration-500"
+                referrerPolicy="no-referrer"
+              />
+              {/* Overlay sheen */}
+              <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/5 to-transparent pointer-events-none"></div>
+            </div>
           </div>
           <h1 className="text-2xl font-black text-zinc-100 tracking-tight">ARBITRAGE Crypto</h1>
           <p className="text-xs text-zinc-400 mt-1 max-w-[260px] mx-auto">

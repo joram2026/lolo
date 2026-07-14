@@ -924,8 +924,13 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
       {/* Admin Header */}
       <div className="bg-slate-800 border-b border-slate-700/80 sticky top-0 z-40 px-4 py-3.5 flex justify-between items-center">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-emerald-600 to-teal-400 flex items-center justify-center font-black text-slate-950 text-sm">
-            A
+          <div className="w-8 h-8 rounded-lg bg-slate-950 border border-emerald-500/30 p-1 flex items-center justify-center overflow-hidden">
+            <img 
+              src="/icon.svg" 
+              alt="ARBITRAGE" 
+              className="w-full h-full object-contain"
+              referrerPolicy="no-referrer"
+            />
           </div>
           <div>
             <h1 className="text-sm font-black tracking-tight flex items-center gap-1.5 text-zinc-100">
