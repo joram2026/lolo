@@ -378,6 +378,20 @@ export default function StandardUserDashboard({
     const invQuery = query(invCol, where('userId', '==', user.uid));
     const unsubscribeInvestments = onSnapshot(invQuery, (snapshot) => {
       const invs = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as any));
+      // Sort MMF investments by creation date (newest/recently done first)
+      invs.sort((a, b) => {
+        const aTime = a.createdAt?.seconds 
+          ? a.createdAt.seconds * 1000 
+          : a.createdAt?.toDate 
+            ? a.createdAt.toDate().getTime() 
+            : new Date(a.createdAt || 0).getTime();
+        const bTime = b.createdAt?.seconds 
+          ? b.createdAt.seconds * 1000 
+          : b.createdAt?.toDate 
+            ? b.createdAt.toDate().getTime() 
+            : new Date(b.createdAt || 0).getTime();
+        return bTime - aTime;
+      });
       setActiveInvestments(invs);
     });
 
