@@ -1,5 +1,5 @@
 // Service Worker for ARBITRAGE PWA
-const CACHE_NAME = 'arbitrage-v1';
+const CACHE_NAME = 'arbitrage-v3';
 const ASSETS = [
   '/',
   '/index.html',
@@ -35,7 +35,7 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Fetch Event
+// Fetch Event (Network-First, falling back to Cache)
 self.addEventListener('fetch', (event) => {
   // Let browser handle non-GET or cross-origin / Firebase API requests dynamically
   if (event.request.method !== 'GET' || !event.request.url.startsWith(self.location.origin)) {
@@ -43,25 +43,23 @@ self.addEventListener('fetch', (event) => {
   }
 
   event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      if (cachedResponse) {
-        return cachedResponse;
-      }
-      return fetch(event.request).then((networkResponse) => {
+    fetch(event.request)
+      .then((networkResponse) => {
         if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== 'basic') {
           return networkResponse;
         }
-        
-        // Dynamically cache other GET requests from our origin
+
+        // Dynamically update the cache with the fresh response
         const responseToCache = networkResponse.clone();
         caches.open(CACHE_NAME).then((cache) => {
           cache.put(event.request, responseToCache);
         });
 
         return networkResponse;
-      }).catch(() => {
-        // Fallback or handle offline
-      });
-    })
+      })
+      .catch(() => {
+        // Fallback to cache if network is unavailable/offline
+        return caches.match(event.request);
+      })
   );
 });
