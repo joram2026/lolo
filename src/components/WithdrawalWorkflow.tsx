@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { collection, addDoc, getDoc, getDocs, doc, updateDoc, runTransaction, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, getDoc, getDocs, doc, updateDoc, runTransaction, serverTimestamp, query, where } from 'firebase/firestore';
 import { CryptoNetwork, P2PMerchant, UserAccount, Transaction } from '../types';
 import { 
   ArrowLeft, Send, Users, ShieldAlert, ChevronRight, Check, 
@@ -29,6 +29,7 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess }: Withdraw
   };
 
   const [profile, setProfile] = useState<UserAccount | null>(null);
+  const [lockedUSDT, setLockedUSDT] = useState<number>(0);
   
   // Crypto States
   const [networks, setNetworks] = useState<CryptoNetwork[]>([]);
@@ -59,6 +60,17 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess }: Withdraw
         if (userSnap.exists()) {
           setProfile(userSnap.data() as UserAccount);
         }
+
+        // Fetch user's locked USDT amount from active investments
+        const invCol = collection(db, 'investments');
+        const invQuery = query(invCol, where('userId', '==', user.uid));
+        const invSnap = await getDocs(invQuery);
+        const invList = invSnap.docs.map(d => d.data());
+        const userActiveInvs = invList.filter((inv: any) => inv.status === 'active');
+        const lockedSum = userActiveInvs
+          .filter((inv: any) => inv.coinSymbol === 'USDT')
+          .reduce((sum: number, inv: any) => sum + (inv.amount || 0), 0);
+        setLockedUSDT(lockedSum);
 
         const netCol = collection(db, 'crypto_networks');
         const netSnap = await getDocs(netCol);
@@ -94,8 +106,9 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess }: Withdraw
       return;
     }
     const usdVal = parseFloat(amountUSD);
-    if (usdVal > (profile?.balance || 0)) {
-      setError('Insufficient available balance.');
+    const availableBalance = Math.max(0, (profile?.balance || 0) - lockedUSDT);
+    if (usdVal > availableBalance) {
+      setError(`Insufficient available balance. You have $${availableBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })} available ($${lockedUSDT.toLocaleString(undefined, { minimumFractionDigits: 2 })} USDT is locked in MMF).`);
       return;
     }
     if (!destAddress.trim()) {
@@ -173,8 +186,9 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess }: Withdraw
         }
 
         const currentBalance = userDoc.data().balance || 0;
-        if (usdVal > currentBalance) {
-          throw new Error("Insufficient balance during transaction execution.");
+        const availableBalance = Math.max(0, currentBalance - lockedUSDT);
+        if (usdVal > availableBalance) {
+          throw new Error(`Insufficient available balance during transaction execution. You have $${availableBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })} available ($${lockedUSDT.toLocaleString(undefined, { minimumFractionDigits: 2 })} USDT is locked in MMF).`);
         }
 
         // Deduct balance instantly
@@ -240,7 +254,7 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess }: Withdraw
             {method === 'p2p_pin_confirm' && 'Verify Security PIN'}
           </h2>
           <p className="text-xs text-zinc-500">
-            {method === 'selection' && `Available Balance: $${profile?.balance?.toLocaleString(undefined, { minimumFractionDigits: 2 }) || '0.00'}`}
+            {method === 'selection' && `Available Balance: $${Math.max(0, (profile?.balance || 0) - lockedUSDT).toLocaleString(undefined, { minimumFractionDigits: 2 })}${lockedUSDT > 0 ? ` ($${profile?.balance?.toLocaleString(undefined, { minimumFractionDigits: 2 })} total)` : ''}`}
             {method === 'crypto_coin_select' && 'Choose a crypto asset to withdraw'}
             {method === 'crypto' && `Configure network and destination for ${selectedCoin ? formatCoinName(selectedCoin.tokenName) : ''}`}
             {method === 'crypto_pin_confirm' && 'Enter your 4-digit PIN to authorize withdrawal'}
@@ -409,7 +423,7 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess }: Withdraw
                 <div className="flex justify-between items-center">
                   <label className="text-xs font-semibold text-zinc-400">Amount (USD)</label>
                   <span className="text-[10px] text-zinc-500 font-semibold">
-                    Available: ${(profile?.balance || 0).toLocaleString()}
+                    Available: ${Math.max(0, (profile?.balance || 0) - lockedUSDT).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </span>
                 </div>
                 <div className="relative">
@@ -425,7 +439,7 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess }: Withdraw
                   />
                   <button
                     type="button"
-                    onClick={() => setAmountUSD((profile?.balance || 0).toString())}
+                    onClick={() => setAmountUSD(Math.max(0, (profile?.balance || 0) - lockedUSDT).toString())}
                     className="absolute inset-y-0 right-0 pr-3 flex items-center"
                   >
                     <span className="bg-red-500/15 hover:bg-red-500/25 text-red-400 font-black text-[10px] px-2.5 py-1 rounded-md border border-red-500/30 transition-all cursor-pointer">
@@ -445,8 +459,9 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess }: Withdraw
                     setError('Please enter a valid withdrawal amount.');
                     return;
                   }
-                  if (usdVal > (profile?.balance || 0)) {
-                    setError('Insufficient available balance.');
+                  const availableBalance = Math.max(0, (profile?.balance || 0) - lockedUSDT);
+                  if (usdVal > availableBalance) {
+                    setError(`Insufficient available balance. You have $${availableBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })} available ($${lockedUSDT.toLocaleString(undefined, { minimumFractionDigits: 2 })} USDT is locked in MMF).`);
                     return;
                   }
                   if (!destAddress.trim()) {
@@ -637,7 +652,7 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess }: Withdraw
                   <div className="flex justify-between items-center">
                     <label className="text-xs font-semibold text-zinc-400">Amount (USD to Sell)</label>
                     <span className="text-[10px] text-zinc-500 font-semibold">
-                      Available: ${(profile?.balance || 0).toLocaleString()}
+                      Available: ${Math.max(0, (profile?.balance || 0) - lockedUSDT).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </span>
                   </div>
                   <div className="relative">
@@ -653,7 +668,7 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess }: Withdraw
                     />
                     <button
                       type="button"
-                      onClick={() => setP2pUSDAmount((profile?.balance || 0).toString())}
+                      onClick={() => setP2pUSDAmount(Math.max(0, (profile?.balance || 0) - lockedUSDT).toString())}
                       className="absolute inset-y-0 right-0 pr-3 flex items-center"
                     >
                       <span className="bg-red-500/15 hover:bg-red-500/25 text-red-400 font-black text-[10px] px-2.5 py-1 rounded-md border border-red-500/30 transition-all cursor-pointer">
@@ -677,7 +692,7 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess }: Withdraw
               {/* Proceed to Sell */}
               <button
                 id="p2p-sell-proceed"
-                disabled={!p2pUSDAmount || parseFloat(p2pUSDAmount) <= 0 || parseFloat(p2pUSDAmount) > (profile?.balance || 0)}
+                disabled={!p2pUSDAmount || parseFloat(p2pUSDAmount) <= 0 || parseFloat(p2pUSDAmount) > Math.max(0, (profile?.balance || 0) - lockedUSDT)}
                 onClick={() => setMethod('p2p_instructions')}
                 className="w-full flex items-center justify-between py-3 px-5 bg-gradient-to-r from-red-600 to-rose-500 text-white hover:from-red-500 hover:to-rose-400 disabled:bg-slate-800 disabled:text-zinc-500 rounded-xl text-sm font-bold transition-all shadow-md mt-6 cursor-pointer"
               >

@@ -8,7 +8,7 @@ import {
   TrendingUp, TrendingDown, ArrowUpRight, ArrowDownLeft, Search, 
   User, LogOut, ArrowRightLeft, ShieldCheck, Activity, Wallet, 
   HelpCircle, RefreshCw, Coins, ArrowRight, MessageSquare, AlertCircle,
-  History, ArrowLeft, X, ChevronDown, Check
+  History, ArrowLeft, X, ChevronDown, Check, Lock, Unlock
 } from 'lucide-react';
 
 interface StandardUserDashboardProps {
@@ -258,7 +258,7 @@ export default function StandardUserDashboard({
   const [mmfSubView, setMmfSubView] = useState<'main' | 'list' | 'form'>('main');
   const [selectedCoinForInvestment, setSelectedCoinForInvestment] = useState<CryptoPrice | null>(null);
   const [investmentAmount, setInvestmentAmount] = useState<string>('');
-  const [autoInvestToggle, setAutoInvestToggle] = useState<boolean>(false);
+  const [investmentDays, setInvestmentDays] = useState<string>('5');
   const [investmentLoading, setInvestmentLoading] = useState<boolean>(false);
   const [investmentError, setInvestmentError] = useState<string | null>(null);
   const [investmentSuccess, setInvestmentSuccess] = useState<string | null>(null);
@@ -507,6 +507,12 @@ export default function StandardUserDashboard({
       return;
     }
 
+    const daysVal = parseInt(investmentDays);
+    if (isNaN(daysVal) || daysVal < 5) {
+      setInvestmentError("Minimum lock duration is 5 days.");
+      return;
+    }
+
     const currentHolding = getCoinHolding(selectedCoinForInvestment.symbol);
     const lockedAmount = getLockedAmount(selectedCoinForInvestment.symbol);
     const unlockedHolding = currentHolding - lockedAmount;
@@ -520,9 +526,9 @@ export default function StandardUserDashboard({
 
     try {
       const unlockTime = new Date();
-      unlockTime.setHours(unlockTime.getHours() + 24);
+      unlockTime.setDate(unlockTime.getDate() + daysVal);
 
-      // Create investment document
+      // Create investment document with totalDays and daysPaid tracking
       await addDoc(collection(db, 'investments'), {
         userId: user.uid,
         userEmail: user.email,
@@ -530,7 +536,8 @@ export default function StandardUserDashboard({
         amount: amountVal,
         dailyRate: selectedCoinForInvestment.investmentRate ?? 5.0,
         status: 'active',
-        autoInvest: autoInvestToggle,
+        totalDays: daysVal,
+        daysPaid: 0,
         createdAt: new Date(),
         unlockAt: unlockTime
       });
@@ -545,11 +552,12 @@ export default function StandardUserDashboard({
         coinAmount: amountVal,
         status: 'APPROVED',
         createdAt: new Date(),
-        paymentMessage: `Crypto MMF Invested: Locked ${amountVal} ${selectedCoinForInvestment.symbol} at ${selectedCoinForInvestment.investmentRate ?? 5.0}% daily yield.`
+        paymentMessage: `Crypto MMF Invested: Locked ${amountVal} ${selectedCoinForInvestment.symbol} for ${daysVal} days at ${selectedCoinForInvestment.investmentRate ?? 5.0}% daily yield.`
       });
 
-      setInvestmentSuccess(`Successfully invested ${amountVal} ${selectedCoinForInvestment.symbol} in MMF! Your funds are locked for 1 day.`);
+      setInvestmentSuccess(`Successfully invested ${amountVal} ${selectedCoinForInvestment.symbol} in MMF! Your funds are locked for ${daysVal} days.`);
       setInvestmentAmount('');
+      setInvestmentDays('5');
       setMmfSubView('main');
     } catch (err: any) {
       console.error(err);
@@ -559,64 +567,79 @@ export default function StandardUserDashboard({
     }
   };
 
-  const handleToggleAutoInvest = async (invId: string, currentVal: boolean) => {
-    try {
-      setInvestmentError(null);
-      setInvestmentSuccess(null);
-      const invRef = doc(db, 'investments', invId);
-      await updateDoc(invRef, {
-        autoInvest: !currentVal
-      });
-      setInvestmentSuccess(`Successfully ${!currentVal ? 'enabled' : 'disabled'} auto-invest for this investment!`);
-    } catch (err: any) {
-      console.error(err);
-      setInvestmentError("Failed to update auto-invest setting: " + err.message);
-    }
-  };
-
-  // Check and auto-matured active investments in real-time
+  // Check and auto-matured active investments in real-time based on real clock passing
   useEffect(() => {
     if (!profile || activeInvestments.length === 0) return;
 
     const checkMaturity = async () => {
       const now = new Date();
-      // Filter out matured active investments that are NOT already in the processing ref
-      const matured = activeInvestments.filter(inv => {
-        if (inv.status !== 'active' || !inv.unlockAt) return false;
+
+      const getKenyanDaysSinceEpoch = (d: Date): number => {
+        // Kenya is UTC+3
+        const eatMs = d.getTime() + 3 * 3600 * 1000;
+        return Math.floor(eatMs / (1000 * 60 * 60 * 24));
+      };
+
+      const nowDayEpoch = getKenyanDaysSinceEpoch(now);
+
+      // Filter active investments that need payments based on EAT calendar day boundary rollover (midnight)
+      const needingPayment = activeInvestments.filter(inv => {
+        if (inv.status !== 'active') return false;
         if (processingInvestmentsRef.current.has(inv.id)) return false;
-        const unlockDate = inv.unlockAt.toDate ? inv.unlockAt.toDate() : new Date(inv.unlockAt);
-        return unlockDate <= now;
+
+        const created = inv.createdAt?.toDate ? inv.createdAt.toDate() : new Date(inv.createdAt);
+        const createdDayEpoch = getKenyanDaysSinceEpoch(created);
+        const daysElapsed = Math.max(0, nowDayEpoch - createdDayEpoch);
+
+        const totalDays = inv.totalDays ?? 5;
+        const daysPaid = inv.daysPaid ?? 0;
+
+        // We owe payments if more calendar days have elapsed than what we have paid
+        return daysElapsed > daysPaid && daysPaid < totalDays;
       });
 
-      if (matured.length === 0) return;
+      if (needingPayment.length === 0) return;
 
-      // Instantly mark them in the ref so they won't get picked up by any rapid triggers / re-renders
-      matured.forEach(inv => processingInvestmentsRef.current.add(inv.id));
+      // Mark as processing instantly to prevent duplicate runs
+      needingPayment.forEach(inv => processingInvestmentsRef.current.add(inv.id));
 
       try {
-        // Initialize running state variables starting from the latest known profile state,
-        // so that concurrent updates to multiple matured investments in the same loop
-        // accumulate correctly without overwriting each other.
         let runningBalance = profile.balance || 0;
         const runningHoldings = { ...(profile.holdings || {}) };
 
-        for (const inv of matured) {
+        for (const inv of needingPayment) {
           const coinInfo = cryptoPrices.find(c => c.symbol === inv.coinSymbol);
           const coinPrice = coinInfo?.price || 1.0;
-          const profit = inv.amount * (inv.dailyRate / 100);
+
+          const created = inv.createdAt?.toDate ? inv.createdAt.toDate() : new Date(inv.createdAt);
+          const createdDayEpoch = getKenyanDaysSinceEpoch(created);
+          const daysElapsed = Math.max(0, nowDayEpoch - createdDayEpoch);
+
+          const totalDays = inv.totalDays ?? 5;
+          const daysPaid = inv.daysPaid ?? 0;
+
+          // Number of payouts to apply in this batch
+          const payoutsToApply = Math.min(daysElapsed, totalDays) - daysPaid;
+          if (payoutsToApply <= 0) continue;
+
+          // Profit calculation for the payouts in this batch
+          const singleDayProfit = inv.amount * (inv.dailyRate / 100);
+          const totalProfitInBatch = singleDayProfit * payoutsToApply;
 
           if (inv.coinSymbol === 'USDT') {
-            runningBalance += profit;
+            runningBalance += totalProfitInBatch;
           } else {
-            runningHoldings[inv.coinSymbol] = (runningHoldings[inv.coinSymbol] || 0) + profit;
+            runningHoldings[inv.coinSymbol] = (runningHoldings[inv.coinSymbol] || 0) + totalProfitInBatch;
           }
 
-          // 1. FIRST, update the investment status in Firestore to 'completed'.
-          // This ensures that any subsequent subscriptions/snapshots instantly read this investment
-          // as inactive/completed and prevent any other concurrent components or loops from triggering.
+          const nextDaysPaid = daysPaid + payoutsToApply;
+          const isCompleted = nextDaysPaid >= totalDays;
+
+          // 1. Update the investment progress
           const oldInvRef = doc(db, 'investments', inv.id);
           await updateDoc(oldInvRef, {
-            status: 'completed'
+            daysPaid: nextDaysPaid,
+            status: isCompleted ? 'completed' : 'active'
           });
 
           // 2. Update the user profile with the accumulated running balance & holdings
@@ -626,54 +649,24 @@ export default function StandardUserDashboard({
             holdings: runningHoldings
           });
 
-          // 3. Document the earning payout in transactions
+          // 3. Document the earning payouts in transactions
           await addDoc(collection(db, 'transactions'), {
             userId: user.uid,
             userEmail: user.email,
             type: 'investment_earning',
-            amount: parseFloat((profit * coinPrice).toFixed(2)),
+            amount: parseFloat((totalProfitInBatch * coinPrice).toFixed(2)),
             coinSymbol: inv.coinSymbol,
-            coinAmount: parseFloat(profit.toFixed(6)),
+            coinAmount: parseFloat(totalProfitInBatch.toFixed(6)),
             status: 'APPROVED',
             createdAt: new Date(),
-            paymentMessage: `Crypto MMF Earnings: Received +${parseFloat(profit.toFixed(6))} ${inv.coinSymbol} daily profit yield.`
+            paymentMessage: `Crypto MMF Earnings: Received +${parseFloat(totalProfitInBatch.toFixed(6))} ${inv.coinSymbol} daily profit yield (Days ${daysPaid + 1} to ${nextDaysPaid}).`
           });
-
-          // 4. Handle auto-rollover reinvestment if requested
-          if (inv.autoInvest) {
-            const newPrincipal = inv.amount + profit;
-            const unlockTime = new Date();
-            unlockTime.setHours(unlockTime.getHours() + 24);
-
-            await addDoc(collection(db, 'investments'), {
-              userId: user.uid,
-              userEmail: user.email,
-              coinSymbol: inv.coinSymbol,
-              amount: parseFloat(newPrincipal.toFixed(6)),
-              dailyRate: inv.dailyRate,
-              status: 'active',
-              autoInvest: true,
-              createdAt: new Date(),
-              unlockAt: unlockTime
-            });
-
-            await addDoc(collection(db, 'transactions'), {
-              userId: user.uid,
-              userEmail: user.email,
-              type: 'invested',
-              amount: parseFloat((newPrincipal * coinPrice).toFixed(2)),
-              coinSymbol: inv.coinSymbol,
-              coinAmount: parseFloat(newPrincipal.toFixed(6)),
-              status: 'APPROVED',
-              createdAt: new Date(),
-              paymentMessage: `Crypto MMF Auto-Rollover: Reinvested ${parseFloat(newPrincipal.toFixed(6))} ${inv.coinSymbol} into MMF portfolio.`
-            });
-          }
         }
       } catch (err) {
         console.error("Auto maturity execution error:", err);
-        // Clean up from the ref upon a catastrophic error so it can retry later if necessary
-        matured.forEach(inv => processingInvestmentsRef.current.delete(inv.id));
+      } finally {
+        // Clean up from the ref after updates are complete
+        needingPayment.forEach(inv => processingInvestmentsRef.current.delete(inv.id));
       }
     };
 
@@ -698,6 +691,8 @@ export default function StandardUserDashboard({
     const coinInfo = cryptoPrices.find(c => c.symbol === def.symbol);
     const price = coinInfo?.price || 1.00;
     const coinAmount = getCoinHolding(def.symbol);
+    const lockedAmount = getLockedAmount(def.symbol);
+    const unlockedAmount = Math.max(0, coinAmount - lockedAmount);
     const usdValue = coinAmount * price; // Amount * Live Price = USDT equivalent!
     return {
       symbol: def.symbol,
@@ -705,7 +700,9 @@ export default function StandardUserDashboard({
       colorClass: def.color,
       usdValue,
       coinAmount,
-      price
+      price,
+      lockedAmount,
+      unlockedAmount
     };
   });
 
@@ -759,14 +756,16 @@ export default function StandardUserDashboard({
 
     const price = coin.price;
     const cashBalance = profile?.balance || 0;
+    const lockedUSDT = getLockedAmount('USDT');
+    const unlockedCashBalance = Math.max(0, cashBalance - lockedUSDT);
     const coinHolding = getCoinHolding(symbol);
     setTradeLoading(true);
 
     if (type === 'BUY') {
       const totalCost = amount * price;
-      if (cashBalance < totalCost) {
+      if (unlockedCashBalance < totalCost) {
         setTradeMessage({ 
-          text: `Insufficient USD balance. Buying ${amount} ${symbol} requires $${totalCost.toLocaleString(undefined, { minimumFractionDigits: 2 })} but you only have $${cashBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}.`, 
+          text: `Insufficient available cash balance. Buying ${amount} ${symbol} requires $${totalCost.toLocaleString(undefined, { minimumFractionDigits: 2 })} but you only have $${unlockedCashBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })} available ($${lockedUSDT.toLocaleString(undefined, { minimumFractionDigits: 2 })} USDT is currently locked in Crypto MMF Investments).`, 
           isError: true 
         });
         setTradeLoading(false);
@@ -1389,7 +1388,10 @@ export default function StandardUserDashboard({
           <div className="space-y-4 border-t border-slate-800 pt-5">
             <div className="flex justify-between items-center select-none">
               <span className="text-xs font-black text-zinc-300 uppercase tracking-wider">Trading Desk</span>
-              <span className="text-[10px] text-zinc-500 font-bold">Cash Balance: ${profile?.balance?.toLocaleString(undefined, { minimumFractionDigits: 2 }) || '0.00'}</span>
+              <span className="text-[10px] text-zinc-500 font-bold">
+                Available: ${Math.max(0, (profile?.balance || 0) - getLockedAmount('USDT')).toLocaleString(undefined, { minimumFractionDigits: 2 })} USDT
+                {getLockedAmount('USDT') > 0 && ` ($${profile?.balance?.toLocaleString(undefined, { minimumFractionDigits: 2 })} total)`}
+              </span>
             </div>
 
             {/* BUY / SELL Switch tabs */}
@@ -1437,10 +1439,13 @@ export default function StandardUserDashboard({
                       type="button"
                       onClick={() => {
                         if (quickTradeType === 'BUY') {
-                          const spend = (profile?.balance || 0) * (pct / 100);
+                          const availableSpend = Math.max(0, (profile?.balance || 0) - getLockedAmount('USDT'));
+                          const spend = availableSpend * (pct / 100);
                           setQuickTradeAmount(parseFloat((spend / liveCoin.price).toFixed(6)).toString());
                         } else {
-                          const sellAmt = holding * (pct / 100);
+                          const lockedCoin = getLockedAmount(liveCoin.symbol);
+                          const unlockedHolding = Math.max(0, holding - lockedCoin);
+                          const sellAmt = unlockedHolding * (pct / 100);
                           setQuickTradeAmount(parseFloat(sellAmt.toFixed(6)).toString());
                         }
                         setTradeMessage(null);
@@ -1854,40 +1859,67 @@ export default function StandardUserDashboard({
                             setQuickTradeType('BUY');
                           }
                         }}
-                        className="flex justify-between items-center p-4 bg-slate-800/80 border border-slate-700/65 rounded-2xl hover:border-slate-500 hover:bg-slate-800/95 hover:scale-[1.01] active:scale-[0.99] transition-all cursor-pointer group"
+                        className="flex flex-col p-4 bg-slate-800/80 border border-slate-700/65 rounded-2xl hover:border-slate-500 hover:bg-slate-800/95 hover:scale-[1.01] active:scale-[0.99] transition-all cursor-pointer group"
                       >
-                        <div className="flex items-center gap-3">
-                          <CoinIcon symbol={asset.symbol} className="w-10 h-10" />
-                          <div>
-                            <div className="flex items-center gap-1.5">
-                              <span className="font-bold text-xs text-zinc-200 group-hover:text-white transition-colors">{asset.name}</span>
-                              <span className="text-[9px] text-zinc-400 font-bold px-1.5 py-0.5 bg-slate-900 border border-slate-800 rounded">
-                                {assetPct.toFixed(1)}%
+                        <div className="flex justify-between items-center">
+                          <div className="flex items-center gap-3">
+                            <CoinIcon symbol={asset.symbol} className="w-10 h-10" />
+                            <div>
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-bold text-xs text-zinc-200 group-hover:text-white transition-colors">{asset.name}</span>
+                                <span className="text-[9px] text-zinc-400 font-bold px-1.5 py-0.5 bg-slate-900 border border-slate-800 rounded">
+                                  {assetPct.toFixed(1)}%
+                                </span>
+                              </div>
+                              <span className="text-[10px] text-zinc-500 font-mono mt-0.5 block">
+                                1 {asset.symbol} ≈ ${asset.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
                               </span>
                             </div>
-                            <span className="text-[10px] text-zinc-500 font-mono mt-0.5 block">
-                              1 {asset.symbol} ≈ ${asset.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
-                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-3">
+                            <div className="text-right">
+                              <span className="font-extrabold text-xs text-zinc-100 block font-mono">
+                                {asset.coinAmount.toLocaleString(undefined, {
+                                  minimumFractionDigits: asset.symbol === 'BTC' || asset.symbol === 'ETH' ? 6 : 2,
+                                  maximumFractionDigits: asset.symbol === 'BTC' || asset.symbol === 'ETH' ? 8 : 4
+                                })} {asset.symbol}
+                              </span>
+                              <span className="text-[10px] font-extrabold text-emerald-400 font-mono block mt-0.5">
+                                $ {asset.usdValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                              </span>
+                            </div>
+
+                            <div className="text-zinc-600 group-hover:text-emerald-400 transition-colors">
+                              <ArrowRight size={14} className="transform group-hover:translate-x-0.5 transition-transform" />
+                            </div>
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-3">
-                          <div className="text-right">
-                            <span className="font-extrabold text-xs text-zinc-100 block font-mono">
-                              {asset.coinAmount.toLocaleString(undefined, {
-                                minimumFractionDigits: asset.symbol === 'BTC' || asset.symbol === 'ETH' ? 6 : 2,
-                                maximumFractionDigits: asset.symbol === 'BTC' || asset.symbol === 'ETH' ? 8 : 4
-                              })} {asset.symbol}
-                            </span>
-                            <span className="text-[10px] font-extrabold text-emerald-400 font-mono block mt-0.5">
-                              $ {asset.usdValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                            </span>
+                        {asset.lockedAmount > 0 && (
+                          <div className="mt-3 pt-2.5 border-t border-slate-700/40 flex justify-between items-center text-[10px] font-mono">
+                            <div className="flex items-center gap-1 text-zinc-400 font-bold">
+                              <Unlock size={11} className="text-emerald-400 shrink-0" />
+                              <span>Free:</span>
+                              <span className="text-emerald-400 font-extrabold">
+                                {asset.unlockedAmount.toLocaleString(undefined, {
+                                  minimumFractionDigits: asset.symbol === 'BTC' || asset.symbol === 'ETH' ? 4 : 2,
+                                  maximumFractionDigits: 6
+                                })} {asset.symbol}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1 text-zinc-400 font-bold">
+                              <Lock size={11} className="text-amber-400 shrink-0" />
+                              <span>Invested:</span>
+                              <span className="text-amber-400 font-extrabold">
+                                {asset.lockedAmount.toLocaleString(undefined, {
+                                  minimumFractionDigits: asset.symbol === 'BTC' || asset.symbol === 'ETH' ? 4 : 2,
+                                  maximumFractionDigits: 6
+                                })} {asset.symbol}
+                              </span>
+                            </div>
                           </div>
-
-                          <div className="text-zinc-600 group-hover:text-emerald-400 transition-colors">
-                            <ArrowRight size={14} className="transform group-hover:translate-x-0.5 transition-transform" />
-                          </div>
-                        </div>
+                        )}
                       </div>
                     );
                   })}
@@ -2139,7 +2171,6 @@ export default function StandardUserDashboard({
                                   onClick={() => {
                                     setSelectedCoinForInvestment(coin);
                                     setInvestmentAmount('');
-                                    setAutoInvestToggle(false);
                                     setMmfSubView('form');
                                     setInvestmentError(null);
                                     setInvestmentSuccess(null);
@@ -2157,10 +2188,12 @@ export default function StandardUserDashboard({
                       {/* Display Active/Completed Investments */}
                       {activeInvestments.length > 0 && (
                         <div className="space-y-3 pt-4 border-t border-slate-850">
-                          <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
-                            <History size={12} className="text-zinc-400" />
-                            MMF Investment History
-                          </h4>
+                          <div className="flex justify-between items-center select-none">
+                            <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
+                              <History size={12} className="text-zinc-400" />
+                              MMF Investment History
+                            </h4>
+                          </div>
                           <div className="space-y-2.5 max-h-[300px] overflow-y-auto pr-1">
                             {activeInvestments.map((inv: any) => {
                               const createdDate = inv.createdAt?.toDate ? inv.createdAt.toDate().toLocaleDateString() : new Date(inv.createdAt).toLocaleDateString();
@@ -2182,23 +2215,9 @@ export default function StandardUserDashboard({
                                       <span className="text-[9px] px-1 py-0.25 rounded bg-slate-950 border border-slate-850 text-emerald-400 font-bold">{inv.dailyRate}% Daily</span>
                                     </div>
                                     <div className="text-[9px] text-zinc-500 mt-1 flex flex-wrap items-center gap-2">
+                                      <span className="text-zinc-400 font-bold">Progress: {inv.daysPaid ?? 0}/{inv.totalDays ?? 5} Days</span>
+                                      <span>•</span>
                                       <span>End: {unlockDate}</span>
-                                      {!isCompleted ? (
-                                        <button
-                                          type="button"
-                                          onClick={() => handleToggleAutoInvest(inv.id, inv.autoInvest)}
-                                          className={`text-[9px] font-bold px-1.5 py-0.5 rounded cursor-pointer transition-all flex items-center gap-1 ${
-                                            inv.autoInvest 
-                                              ? 'bg-teal-500/15 text-teal-400 border border-teal-500/30 hover:bg-teal-500/25' 
-                                              : 'bg-zinc-850 text-zinc-400 border border-zinc-750 hover:bg-zinc-800'
-                                          }`}
-                                        >
-                                          <span className={`w-1.5 h-1.5 rounded-full ${inv.autoInvest ? 'bg-teal-400 animate-pulse' : 'bg-zinc-500'}`} />
-                                          Auto: {inv.autoInvest ? 'ON' : 'OFF'}
-                                        </button>
-                                      ) : (
-                                        inv.autoInvest && <span className="text-teal-400 font-extrabold text-[8px] px-1 py-0.25 rounded bg-teal-500/10 border border-teal-500/20">● Auto-invested</span>
-                                      )}
                                     </div>
                                   </div>
 
@@ -2211,7 +2230,10 @@ export default function StandardUserDashboard({
                                       {inv.status}
                                     </span>
                                     <div className="text-[9px] text-zinc-500 mt-1">
-                                      Yield: +{(inv.amount * (inv.dailyRate / 100)).toFixed(4)} {inv.coinSymbol}
+                                      Earning: +{(inv.amount * (inv.dailyRate / 100)).toFixed(4)} / day
+                                    </div>
+                                    <div className="text-[9px] text-emerald-500/80 font-bold mt-0.5">
+                                      Earned: +{((inv.daysPaid ?? 0) * (inv.amount * (inv.dailyRate / 100))).toFixed(4)} {inv.coinSymbol}
                                     </div>
                                   </div>
                                 </div>
@@ -2276,9 +2298,9 @@ export default function StandardUserDashboard({
                               placeholder="e.g. 50"
                               value={investmentAmount}
                               onChange={(e) => {
-                                setInvestmentAmount(e.target.value);
-                                setInvestmentError(null);
-                                setInvestmentSuccess(null);
+                                  setInvestmentAmount(e.target.value);
+                                  setInvestmentError(null);
+                                  setInvestmentSuccess(null);
                               }}
                               className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-xs focus:outline-none focus:border-emerald-500 text-white font-mono"
                             />
@@ -2295,34 +2317,41 @@ export default function StandardUserDashboard({
                           </div>
                         </div>
 
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block">Lock Duration (Days)</label>
+                          <input
+                            id="investment-days-input"
+                            type="number"
+                            min="5"
+                            placeholder="Minimum 5 days"
+                            value={investmentDays}
+                            onChange={(e) => {
+                              setInvestmentDays(e.target.value);
+                              setInvestmentError(null);
+                              setInvestmentSuccess(null);
+                            }}
+                            className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-xs focus:outline-none focus:border-emerald-500 text-white font-mono"
+                          />
+                          <p className="text-[9px] text-zinc-500">Minimum duration is 5 days. Daily earnings accrue instantly to your main account.</p>
+                        </div>
+
                         {/* Profit preview calculator */}
                         {parseFloat(investmentAmount) > 0 && (
-                          <div className="bg-slate-950/40 border border-slate-850 p-3 rounded-xl flex justify-between items-center select-none">
-                            <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Estimated 1D profit</span>
-                            <span className="text-xs font-bold font-mono text-emerald-400">
-                              +{(parseFloat(investmentAmount) * ((selectedCoinForInvestment.investmentRate ?? 5.0) / 100)).toFixed(4)} {selectedCoinForInvestment.symbol}
-                            </span>
+                          <div className="bg-slate-950/40 border border-slate-850 p-3 rounded-xl flex flex-col gap-2 select-none">
+                            <div className="flex justify-between items-center text-[10px]">
+                              <span className="text-zinc-500 font-bold uppercase tracking-wider">Daily Yield</span>
+                              <span className="font-bold font-mono text-emerald-400">
+                                +{(parseFloat(investmentAmount) * ((selectedCoinForInvestment.investmentRate ?? 5.0) / 100)).toFixed(4)} {selectedCoinForInvestment.symbol}
+                              </span>
+                            </div>
+                            <div className="flex justify-between items-center text-[10px] border-t border-slate-850/60 pt-2">
+                              <span className="text-zinc-500 font-bold uppercase tracking-wider">Total {parseInt(investmentDays) || 5} Days Yield</span>
+                              <span className="font-bold font-mono text-emerald-400">
+                                +{(parseFloat(investmentAmount) * ((selectedCoinForInvestment.investmentRate ?? 5.0) / 100) * (parseInt(investmentDays) || 5)).toFixed(4)} {selectedCoinForInvestment.symbol}
+                              </span>
+                            </div>
                           </div>
                         )}
-
-                        {/* Auto-Invest option toggle */}
-                        <div className="p-3.5 bg-slate-950/40 border border-slate-850 rounded-2xl flex justify-between items-center select-none">
-                          <div className="max-w-[80%]">
-                            <span className="text-[11px] font-bold text-zinc-200 block">Daily Auto-Invest Option</span>
-                            <span className="text-[9px] text-zinc-500 leading-relaxed block mt-0.5">
-                              Automatically reinvest principal and profit daily for compounding high yields.
-                            </span>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => setAutoInvestToggle(!autoInvestToggle)}
-                            className={`w-9 h-5 rounded-full p-0.5 transition-colors duration-200 ease-in-out cursor-pointer flex items-center ${
-                              autoInvestToggle ? 'bg-emerald-500 justify-end' : 'bg-slate-800 justify-start border border-slate-700'
-                            }`}
-                          >
-                            <span className="w-4 h-4 rounded-full bg-slate-950 shadow-md"></span>
-                          </button>
-                        </div>
 
                         {/* Feedback messages */}
                         {investmentError && (
