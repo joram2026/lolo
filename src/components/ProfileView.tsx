@@ -1639,17 +1639,12 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                             
                             <div className="flex items-center justify-between gap-3 relative z-10">
                               <div className="space-y-1 text-left">
-                                <div className="flex items-center gap-1.5">
-                                  <span className="text-[9px] font-bold text-emerald-400 uppercase tracking-widest bg-emerald-500/15 px-1.5 py-0.5 rounded-md">
-                                    APK Fallback
-                                  </span>
-                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                                </div>
+                              
                                 <h4 className="text-[11px] font-black text-zinc-100 tracking-tight">
-                                  Manual Installation Pack
+                                  Click to Install 
                                 </h4>
                                 <p className="text-[9px] text-zinc-400 font-medium leading-relaxed max-w-[160px]">
-                                  Secure, direct android package package (3.44 MB)
+                                  Secure, direct android package package.
                                 </p>
                               </div>
                               
@@ -1658,7 +1653,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                                 className="px-3.5 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 active:scale-95 text-white text-[10px] font-black rounded-lg transition-all flex items-center gap-1.5 cursor-pointer shadow-lg shadow-emerald-950/40 border border-emerald-400/20"
                               >
                                 <Download size={12} className="stroke-[2.5]" />
-                                <span>Download APK</span>
+                                <span>Download</span>
                               </button>
                             </div>
                           </div>
