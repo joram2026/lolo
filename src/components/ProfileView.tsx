@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { UserAccount } from '../types';
 import { db, auth } from '../firebase';
 import { doc, getDoc, updateDoc, collection, query, where, getDocs, setDoc } from 'firebase/firestore';
@@ -8,7 +8,7 @@ import {
   Smartphone, Copy, CheckCircle2, QrCode, Power, Lock, ShieldAlert,
   ChevronRight, HelpCircle, MessageSquare, Send, Download, Laptop,
   Gamepad2, LayoutGrid, Clapperboard, BookOpen, Star, Share2, Plus, 
-  Search, MoreVertical, Info, ShieldCheck
+  Search, MoreVertical, Info, ShieldCheck, X
 } from 'lucide-react';
 
 interface ProfileViewProps {
@@ -55,7 +55,10 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
   const [installSuccess, setInstallSuccess] = useState<boolean>(() => {
     return localStorage.getItem('arbitrage_pwa_installed') === 'true';
   });
+  const [pwaLoading, setPwaLoading] = useState(false);
+  const pwaLoadingRef = useRef(false);
   const [showPwaInstructions, setShowPwaInstructions] = useState(false);
+  const [showOpenInstruction, setShowOpenInstruction] = useState(false);
   const [deviceTab, setDeviceTab] = useState<'android' | 'ios' | 'desktop'>(() => {
     const ua = navigator.userAgent.toLowerCase();
     if (/ipad|iphone|ipod/.test(ua)) return 'ios';
@@ -70,9 +73,13 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
       console.log('beforeinstallprompt event triggered and stashed.');
     };
     const handleAppInstalled = () => {
+      console.log('App was successfully installed natively.');
+      if (pwaLoadingRef.current) {
+        console.log('Installation is already being handled with 4s delay.');
+        return;
+      }
       setInstallSuccess(true);
       localStorage.setItem('arbitrage_pwa_installed', 'true');
-      console.log('App was successfully installed natively.');
     };
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     window.addEventListener('appinstalled', handleAppInstalled);
@@ -339,8 +346,13 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
   };
 
   const handleOpenApp = () => {
-    localStorage.removeItem('profile_subpage');
-    onBack();
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone;
+    if (isStandalone) {
+      localStorage.removeItem('profile_subpage');
+      onBack();
+    } else {
+      setShowOpenInstruction(true);
+    }
   };
 
   const startApkDownload = () => {
@@ -383,8 +395,14 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
         const { outcome } = await deferredPrompt.userChoice;
         console.log(`User response to the install prompt: ${outcome}`);
         if (outcome === 'accepted') {
-          setInstallSuccess(true);
-          localStorage.setItem('arbitrage_pwa_installed', 'true');
+          setPwaLoading(true);
+          pwaLoadingRef.current = true;
+          setTimeout(() => {
+            setPwaLoading(false);
+            pwaLoadingRef.current = false;
+            setInstallSuccess(true);
+            localStorage.setItem('arbitrage_pwa_installed', 'true');
+          }, 4000);
         }
         setDeferredPrompt(null);
       } catch (err) {
@@ -1570,9 +1588,17 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                     <button
                       id="playstore-install-btn"
                       onClick={handleInstallClick}
-                      className="w-full py-2.5 bg-[#01875f] hover:bg-[#01704e] active:scale-[0.99] text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-emerald-700/10"
+                      disabled={pwaLoading}
+                      className="w-full py-2.5 bg-[#01875f] hover:bg-[#01704e] active:scale-[0.99] text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-emerald-700/10 disabled:opacity-90 disabled:cursor-wait"
                     >
-                      <span>Install App</span>
+                      {pwaLoading ? (
+                        <>
+                          <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                          <span>Installing ARBITRAGE...</span>
+                        </>
+                      ) : (
+                        <span>Install App</span>
+                      )}
                     </button>
 
                     {showPwaInstructions && (
@@ -1732,13 +1758,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                             </button>
                           </div>
                           
-                          <div className="bg-amber-50 border border-amber-200/70 p-2.5 rounded-lg flex gap-2 text-[9px] text-amber-800 leading-normal font-medium">
-                            <AlertCircle size={14} className="text-amber-600 shrink-0 mt-0.5" />
-                            <div>
-                              <strong className="text-amber-900 block mb-0.5">⚠️ Google Play Protect Alert:</strong>
-                              When installing the downloaded APK, Android will block it with an <em>"App blocked to protect your device"</em> popup. To complete installation, tap <strong>"More details"</strong> and then select <strong>"Install anyway"</strong>.
-                            </div>
-                          </div>
+                          
                         </div>
 
                       </div>
@@ -1968,9 +1988,103 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                 <span className="text-[8px] font-bold">Children</span>
               </div>
             </div>
-
           </div>
+        </div>
+      )}
 
+      {showOpenInstruction && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-sm animate-fade-in font-sans">
+          <div className="bg-slate-900 border border-slate-800 text-white rounded-[2rem] w-full max-w-sm overflow-hidden shadow-2xl relative animate-scale-up p-1">
+            <div className="bg-slate-950/40 rounded-[1.8rem] p-5">
+              
+              {/* Close Button */}
+              <button 
+                onClick={() => setShowOpenInstruction(false)}
+                className="absolute top-6 right-6 p-1.5 rounded-full bg-slate-800 hover:bg-slate-700 text-zinc-400 hover:text-white transition-all cursor-pointer z-10"
+              >
+                <X size={15} />
+              </button>
+
+              {/* Icon & Glow */}
+              <div className="text-center relative pt-2">
+                <div className="w-20 h-20 mx-auto rounded-3xl bg-zinc-950 border-2 border-emerald-500/30 shadow-lg shadow-emerald-500/10 flex items-center justify-center overflow-hidden relative group mb-3">
+                  <div className="absolute inset-0 bg-emerald-500/15 rounded-3xl animate-pulse"></div>
+                  <img 
+                    src="/icon.svg" 
+                    alt="ARBITRAGE" 
+                    className="w-14 h-14 object-cover relative z-10"
+                    referrerPolicy="no-referrer"
+                  />
+                </div>
+                <h3 className="text-base font-black tracking-tight bg-gradient-to-r from-emerald-400 via-teal-300 to-emerald-200 bg-clip-text text-transparent">
+                  Launch Standalone App
+                </h3>
+                <p className="text-[11px] text-zinc-400 mt-1.5 font-medium leading-relaxed px-2">
+                  Due to browser security policies, websites cannot launch installed apps directly. Follow these simple steps to run ARBITRAGE:
+                </p>
+              </div>
+
+              {/* Instructions Steps */}
+              <div className="py-5 space-y-4 text-left border-y border-slate-800/60 my-4">
+                <div className="flex gap-3.5 items-start">
+                  <div className="w-5.5 h-5.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-extrabold flex items-center justify-center text-[10px] shrink-0">
+                    1
+                  </div>
+                  <div>
+                    <strong className="text-zinc-100 text-xs block font-bold">Go to your Home Screen</strong>
+                    <p className="text-[11px] text-zinc-400 leading-normal mt-0.5">
+                      Press your phone's home button or swipe up to exit the browser.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex gap-3.5 items-start">
+                  <div className="w-5.5 h-5.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-extrabold flex items-center justify-center text-[10px] shrink-0">
+                    2
+                  </div>
+                  <div>
+                    <strong className="text-zinc-100 text-xs block font-bold">Find the "ARBITRAGE" Icon</strong>
+                    <p className="text-[11px] text-zinc-400 leading-normal mt-0.5 font-medium">
+                      Look for the beautiful round logo with the letter <span className="text-emerald-400 font-bold">"A"</span> on your home screen or app drawer.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex gap-3.5 items-start">
+                  <div className="w-5.5 h-5.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-extrabold flex items-center justify-center text-[10px] shrink-0">
+                    3
+                  </div>
+                  <div>
+                    <strong className="text-zinc-100 text-xs block font-bold">Tap to launch natively</strong>
+                    <p className="text-[11px] text-zinc-400 leading-normal mt-0.5">
+                      Tap the icon to start the immersive, full-screen standalone application!
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex flex-col gap-2 pt-1">
+                <button
+                  onClick={() => setShowOpenInstruction(false)}
+                  className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black transition-all shadow-md shadow-emerald-950/20 cursor-pointer"
+                >
+                  Got it, I'll open it!
+                </button>
+                <button
+                  onClick={() => {
+                    setShowOpenInstruction(false);
+                    localStorage.removeItem('profile_subpage');
+                    onBack();
+                  }}
+                  className="w-full py-2 bg-transparent hover:bg-slate-850 text-zinc-500 hover:text-zinc-300 rounded-xl text-[11px] font-bold transition-all border border-transparent hover:border-slate-800 cursor-pointer"
+                >
+                  Continue in browser tab
+                </button>
+              </div>
+
+            </div>
+          </div>
         </div>
       )}
     </div>
