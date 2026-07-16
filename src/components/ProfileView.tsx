@@ -1596,9 +1596,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                             </div>
                             <div className="space-y-1.5 flex-1 text-left">
                               <strong className="text-emerald-950 text-[12px] block font-black">🔄 Just uninstalled ARBITRAGE?</strong>
-                              <p className="text-zinc-600 text-[11px] leading-relaxed">
-                                Browsers need a simple page refresh to reset their cache and restore the super-fast 1-click install prompt from the video!
-                              </p>
+                            
                               <button
                                 onClick={() => window.location.reload()}
                                 className="mt-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-[10px] font-bold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
