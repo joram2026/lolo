@@ -402,7 +402,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
             pwaLoadingRef.current = false;
             setInstallSuccess(true);
             localStorage.setItem('arbitrage_pwa_installed', 'true');
-          }, 7000);
+          }, 10000);
         }
         setDeferredPrompt(null);
       } catch (err) {
@@ -1523,7 +1523,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
               <div className="space-y-3">
                 {installSuccess ? (
                   <div className="space-y-3.5 animate-fade-in">
-                    <div className="flex gap-3">
+                    <div className="flex">
                       <button
                         id="playstore-uninstall-btn"
                         onClick={() => {
@@ -1535,30 +1535,21 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                           // Reload the page to clear the browser's PWA install state so Chrome re-triggers beforeinstallprompt!
                           window.location.reload();
                         }}
-                        className="flex-1 py-2.5 bg-white hover:bg-zinc-50 border border-zinc-300 text-zinc-700 hover:text-zinc-900 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                        className="w-full py-2.5 bg-white hover:bg-zinc-50 border border-zinc-300 text-zinc-700 hover:text-zinc-900 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                       >
                         <span>Uninstall</span>
-                      </button>
-                      <button
-                        id="playstore-open-btn"
-                        onClick={handleOpenApp}
-                        className="flex-1 py-2.5 bg-[#01875f] hover:bg-[#01704e] active:scale-[0.99] text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-md shadow-emerald-700/10"
-                      >
-                        <span>Open</span>
                       </button>
                     </div>
 
                     {/* Beautiful, clear instruction helper for Android APK installs */}
-                    <div className="bg-emerald-50 border border-emerald-200/60 p-4 rounded-2xl text-left space-y-3 shadow-sm">
+                    <div className="bg-emerald-50 border border-emerald-200/60 p-4 rounded-2xl text-left space-y-2 shadow-sm">
                       <div className="flex items-center gap-2 text-emerald-800 text-[11px] font-black uppercase tracking-tight">
                         <CheckCircle2 size={14} className="text-emerald-600 animate-bounce" />
                         <span>Download Complete! What's Next?</span>
                       </div>
                       
-                      <div className="space-y-2.5 text-xs text-zinc-600 font-medium leading-relaxed font-sans">
-                          
-                     
-    
+                      <div className="text-[11px] font-bold text-emerald-900 leading-snug font-sans uppercase tracking-wide pl-5.5">
+                        OPEN APP ON YOUR HOMESCREEN
                       </div>
                     </div>
                   </div>
