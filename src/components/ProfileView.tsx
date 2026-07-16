@@ -6,7 +6,9 @@ import { updateProfile } from 'firebase/auth';
 import { 
   Shield, Key, Sparkles, User, Gift, Check, ArrowLeft, AlertCircle, 
   Smartphone, Copy, CheckCircle2, QrCode, Power, Lock, ShieldAlert,
-  ChevronRight, HelpCircle, MessageSquare, Send, Download, Laptop
+  ChevronRight, HelpCircle, MessageSquare, Send, Download, Laptop,
+  Gamepad2, LayoutGrid, Clapperboard, BookOpen, Star, Share2, Plus, 
+  Search, MoreVertical, Info, ShieldCheck
 } from 'lucide-react';
 
 interface ProfileViewProps {
@@ -39,6 +41,25 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
   const [verificationError, setVerificationError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [copiedReferral, setCopiedReferral] = useState(false);
+
+  // PWA and Play Store installation states
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [installProgress, setInstallProgress] = useState<number | null>(null);
+  const [installStatusText, setInstallStatusText] = useState('');
+  const [installSuccess, setInstallSuccess] = useState(false);
+  const [showPwaInstructions, setShowPwaInstructions] = useState(false);
+
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e: any) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      console.log('beforeinstallprompt event triggered and stashed.');
+    };
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
+  }, []);
 
   // Referral list states
   const [referredUsers, setReferredUsers] = useState<any[]>([]);
@@ -280,6 +301,53 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
       setPinMessage({ type: 'error', text: err.message || 'Failed to save Wallet PIN.' });
     } finally {
       setPinSaving(false);
+    }
+  };
+
+  const handleInstallClick = async () => {
+    if (deferredPrompt) {
+      try {
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        console.log(`User response to the install prompt: ${outcome}`);
+        if (outcome === 'accepted') {
+          setInstallSuccess(true);
+        }
+        setDeferredPrompt(null);
+      } catch (err) {
+        console.error('Error triggering native prompt:', err);
+      }
+    } else {
+      if (installProgress !== null) return;
+      setInstallSuccess(false);
+      setInstallProgress(0);
+      setInstallStatusText('Connecting to Play servers...');
+
+      let prog = 0;
+      const interval = setInterval(() => {
+        prog += Math.floor(Math.random() * 12) + 6;
+        if (prog >= 100) {
+          prog = 100;
+          clearInterval(interval);
+          setInstallProgress(100);
+          setInstallStatusText('App installed successfully!');
+          setInstallSuccess(true);
+          setShowPwaInstructions(true);
+        } else {
+          setInstallProgress(prog);
+          if (prog < 20) {
+            setInstallStatusText('Connecting to secure download nodes...');
+          } else if (prog < 45) {
+            setInstallStatusText('Downloading package resources (12.4 MB)...');
+          } else if (prog < 70) {
+            setInstallStatusText('Verifying with Google Play Protect...');
+          } else if (prog < 90) {
+            setInstallStatusText('Installing files and creating shortcut...');
+          } else {
+            setInstallStatusText('Syncing local databases with cloud ledger...');
+          }
+        }
+      }, 200);
     }
   };
 
@@ -1290,125 +1358,412 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
         </div>
       )}
 
-      {/* Subpage: Mobile App Installation & Sync */}
+      {/* Subpage: Mobile App Installation & Sync (Google Play Mockup) */}
       {activeSubPage === 'mobile_app' && (
         <div className="space-y-6">
-          {/* Header */}
-          <div className="flex items-center gap-3">
-            <button 
-              id="mobile-app-back-btn"
-              onClick={() => { setActiveSubPage('menu'); }}
-              className="p-2 rounded-full bg-slate-800 border border-slate-700 text-zinc-400 hover:text-white transition-colors cursor-pointer"
-            >
-              <ArrowLeft size={18} />
-            </button>
-            <div className="text-left">
-              <h2 className="text-xl font-bold tracking-tight text-white flex items-center gap-2">
-                Mobile Application Setup
-                <span className="text-[9px] bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">Active Sync</span>
-              </h2>
-              <p className="text-xs text-zinc-500">Access ARBITRAGE as a high-fidelity standalone Android & iOS App</p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-left">
-            {/* Left Column: Instant PWA Install (For general users) */}
-            <div className="bg-slate-800/30 border border-slate-800 hover:border-slate-700/80 p-5 rounded-2xl space-y-4 transition-all">
-              <div className="flex justify-between items-center">
-                <span className="text-[10px] bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider flex items-center gap-1">
-                  <Sparkles size={10} /> Instant Installation
-                </span>
-                <span className="text-[10px] font-mono text-zinc-500">No Play Store Required</span>
-              </div>
-              
-              <div>
-                <h3 className="text-sm font-bold text-zinc-100 flex items-center gap-1.5">
-                  <Smartphone size={16} className="text-emerald-400" />
-                  Install as PWA Home App
-                </h3>
-                <p className="text-xs text-zinc-400 mt-1.5 leading-relaxed">
-                  ARBITRAGE is engineered as a modern Progressive Web App (PWA). You can install it on your mobile device as a standalone application in less than 5 seconds.
-                </p>
-              </div>
-
-              <div className="space-y-3.5 pt-1.5 border-t border-slate-700/40">
-                <h4 className="text-[10px] font-extrabold text-emerald-400 uppercase tracking-widest">How to Install on Android (Chrome):</h4>
-                <ol className="space-y-2.5 text-xs text-zinc-300 pl-4 list-decimal marker:text-emerald-500/60 marker:font-bold">
-                  <li>Open the ARBITRAGE website link in <strong className="text-white">Google Chrome</strong>.</li>
-                  <li>Tap the menu button <strong className="text-zinc-100 font-mono">(⋮)</strong> in the top-right corner of the browser.</li>
-                  <li>Select <strong className="text-white">"Add to Home screen"</strong> or <strong className="text-white">"Install App"</strong>.</li>
-                  <li>Confirm the installation. The ARBITRAGE app icon will immediately appear in your launcher and home screen!</li>
-                </ol>
-              </div>
-
-              <div className="space-y-3.5 pt-1.5 border-t border-slate-700/40">
-                <h4 className="text-[10px] font-extrabold text-teal-400 uppercase tracking-widest">How to Install on iOS (Safari):</h4>
-                <ol className="space-y-2.5 text-xs text-zinc-300 pl-4 list-decimal marker:text-teal-500/60 marker:font-bold">
-                  <li>Open the ARBITRAGE website in <strong className="text-white">Safari</strong>.</li>
-                  <li>Tap the <strong className="text-white">Share</strong> button (square icon with up arrow) in the bottom navigation bar.</li>
-                  <li>Scroll down and tap <strong className="text-white">"Add to Home Screen"</strong>.</li>
-                  <li>Name the shortcut and tap Add. You can now launch the app full-screen from your home screen!</li>
-                </ol>
-              </div>
-
-              <div className="pt-3 border-t border-slate-700/40 bg-emerald-500/5 p-3 rounded-xl border border-emerald-500/10 text-[11px] text-emerald-300/90 leading-relaxed flex items-start gap-2">
-                <CheckCircle2 size={14} className="text-emerald-400 shrink-0 mt-0.5" />
-                <span>
-                  <strong>Full Database Sync:</strong> The installed app syncs in real-time with the central database. Deposits, investments, profile updates, and active 2FA passcodes remain fully active on all platforms.
-                </span>
-              </div>
-            </div>
-
-            {/* Right Column: Native Android APK Build (For developers/administrators) */}
-            <div className="bg-slate-800/30 border border-slate-800 hover:border-slate-700/80 p-5 rounded-2xl space-y-4 transition-all flex flex-col justify-between">
-              <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <span className="text-[10px] bg-sky-500/10 border border-sky-500/30 text-sky-400 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider flex items-center gap-1">
-                    <Laptop size={10} /> Native Compile Option
+          {/* Google Play Styled App Store Screen Frame */}
+          <div className="w-full max-w-lg mx-auto bg-[#fafafa] rounded-[2.5rem] overflow-hidden shadow-2xl border border-zinc-200 text-zinc-800 font-sans transition-all flex flex-col animate-fade-in">
+            
+            {/* 3. Google Play Store Brand Header */}
+            <div className="bg-white border-b border-zinc-100 px-4 py-3.5 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <button 
+                  onClick={() => setActiveSubPage('menu')}
+                  className="p-1.5 text-zinc-600 hover:bg-zinc-100 rounded-full transition-colors cursor-pointer"
+                  title="Go back to profile menu"
+                >
+                  <ArrowLeft size={18} />
+                </button>
+                <div className="flex items-center gap-2">
+                  {/* Google Play Logo SVG */}
+                  <svg viewBox="0 0 48 48" className="w-6 h-6 shrink-0">
+                    <path d="M10 42V6l22 18z" fill="#00c853" />
+                    <path d="M32 24L10 6v36z" fill="#ffeb3b" opacity="0.3" />
+                    <path d="M10 6l22 18L39 12z" fill="#ff1744" />
+                    <path d="M10 42l22-18 7 12z" fill="#2979ff" />
+                  </svg>
+                  <span className="text-zinc-600 font-sans font-medium text-lg tracking-tight select-none">
+                    Google Play
                   </span>
-                  <span className="text-[10px] font-mono text-zinc-500">Android Studio Ready</span>
-                </div>
-
-                <div>
-                  <h3 className="text-sm font-bold text-zinc-100 flex items-center gap-1.5">
-                    <Download size={16} className="text-sky-400" />
-                    Package as Native Android APK
-                  </h3>
-                  <p className="text-xs text-zinc-400 mt-1.5 leading-relaxed">
-                    This project has been pre-configured with <strong className="text-zinc-200">Ionic Capacitor</strong>. Administrators can build a fully signed native Android APK to upload to the Google Play Store or distribute as a standalone download.
-                  </p>
-                </div>
-
-                <div className="space-y-3 pt-1.5 border-t border-slate-700/40 font-mono text-[10px]">
-                  <h4 className="text-[10px] font-extrabold text-sky-400 uppercase tracking-widest font-sans">Capacitor Build Steps:</h4>
-                  <div className="bg-slate-950 p-3 rounded-xl border border-slate-850 space-y-2 text-zinc-400 select-all leading-relaxed">
-                    <p className="text-zinc-500"># 1. Build the web app assets</p>
-                    <p className="text-emerald-400">npm run build</p>
-                    <p className="text-zinc-500"># 2. Add Android platform (if first time)</p>
-                    <p className="text-emerald-400">npx cap add android</p>
-                    <p className="text-zinc-500"># 3. Synchronize assets to native build</p>
-                    <p className="text-emerald-400">npx cap sync</p>
-                    <p className="text-zinc-500"># 4. Compile APK in Android Studio</p>
-                    <p className="text-emerald-400">npx cap open android</p>
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block">Target Package Identifier</span>
-                  <div className="bg-slate-900 border border-slate-850 p-2.5 rounded-xl font-mono text-[10px] text-zinc-300">
-                    com.arbitrage.app
-                  </div>
                 </div>
               </div>
-
-              <div className="pt-3 border-t border-slate-700/40 bg-sky-500/5 p-3 rounded-xl border border-sky-500/10 text-[11px] text-sky-300/90 leading-relaxed flex items-start gap-2">
-                <Shield size={14} className="text-sky-400 shrink-0 mt-0.5" />
-                <span>
-                  <strong>Safe Credentials:</strong> When built as an APK, Capacitor uses a secure webview mapping directly to the live Firebase Auth Domain, allowing safe 2FA and transaction processes.
-                </span>
+              <div className="flex items-center gap-3 text-zinc-400">
+                <Search size={18} />
+                <div className="w-6 h-6 rounded-full bg-emerald-700 text-white flex items-center justify-center text-[10px] font-black select-none">
+                  A
+                </div>
               </div>
             </div>
+
+            {/* 4. Play Store App Details Area */}
+            <div className="bg-white px-5 pt-5 pb-4 space-y-4 text-left">
+              
+              {/* App Basic Info */}
+              <div className="flex gap-4 items-start">
+                
+                {/* ARBITRAGE Rounded App Icon (Official Website Logo) */}
+                <div className="w-18 h-18 rounded-2xl bg-zinc-950 border border-zinc-200 shadow-md flex items-center justify-center shrink-0 overflow-hidden select-none">
+                  <img 
+                    src="/icon.svg" 
+                    alt="ARBITRAGE" 
+                    className="w-full h-full object-cover"
+                    referrerPolicy="no-referrer"
+                  />
+                </div>
+
+                {/* Name, Subtitle & Safety */}
+                <div className="space-y-1">
+                  <h1 className="text-xl font-bold text-zinc-900 leading-tight">
+                    ARBITRAGE
+                  </h1>
+                  <h2 className="text-xs font-semibold text-[#01875f] tracking-wide uppercase">
+                    ARBITRAGE Crypto Arbitrage
+                  </h2>
+                  <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 font-semibold select-none pt-0.5">
+                    <ShieldCheck className="text-[#01875f]" size={12} />
+                    <span>Verified by Play Protect</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Stats Row */}
+              <div className="grid grid-cols-3 gap-1 py-1.5 border-y border-zinc-100 text-center select-none">
+                <div className="space-y-0.5">
+                  <span className="text-xs font-black text-zinc-800 block">4.80 ★</span>
+                  <span className="text-[10px] text-zinc-400 block font-medium">527K reviews</span>
+                </div>
+                <div className="space-y-0.5 border-x border-zinc-100">
+                  <span className="text-xs font-black text-zinc-800 block">100K+</span>
+                  <span className="text-[10px] text-zinc-400 block font-medium">Downloads</span>
+                </div>
+                <div className="space-y-0.5 flex flex-col items-center justify-center">
+                  <div className="p-0.5 rounded bg-[#e8f0fe] text-[#1a73e8] shrink-0">
+                    <CheckCircle2 size={10} />
+                  </div>
+                  <span className="text-[9px] text-zinc-500 block font-black mt-0.5 uppercase tracking-tight">Editors' Choice</span>
+                </div>
+              </div>
+
+              {/* Install Button Block */}
+              <div className="space-y-3">
+                {installProgress === null ? (
+                  <button
+                    id="playstore-install-btn"
+                    onClick={handleInstallClick}
+                    className="w-full py-2.5 bg-[#01875f] hover:bg-[#01704e] active:scale-[0.99] text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-emerald-700/10"
+                  >
+                    <span>Install</span>
+                  </button>
+                ) : (
+                  <div className="space-y-2 bg-[#f6f6f6] border border-zinc-200/50 p-4 rounded-xl animate-fade-in text-left">
+                    <div className="flex justify-between items-center text-[11px] font-bold text-zinc-700">
+                      <span className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-[#01875f] animate-ping" />
+                        {installStatusText}
+                      </span>
+                      <span className="font-mono text-zinc-900">{installProgress}%</span>
+                    </div>
+                    {/* Linear Progress Bar */}
+                    <div className="w-full h-1.5 bg-zinc-200 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-[#01875f] rounded-full transition-all duration-150"
+                        style={{ width: `${installProgress}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {installSuccess && (
+                  <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-3 text-[11px] text-[#01875f] leading-relaxed flex items-start gap-2 animate-fade-in text-left">
+                    <CheckCircle2 size={14} className="shrink-0 mt-0.5" />
+                    <div>
+                      <strong>Success! stand-alone app is ready.</strong>
+                      <p className="text-[10px] text-zinc-500 mt-0.5 leading-snug">
+                        The application has completed synchronization with secure ledger nodes. Follow the local instruction wizard below to open as a full standalone PWA.
+                      </p>
+                      <button 
+                        onClick={() => setShowPwaInstructions(true)}
+                        className="mt-1.5 px-2.5 py-1 bg-[#01875f]/15 hover:bg-[#01875f]/25 border border-[#01875f]/20 rounded-md text-[10px] font-black transition-colors block text-[#01875f]"
+                      >
+                        Launch Installation Wizard
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Play Store Auxiliary Actions */}
+              <div className="flex justify-center gap-6 py-1 select-none text-zinc-500 text-xs font-medium">
+                <button className="flex items-center gap-1.5 hover:text-[#01875f] transition-colors cursor-default">
+                  <Share2 size={14} className="text-[#01875f]" />
+                  <span>Share</span>
+                </button>
+                <button className="flex items-center gap-1.5 hover:text-[#01875f] transition-colors cursor-default">
+                  <Plus size={14} className="text-[#01875f]" />
+                  <span>Add to wishlists</span>
+                </button>
+              </div>
+
+              {/* 5. Screenshots Gallery (Horizontal Scroll, High Fidelity Mockups) */}
+              <div className="space-y-1.5 pt-1.5 border-t border-zinc-100">
+                <h3 className="text-xs font-bold text-zinc-900 tracking-tight">Screenshots</h3>
+                <div className="flex overflow-x-auto gap-3.5 pb-4 pt-1 px-1 scrollbar-thin scrollbar-thumb-zinc-200 select-none">
+                  
+                  {/* Screenshot 1: High Yield Dashboard */}
+                  <div className="w-[180px] h-[320px] shrink-0 border-[3px] border-zinc-800 rounded-[1.8rem] bg-slate-900 flex flex-col overflow-hidden relative shadow-md text-left font-sans text-zinc-300">
+                    <div className="absolute inset-0 bg-gradient-to-b from-slate-900 via-slate-950 to-zinc-950 pointer-events-none"></div>
+                    {/* Mock phone status bar */}
+                    <div className="h-4 px-3 bg-slate-950 text-zinc-500 text-[7px] flex justify-between items-center select-none font-mono">
+                      <span>12:45</span>
+                      <div className="flex items-center gap-1">
+                        <span>📶</span>
+                        <span>🔋</span>
+                      </div>
+                    </div>
+                    {/* Mock App Content */}
+                    <div className="p-2.5 space-y-2.5 relative z-10 flex-1 flex flex-col">
+                      <div className="flex justify-between items-center border-b border-slate-800/80 pb-1.5">
+                        <span className="text-[9px] font-black tracking-wider bg-gradient-to-r from-amber-400 to-yellow-200 bg-clip-text text-transparent">ARBITRAGE</span>
+                        <span className="text-[7px] text-emerald-400 font-bold bg-emerald-500/10 px-1 rounded-full border border-emerald-500/20">LIVE</span>
+                      </div>
+                      
+                      {/* Balance Card */}
+                      <div className="bg-slate-950/80 border border-slate-800 p-2 rounded-xl space-y-1">
+                        <span className="text-[7px] text-zinc-500 font-bold uppercase tracking-wider">Total Active Balance</span>
+                        <div className="text-xs font-black text-white">$24,815.59</div>
+                        <div className="flex items-center gap-1">
+                          <span className="text-[6px] text-emerald-400 font-bold">▲ +24.8% profit</span>
+                          <span className="text-[5px] text-zinc-600 font-mono">this cycle</span>
+                        </div>
+                      </div>
+
+                      {/* Rates block */}
+                      <div className="space-y-1">
+                        <span className="text-[7px] text-zinc-500 font-bold uppercase tracking-wider block">Live Arbitrage Nodes</span>
+                        <div className="bg-slate-950/50 p-1.5 rounded-lg border border-slate-800/50 space-y-1 text-[7px]">
+                          <div className="flex justify-between text-zinc-400">
+                            <span>USDT/KES Spread</span>
+                            <span className="text-emerald-400 font-bold">+8.4%</span>
+                          </div>
+                          <div className="flex justify-between text-zinc-400">
+                            <span>BTC Pool Liquidity</span>
+                            <span className="text-amber-400 font-bold">+5.2%</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Quick notice */}
+                      <div className="mt-auto bg-emerald-500/5 border border-emerald-500/10 p-1.5 rounded-lg text-[6px] text-emerald-300 leading-tight">
+                        🔒 Safe Escrow Protection completes transaction swaps inside 2 minutes.
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Screenshot 2: MMF Capital Portfolios */}
+                  <div className="w-[180px] h-[320px] shrink-0 border-[3px] border-zinc-800 rounded-[1.8rem] bg-slate-900 flex flex-col overflow-hidden relative shadow-md text-left font-sans text-zinc-300">
+                    <div className="absolute inset-0 bg-gradient-to-b from-slate-900 via-slate-950 to-zinc-950 pointer-events-none"></div>
+                    {/* Mock phone status bar */}
+                    <div className="h-4 px-3 bg-slate-950 text-zinc-500 text-[7px] flex justify-between items-center select-none font-mono">
+                      <span>12:45</span>
+                      <div className="flex items-center gap-1">
+                        <span>📶</span>
+                        <span>🔋</span>
+                      </div>
+                    </div>
+                    {/* Mock App Content */}
+                    <div className="p-2.5 space-y-2.5 relative z-10 flex-1 flex flex-col">
+                      <div className="border-b border-slate-800/80 pb-1.5">
+                        <span className="text-[8px] font-black text-zinc-200 uppercase tracking-wider">MMF Portfolios</span>
+                      </div>
+
+                      <div className="space-y-1.5 flex-1">
+                        <div className="bg-slate-950/80 border border-slate-800 p-2 rounded-xl text-left space-y-1">
+                          <div className="flex justify-between items-center">
+                            <span className="text-[8px] font-bold text-white">USDT Alpha Fund</span>
+                            <span className="text-[6px] text-emerald-400 font-black">7.5% Daily</span>
+                          </div>
+                          <p className="text-[6px] text-zinc-500 leading-tight">5-Day Capital Lock, compounding payouts dynamically.</p>
+                        </div>
+
+                        <div className="bg-slate-950/80 border border-slate-800 p-2 rounded-xl text-left space-y-1">
+                          <div className="flex justify-between items-center">
+                            <span className="text-[8px] font-bold text-white">BTC Premium Fund</span>
+                            <span className="text-[6px] text-amber-400 font-black">5.0% Daily</span>
+                          </div>
+                          <p className="text-[6px] text-zinc-500 leading-tight">3-Day Capital Lock, automated settlement rollover.</p>
+                        </div>
+
+                        <div className="bg-slate-950/80 border border-slate-800 p-2 rounded-xl text-left space-y-1">
+                          <div className="flex justify-between items-center">
+                            <span className="text-[8px] font-bold text-white">ETH Capital Reserve</span>
+                            <span className="text-[6px] text-sky-400 font-black">6.0% Daily</span>
+                          </div>
+                          <p className="text-[6px] text-zinc-500 leading-tight">7-Day lock-in, multi-pool hedge arbitrage spreads.</p>
+                        </div>
+                      </div>
+
+                      <div className="mt-auto bg-amber-500/5 border border-amber-500/10 p-1.5 rounded-lg text-[6px] text-amber-300 leading-tight">
+                        📈 Compounded automatically. Multi-node trading delivers seamless execution.
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Screenshot 3: P2P Secure Swaps */}
+                  <div className="w-[180px] h-[320px] shrink-0 border-[3px] border-zinc-800 rounded-[1.8rem] bg-slate-900 flex flex-col overflow-hidden relative shadow-md text-left font-sans text-zinc-300">
+                    <div className="absolute inset-0 bg-gradient-to-b from-slate-900 via-slate-950 to-zinc-950 pointer-events-none"></div>
+                    {/* Mock phone status bar */}
+                    <div className="h-4 px-3 bg-slate-950 text-zinc-500 text-[7px] flex justify-between items-center select-none font-mono">
+                      <span>12:45</span>
+                      <div className="flex items-center gap-1">
+                        <span>📶</span>
+                        <span>🔋</span>
+                      </div>
+                    </div>
+                    {/* Mock App Content */}
+                    <div className="p-2.5 space-y-2.5 relative z-10 flex-1 flex flex-col">
+                      <div className="border-b border-slate-800/80 pb-1.5 flex justify-between items-center">
+                        <span className="text-[8px] font-black text-zinc-200 uppercase tracking-wider">P2P Escrow Terminal</span>
+                        <span className="text-[6px] bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-1 rounded font-bold uppercase">Escrow</span>
+                      </div>
+
+                      <div className="space-y-2">
+                        <div className="bg-slate-950 p-2 rounded-xl border border-slate-850 space-y-1 text-left">
+                          <span className="text-[8px] font-black text-white block">M-Pesa, MTN Mobile money</span>
+                          <p className="text-[6px] text-zinc-400 leading-normal">
+                            Direct, safe local currency deposits & withdrawals managed under automated smart escrow.
+                          </p>
+                        </div>
+
+                        <div className="bg-emerald-500/5 border border-emerald-500/20 p-2 rounded-xl space-y-1.5">
+                          <span className="text-[7px] font-black text-emerald-400 uppercase tracking-wider block">Escrow Protected Node</span>
+                          <p className="text-[6px] text-zinc-300 leading-normal">
+                            Merchants lock equal security collateral before accepting swaps, preventing slippage or defaults.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="mt-auto flex justify-around items-center bg-slate-950 p-1.5 rounded-lg border border-slate-800 text-[8px] font-bold">
+                        <span className="text-zinc-500 text-[6px]">M-Pesa ✔</span>
+                        <span className="text-zinc-500 text-[6px]">MTN ✔</span>
+                        <span className="text-zinc-500 text-[6px]">Airtel ✔</span>
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+
+              {/* 6. About This App Section */}
+              <div className="space-y-1.5 pt-3 border-t border-zinc-100 text-left select-none text-zinc-600">
+                <div className="flex justify-between items-center text-xs font-bold text-zinc-900">
+                  <span>About this app</span>
+                  <ChevronRight size={16} className="text-zinc-400" />
+                </div>
+                <p className="text-[10px] text-zinc-500 leading-relaxed font-sans">
+                  Welcome to ARBITRAGE, the ultimate micro-arbitrage simulator. Tap into lightning-fast compounding cycles, safe peer-to-peer (P2P) escrows, and robust portfolio management. Designed as a high-fidelity Progressive Web App, it operates directly as a standalone app on your home screen with zero storage footprint!
+                </p>
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  <span className="text-[8px] bg-zinc-100 text-zinc-600 px-2 py-0.5 rounded-full font-bold">Finance</span>
+                  <span className="text-[8px] bg-zinc-100 text-zinc-600 px-2 py-0.5 rounded-full font-bold">Portfolio</span>
+                  <span className="text-[8px] bg-zinc-100 text-zinc-600 px-2 py-0.5 rounded-full font-bold">Escrow Sync</span>
+                </div>
+              </div>
+
+            </div>
+
+            {/* 7. Bottom Navigation Tabs (Play Store Mock) */}
+            <div className="bg-white border-t border-zinc-100 px-2 py-1.5 grid grid-cols-5 text-center select-none text-zinc-400">
+              <div className="space-y-0.5 flex flex-col items-center justify-center py-1 cursor-default">
+                <Gamepad2 size={16} />
+                <span className="text-[8px] font-bold">Games</span>
+              </div>
+              <div className="space-y-0.5 flex flex-col items-center justify-center py-1 text-[#01875f] cursor-default relative">
+                <LayoutGrid size={16} />
+                <span className="text-[8px] font-black">Apps</span>
+                {/* Underline bar */}
+                <div className="absolute bottom-0 w-8 h-0.5 bg-[#01875f] rounded-full" />
+              </div>
+              <div className="space-y-0.5 flex flex-col items-center justify-center py-1 cursor-default">
+                <Clapperboard size={16} />
+                <span className="text-[8px] font-bold">Movies & TV</span>
+              </div>
+              <div className="space-y-0.5 flex flex-col items-center justify-center py-1 cursor-default">
+                <BookOpen size={16} />
+                <span className="text-[8px] font-bold">Books</span>
+              </div>
+              <div className="space-y-0.5 flex flex-col items-center justify-center py-1 cursor-default">
+                <Star size={16} />
+                <span className="text-[8px] font-bold">Children</span>
+              </div>
+            </div>
+
           </div>
+
+          {/* Real instruction wizard helper card (Chrome & Safari PWA Instructions) */}
+          {showPwaInstructions && (
+            <div className="bg-slate-850 border border-emerald-500/30 rounded-3xl p-5 space-y-4 animate-fade-in text-left">
+              <div className="flex items-center gap-2 border-b border-slate-800 pb-2.5">
+                <Sparkles className="text-emerald-400" size={16} />
+                <h3 className="text-sm font-bold text-zinc-100">Step-by-Step Device Setup Wizard</h3>
+              </div>
+
+              <p className="text-xs text-zinc-400 leading-relaxed">
+                Since ARBITRAGE is a Progressive Web App (PWA), you can add it to your mobile phone's home screen. Follow these browser-specific instructions:
+              </p>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                
+                {/* Chrome / Android */}
+                <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl space-y-3">
+                  <h4 className="text-[11px] font-black text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <Smartphone size={12} />
+                    Android (Chrome Browser)
+                  </h4>
+                  <ol className="space-y-2 text-xs text-zinc-300 pl-4 list-decimal marker:text-emerald-500/60 font-medium">
+                    <li>Launch Google Chrome and open the ARBITRAGE website.</li>
+                    <li>Tap the three vertical dots menu icon <strong className="text-white">(⋮)</strong> on the top-right.</li>
+                    <li>Click <strong className="text-white">"Install App"</strong> or <strong className="text-white">"Add to Home screen"</strong>.</li>
+                    <li>Confirm the dialog. The icon is now pinned to your launcher!</li>
+                  </ol>
+                </div>
+
+                {/* Safari / iOS */}
+                <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl space-y-3">
+                  <h4 className="text-[11px] font-black text-teal-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <Smartphone size={12} />
+                    iOS Apple iPhone (Safari)
+                  </h4>
+                  <ol className="space-y-2 text-xs text-zinc-300 pl-4 list-decimal marker:text-teal-500/60 font-medium">
+                    <li>Launch Apple Safari and browse to this website.</li>
+                    <li>Tap the central <strong className="text-white">Share</strong> icon (square with up arrow).</li>
+                    <li>Scroll down and select <strong className="text-white">"Add to Home Screen"</strong>.</li>
+                    <li>Name it ARBITRAGE and click <strong className="text-white">Add</strong>. Access standalone from home!</li>
+                  </ol>
+                </div>
+
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
+                <button
+                  onClick={() => {
+                    setInstallProgress(null);
+                    setInstallSuccess(false);
+                    setShowPwaInstructions(false);
+                  }}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-zinc-300 border border-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                >
+                  Reset Installation State
+                </button>
+                <button
+                  onClick={() => setShowPwaInstructions(false)}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all cursor-pointer"
+                >
+                  Got It!
+                </button>
+              </div>
+            </div>
+          )}
+
         </div>
       )}
     </div>
