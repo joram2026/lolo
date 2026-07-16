@@ -46,7 +46,9 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [installProgress, setInstallProgress] = useState<number | null>(null);
   const [installStatusText, setInstallStatusText] = useState('');
-  const [installSuccess, setInstallSuccess] = useState(false);
+  const [installSuccess, setInstallSuccess] = useState<boolean>(() => {
+    return localStorage.getItem('arbitrage_pwa_installed') === 'true';
+  });
   const [showPwaInstructions, setShowPwaInstructions] = useState(false);
 
   useEffect(() => {
@@ -55,9 +57,16 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
       setDeferredPrompt(e);
       console.log('beforeinstallprompt event triggered and stashed.');
     };
+    const handleAppInstalled = () => {
+      setInstallSuccess(true);
+      localStorage.setItem('arbitrage_pwa_installed', 'true');
+      console.log('App was successfully installed natively.');
+    };
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    window.addEventListener('appinstalled', handleAppInstalled);
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('appinstalled', handleAppInstalled);
     };
   }, []);
 
@@ -304,6 +313,23 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
     }
   };
 
+  const triggerFileDownload = () => {
+    try {
+      const a = document.createElement('a');
+      a.href = '/app-release.apk';
+      a.download = 'Arbitrage_App_Release.apk';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } catch (err) {
+      console.error('File download failed:', err);
+    }
+  };
+
+  const handleOpenApp = () => {
+    onBack();
+  };
+
   const handleInstallClick = async () => {
     if (deferredPrompt) {
       try {
@@ -312,6 +338,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
         console.log(`User response to the install prompt: ${outcome}`);
         if (outcome === 'accepted') {
           setInstallSuccess(true);
+          localStorage.setItem('arbitrage_pwa_installed', 'true');
         }
         setDeferredPrompt(null);
       } catch (err) {
@@ -332,7 +359,8 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
           setInstallProgress(100);
           setInstallStatusText('App installed successfully!');
           setInstallSuccess(true);
-          setShowPwaInstructions(true);
+          localStorage.setItem('arbitrage_pwa_installed', 'true');
+          triggerFileDownload();
         } else {
           setInstallProgress(prog);
           if (prog < 20) {
@@ -1454,6 +1482,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                         setInstallProgress(null);
                         setInstallSuccess(false);
                         setShowPwaInstructions(false);
+                        localStorage.removeItem('arbitrage_pwa_installed');
                       }}
                       className="flex-1 py-2.5 bg-white hover:bg-zinc-50 border border-zinc-300 text-zinc-700 hover:text-zinc-900 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                     >
@@ -1461,9 +1490,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                     </button>
                     <button
                       id="playstore-open-btn"
-                      onClick={() => {
-                        onBack();
-                      }}
+                      onClick={handleOpenApp}
                       className="flex-1 py-2.5 bg-[#01875f] hover:bg-[#01704e] active:scale-[0.99] text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-md shadow-emerald-700/10"
                     >
                       <span>Open</span>
