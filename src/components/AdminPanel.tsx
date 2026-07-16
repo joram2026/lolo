@@ -109,6 +109,7 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
     type: 'both' as 'buy' | 'sell' | 'both'
   });
 
+  const [customWipeUID, setCustomWipeUID] = useState('');
   const [loading, setLoading] = useState(true);
   const [actioning, setActioning] = useState<string | null>(null);
   const [feedbackMsg, setFeedbackMsg] = useState<{ type: 'success' | 'error' | 'info', text: string } | null>(null);
@@ -455,6 +456,44 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
     const userTxs = txList.filter(t => t.userId === u.uid);
     setSelectedUserHistory(u);
     setSelectedUserTxs(userTxs);
+  };
+
+  const handleDeleteAllTransactions = (uid: string, email: string) => {
+    const userTxs = txList.filter(t => t.userId === uid);
+    if (userTxs.length === 0) {
+      showFeedback('error', `No transactions found to delete for ${email}.`);
+      return;
+    }
+
+    setConfirmModal({
+      isOpen: true,
+      title: 'Delete All Transactions?',
+      message: `Are you sure you want to PERMANENTLY DELETE all ${userTxs.length} transaction records for ${email}? This action is irreversible, cannot be undone, and will wipe out their entire history in the database.`,
+      danger: true,
+      onConfirm: async () => {
+        setConfirmModal(prev => ({ ...prev, isOpen: false }));
+        setActioning(uid);
+        try {
+          const batch = writeBatch(db);
+          userTxs.forEach(t => {
+            batch.delete(doc(db, 'transactions', t.id));
+          });
+          await batch.commit();
+
+          showFeedback('success', `Successfully wiped all ${userTxs.length} transaction records for ${email}.`);
+          
+          // Clear active logs modal view
+          setSelectedUserTxs([]);
+          
+          await loadAllData(true);
+        } catch (err: any) {
+          console.error(err);
+          showFeedback('error', 'Failed to delete all transactions: ' + err.message);
+        } finally {
+          setActioning(null);
+        }
+      }
+    });
   };
 
   // 2. Deposit Approval Logic
@@ -2058,6 +2097,101 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
 
               </div>
 
+              {/* Orphaned & Custom Transaction Cleaner */}
+              <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 space-y-4">
+                <div className="flex items-center gap-2 border-b border-zinc-800/80 pb-3">
+                  <ShieldAlert className="text-red-400 animate-pulse" size={16} />
+                  <div>
+                    <h3 className="text-xs font-black text-zinc-300 uppercase tracking-wider">Database Maintenance: Orphaned Transaction Cleaner</h3>
+                    <p className="text-[10px] text-zinc-500 font-semibold mt-0.5">Wipe transactions of deleted/missing accounts or manually clean any User ID history.</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Left panel: Manual UID Wipe */}
+                  <div className="space-y-3 bg-zinc-950/40 p-4 rounded-2xl border border-zinc-850/85">
+                    <h4 className="text-[10px] text-red-400 font-black uppercase tracking-wider">Manual Transaction Wipe</h4>
+                    <p className="text-[10px] text-zinc-400 leading-normal">
+                      Enter any specific User ID (UID) below to completely purge all transaction history associated with it. This is useful if the user was deleted before cleaning up their logs.
+                    </p>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] text-zinc-500 font-bold">Target User ID (UID)</label>
+                      <input
+                        id="custom-wipe-uid-input"
+                        type="text"
+                        placeholder="e.g. JjfzhPFIrxZiZOtz4zgrOAg3avz2"
+                        value={customWipeUID}
+                        onChange={(e) => setCustomWipeUID(e.target.value.trim())}
+                        className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-red-500 text-white font-mono"
+                      />
+                    </div>
+                    <button
+                      id="wipe-custom-uid-btn"
+                      onClick={() => {
+                        if (!customWipeUID) {
+                          showFeedback('error', 'Please enter a valid User ID (UID).');
+                          return;
+                        }
+                        handleDeleteAllTransactions(customWipeUID, `Manual Entry (ID: ${customWipeUID})`);
+                      }}
+                      className="w-full py-2 bg-red-950/30 hover:bg-red-950/60 text-red-400 hover:text-red-300 border border-red-900/45 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <Trash2 size={12} />
+                      <span>Wipe Transactions for UID</span>
+                    </button>
+                  </div>
+
+                  {/* Right panel: Automatically Detected Orphaned Transactions */}
+                  <div className="space-y-3 bg-zinc-950/40 p-4 rounded-2xl border border-zinc-850/85 flex flex-col justify-between">
+                    <div className="space-y-1">
+                      <h4 className="text-[10px] text-zinc-300 font-black uppercase tracking-wider">Auto-Detected Orphaned IDs</h4>
+                      <p className="text-[10px] text-zinc-500">
+                        The system has identified transactions on the database that belong to UIDs no longer registered on the system.
+                      </p>
+                    </div>
+
+                    {(() => {
+                      const registeredUIDs = new Set(usersList.map(u => u.uid));
+                      const orphanedUIDs = (Array.from(new Set(txList.map(t => t.userId).filter(Boolean))) as string[])
+                        .filter(uid => !registeredUIDs.has(uid));
+
+                      if (orphanedUIDs.length === 0) {
+                        return (
+                          <div className="text-center py-4 bg-zinc-950/50 border border-zinc-900 rounded-xl">
+                            <span className="text-[10px] text-emerald-400 font-bold block">✓ No Orphaned Transactions Found</span>
+                            <span className="text-[9px] text-zinc-500 mt-0.5 block">Database is clean!</span>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div className="space-y-2 max-h-36 overflow-y-auto pr-1">
+                          {orphanedUIDs.map(uid => {
+                            const count = txList.filter(t => t.userId === uid).length;
+                            return (
+                              <div key={uid} className="flex justify-between items-center bg-zinc-950 p-2.5 rounded-xl border border-zinc-900 text-[10px] font-mono">
+                                <div className="space-y-0.5">
+                                  <span className="text-zinc-400 font-bold block truncate max-w-[120px] sm:max-w-[180px]" title={uid}>{uid}</span>
+                                  <span className="text-zinc-500 text-[9px] block font-sans font-medium">{count} orphaned transaction(s)</span>
+                                </div>
+                                <button
+                                  id={`wipe-orphaned-btn-${uid}`}
+                                  onClick={() => handleDeleteAllTransactions(uid, `Orphaned UID: ${uid}`)}
+                                  className="px-2 py-1 bg-red-950/40 hover:bg-red-950/80 text-red-400 text-[9px] font-bold rounded-lg border border-red-900/30 transition-all cursor-pointer"
+                                  title="Delete transactions for this deleted user ID"
+                                >
+                                  Wipe
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
+              </div>
+
             </div>
           </div>
           )}
@@ -2128,7 +2262,20 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
               )}
             </div>
             
-            <div className="flex justify-end pt-3 border-t border-zinc-800">
+            <div className="flex justify-between items-center pt-3 border-t border-zinc-800">
+              {selectedUserTxs.length > 0 ? (
+                <button
+                  id="wipe-all-user-txs-btn"
+                  onClick={() => handleDeleteAllTransactions(selectedUserHistory.uid, selectedUserHistory.email || '')}
+                  className="px-4 py-2 bg-red-950/40 hover:bg-red-950/60 text-red-400 hover:text-red-300 border border-red-900/50 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer animate-fade-in"
+                  title="Wipe entire transaction history for this user"
+                >
+                  <Trash2 size={12} />
+                  <span>Wipe All Transactions</span>
+                </button>
+              ) : (
+                <div />
+              )}
               <button
                 onClick={() => setSelectedUserHistory(null)}
                 className="px-4 py-2 bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 rounded-xl text-xs font-bold text-zinc-300"
