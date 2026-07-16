@@ -402,7 +402,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
             pwaLoadingRef.current = false;
             setInstallSuccess(true);
             localStorage.setItem('arbitrage_pwa_installed', 'true');
-          }, 4000);
+          }, 7000);
         }
         setDeferredPrompt(null);
       } catch (err) {
@@ -1556,30 +1556,9 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                       </div>
                       
                       <div className="space-y-2.5 text-xs text-zinc-600 font-medium leading-relaxed font-sans">
-                        <div className="flex gap-2 items-start">
-                          <span className="bg-emerald-600 text-white w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">1</span>
-                          <p>
-                            Pull down your screen notifications and tap the downloaded <strong>"ARBITRAGE.apk"</strong> notification (or look in your Downloads folder).
-                          </p>
-                        </div>
-                        <div className="flex gap-2 items-start">
-                          <span className="bg-emerald-600 text-white w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">2</span>
-                          <p>
-                            Select <strong>"Package installer"</strong> and click <strong>"Install"</strong> to launch setup.
-                          </p>
-                        </div>
-                        <div className="flex gap-2 items-start border-t border-emerald-200/40 pt-2.5 mt-1 bg-amber-50/50 -mx-4 px-4 py-2.5 rounded-b-2xl border-b border-l border-r border-amber-200/40">
-                          <AlertCircle size={15} className="text-amber-600 shrink-0 mt-0.5 animate-pulse" />
-                          <div>
-                            <strong className="text-amber-900 block text-[11px] mb-0.5">⚠️ Google Play Protect Alert:</strong>
-                            <p className="text-zinc-600 text-[11px] leading-snug">
-                              Android protects you by warning about external APKs. When the <em>"App blocked"</em> popup appears:
-                            </p>
-                            <p className="text-amber-800 font-bold mt-1 text-[11px]">
-                              👉 Tap "More details" (with the small down arrow) and select "Install anyway"!
-                            </p>
-                          </div>
-                        </div>
+                          
+                     
+    
                       </div>
                     </div>
                   </div>
