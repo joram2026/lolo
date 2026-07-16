@@ -1462,7 +1462,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                     <button
                       id="playstore-open-btn"
                       onClick={() => {
-                        setActiveSubPage('menu');
+                        onBack();
                       }}
                       className="flex-1 py-2.5 bg-[#01875f] hover:bg-[#01704e] active:scale-[0.99] text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-md shadow-emerald-700/10"
                     >
