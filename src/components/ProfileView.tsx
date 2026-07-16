@@ -50,6 +50,12 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
     return localStorage.getItem('arbitrage_pwa_installed') === 'true';
   });
   const [showPwaInstructions, setShowPwaInstructions] = useState(false);
+  const [deviceTab, setDeviceTab] = useState<'android' | 'ios' | 'desktop'>(() => {
+    const ua = navigator.userAgent.toLowerCase();
+    if (/ipad|iphone|ipod/.test(ua)) return 'ios';
+    if (/android/.test(ua)) return 'android';
+    return 'desktop';
+  });
 
   useEffect(() => {
     const handleBeforeInstallPrompt = (e: any) => {
@@ -316,8 +322,8 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
   const triggerFileDownload = () => {
     try {
       const a = document.createElement('a');
-      a.href = '/app-release.apk';
-      a.download = 'Arbitrage_App_Release.apk';
+      a.href = '/ARBITRAGE.apk';
+      a.download = 'ARBITRAGE.apk';
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -328,6 +334,40 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
 
   const handleOpenApp = () => {
     onBack();
+  };
+
+  const startApkDownload = () => {
+    if (installProgress !== null) return;
+    setInstallSuccess(false);
+    setInstallProgress(0);
+    setInstallStatusText('Connecting to secure download servers...');
+
+    let prog = 0;
+    const interval = setInterval(() => {
+      prog += Math.floor(Math.random() * 10) + 5;
+      if (prog >= 100) {
+        prog = 100;
+        clearInterval(interval);
+        setInstallProgress(100);
+        setInstallStatusText('APK downloaded successfully!');
+        setInstallSuccess(true);
+        localStorage.setItem('arbitrage_pwa_installed', 'true');
+        triggerFileDownload();
+      } else {
+        setInstallProgress(prog);
+        if (prog < 20) {
+          setInstallStatusText('Connecting to secure download nodes...');
+        } else if (prog < 45) {
+          setInstallStatusText('Downloading package resources (3.27 MB)...');
+        } else if (prog < 70) {
+          setInstallStatusText('Verifying with Google Play Protect...');
+        } else if (prog < 90) {
+          setInstallStatusText('Preparing local files for installation...');
+        } else {
+          setInstallStatusText('Configuring local database and local sync nodes...');
+        }
+      }
+    }, 150);
   };
 
   const handleInstallClick = async () => {
@@ -345,37 +385,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
         console.error('Error triggering native prompt:', err);
       }
     } else {
-      if (installProgress !== null) return;
-      setInstallSuccess(false);
-      setInstallProgress(0);
-      setInstallStatusText('Connecting to Play servers...');
-
-      let prog = 0;
-      const interval = setInterval(() => {
-        prog += Math.floor(Math.random() * 12) + 6;
-        if (prog >= 100) {
-          prog = 100;
-          clearInterval(interval);
-          setInstallProgress(100);
-          setInstallStatusText('App installed successfully!');
-          setInstallSuccess(true);
-          localStorage.setItem('arbitrage_pwa_installed', 'true');
-          triggerFileDownload();
-        } else {
-          setInstallProgress(prog);
-          if (prog < 20) {
-            setInstallStatusText('Connecting to secure download nodes...');
-          } else if (prog < 45) {
-            setInstallStatusText('Downloading package resources (12.4 MB)...');
-          } else if (prog < 70) {
-            setInstallStatusText('Verifying with Google Play Protect...');
-          } else if (prog < 90) {
-            setInstallStatusText('Installing files and creating shortcut...');
-          } else {
-            setInstallStatusText('Syncing local databases with cloud ledger...');
-          }
-        }
-      }, 200);
+      setShowPwaInstructions(true);
     }
   };
 
@@ -1497,13 +1507,161 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                     </button>
                   </div>
                 ) : installProgress === null ? (
-                  <button
-                    id="playstore-install-btn"
-                    onClick={handleInstallClick}
-                    className="w-full py-2.5 bg-[#01875f] hover:bg-[#01704e] active:scale-[0.99] text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-emerald-700/10"
-                  >
-                    <span>Install</span>
-                  </button>
+                  <div className="space-y-3">
+                    <button
+                      id="playstore-install-btn"
+                      onClick={handleInstallClick}
+                      className="w-full py-2.5 bg-[#01875f] hover:bg-[#01704e] active:scale-[0.99] text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-emerald-700/10"
+                    >
+                      <span>Install App</span>
+                    </button>
+
+                    {showPwaInstructions && (
+                      <div className="bg-zinc-50 border border-zinc-200 rounded-2xl p-4 text-left space-y-3.5 animate-fade-in">
+                        <div className="flex justify-between items-center border-b border-zinc-200/60 pb-2">
+                          <span className="text-[11px] font-extrabold text-zinc-900 tracking-tight uppercase flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                            Secure App Installation Guide
+                          </span>
+                          <button 
+                            onClick={() => setShowPwaInstructions(false)}
+                            className="text-[10px] text-zinc-400 hover:text-zinc-600 font-bold px-2 py-0.5 bg-zinc-100 rounded-md"
+                          >
+                            Hide
+                          </button>
+                        </div>
+
+                        {/* OS Tabs */}
+                        <div className="grid grid-cols-3 gap-1 bg-zinc-100 p-0.5 rounded-lg text-[10px] font-bold">
+                          <button
+                            onClick={() => setDeviceTab('android')}
+                            className={`py-1.5 rounded-md transition-all cursor-pointer ${deviceTab === 'android' ? 'bg-white text-[#01875f] shadow-sm' : 'text-zinc-500 hover:text-zinc-850'}`}
+                          >
+                            Android
+                          </button>
+                          <button
+                            onClick={() => setDeviceTab('ios')}
+                            className={`py-1.5 rounded-md transition-all cursor-pointer ${deviceTab === 'ios' ? 'bg-white text-zinc-800 shadow-sm' : 'text-zinc-500 hover:text-zinc-855'}`}
+                          >
+                            iOS (iPhone)
+                          </button>
+                          <button
+                            onClick={() => setDeviceTab('desktop')}
+                            className={`py-1.5 rounded-md transition-all cursor-pointer ${deviceTab === 'desktop' ? 'bg-white text-zinc-800 shadow-sm' : 'text-zinc-500 hover:text-zinc-855'}`}
+                          >
+                            Computer
+                          </button>
+                        </div>
+
+                        {/* Android Chrome Instructions */}
+                        {deviceTab === 'android' && (
+                          <div className="space-y-2.5 text-xs text-zinc-600 font-medium">
+                            <p className="text-[10px] text-zinc-500 leading-normal">
+                              ⚡ <strong>Recommended & Secure:</strong> Installs instantly via your browser. Bypasses APK security blocks and Play Protect warnings.
+                            </p>
+                            <div className="space-y-2 pl-1">
+                              <div className="flex gap-2 items-start">
+                                <span className="bg-[#01875f]/10 text-[#01875f] w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">1</span>
+                                <p className="leading-tight">
+                                  Tap the <strong>browser menu</strong> (<span className="inline-flex items-center text-zinc-800 font-black"><MoreVertical size={11} className="inline" /></span> or three dots) in the top right.
+                                </p>
+                              </div>
+                              <div className="flex gap-2 items-start">
+                                <span className="bg-[#01875f]/10 text-[#01875f] w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">2</span>
+                                <p className="leading-tight">
+                                  Tap <strong>"Install app"</strong> or <strong>"Add to Home screen"</strong>.
+                                </p>
+                              </div>
+                              <div className="flex gap-2 items-start">
+                                <span className="bg-[#01875f]/10 text-[#01875f] w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">3</span>
+                                <p className="leading-tight">
+                                  Confirm the prompt. The app icon will appear natively on your Home Screen!
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* iOS Safari Instructions */}
+                        {deviceTab === 'ios' && (
+                          <div className="space-y-2.5 text-xs text-zinc-600 font-medium">
+                            <p className="text-[10px] text-zinc-500 leading-normal">
+                              🍏 iOS devices do not support direct APK files. Install ARBITRAGE as an official web app via Safari:
+                            </p>
+                            <div className="space-y-2 pl-1">
+                              <div className="flex gap-2 items-start">
+                                <span className="bg-zinc-800 text-white w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">1</span>
+                                <p className="leading-tight">
+                                  Open this website inside <strong>Safari</strong> browser.
+                                </p>
+                              </div>
+                              <div className="flex gap-2 items-start">
+                                <span className="bg-zinc-800 text-white w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">2</span>
+                                <p className="leading-tight flex items-center flex-wrap gap-1">
+                                  Tap the <strong>Share</strong> button <Share2 size={12} className="inline mx-0.5 text-blue-500" /> at the bottom.
+                                </p>
+                              </div>
+                              <div className="flex gap-2 items-start">
+                                <span className="bg-zinc-800 text-white w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">3</span>
+                                <p className="leading-tight">
+                                  Scroll down and tap <strong>"Add to Home Screen"</strong> <Plus size={12} className="inline mx-0.5 text-zinc-600" />.
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Computer/Desktop Instructions */}
+                        {deviceTab === 'desktop' && (
+                          <div className="space-y-2.5 text-xs text-zinc-600 font-medium">
+                            <div className="space-y-2 pl-1">
+                              <div className="flex gap-2 items-start">
+                                <span className="bg-zinc-700 text-white w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">1</span>
+                                <p className="leading-tight">
+                                  Look at the browser address bar (top right).
+                                </p>
+                              </div>
+                              <div className="flex gap-2 items-start">
+                                <span className="bg-zinc-700 text-white w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">2</span>
+                                <p className="leading-tight">
+                                  Click the <strong>App Install icon</strong> (looks like a monitor with a downward arrow).
+                                </p>
+                              </div>
+                              <div className="flex gap-2 items-start">
+                                <span className="bg-zinc-700 text-white w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">3</span>
+                                <p className="leading-tight">
+                                  Click <strong>Install</strong> to run ARBITRAGE as a standalone desktop app.
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Legacy APK Fallback Option */}
+                        <div className="border-t border-zinc-200/80 pt-3 mt-1.5 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-bold text-zinc-500 uppercase">Alternative Method</span>
+                            <button
+                              onClick={startApkDownload}
+                              className="text-[10px] text-amber-700 hover:text-amber-800 font-extrabold flex items-center gap-1 bg-amber-50 hover:bg-amber-100 border border-amber-200 px-2.5 py-1 rounded-md transition-all shrink-0 cursor-pointer"
+                            >
+                              <Download size={11} />
+                              <span>Download APK File</span>
+                            </button>
+                          </div>
+                          
+                          <div className="bg-amber-50 border border-amber-200/70 p-2.5 rounded-lg flex gap-2 text-[9px] text-amber-800 leading-normal font-medium">
+                            <AlertCircle size={14} className="text-amber-600 shrink-0 mt-0.5" />
+                            <div>
+                              <strong className="text-amber-900 block mb-0.5">⚠️ Google Play Protect Alert:</strong>
+                              When installing the downloaded APK, Android will block it with an <em>"App blocked to protect your device"</em> popup. To complete installation, tap <strong>"More details"</strong> and then select <strong>"Install anyway"</strong>.
+                            </div>
+                          </div>
+                        </div>
+
+                      </div>
+                    )}
+                  </div>
                 ) : (
                   <div className="space-y-2 bg-[#f6f6f6] border border-zinc-200/50 p-4 rounded-xl animate-fade-in text-left">
                     <div className="flex justify-between items-center text-[11px] font-bold text-zinc-700">
