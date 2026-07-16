@@ -1446,7 +1446,30 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
 
               {/* Install Button Block */}
               <div className="space-y-3">
-                {installProgress === null ? (
+                {installSuccess ? (
+                  <div className="flex gap-3 animate-fade-in">
+                    <button
+                      id="playstore-uninstall-btn"
+                      onClick={() => {
+                        setInstallProgress(null);
+                        setInstallSuccess(false);
+                        setShowPwaInstructions(false);
+                      }}
+                      className="flex-1 py-2.5 bg-white hover:bg-zinc-50 border border-zinc-300 text-zinc-700 hover:text-zinc-900 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <span>Uninstall</span>
+                    </button>
+                    <button
+                      id="playstore-open-btn"
+                      onClick={() => {
+                        setActiveSubPage('menu');
+                      }}
+                      className="flex-1 py-2.5 bg-[#01875f] hover:bg-[#01704e] active:scale-[0.99] text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-md shadow-emerald-700/10"
+                    >
+                      <span>Open</span>
+                    </button>
+                  </div>
+                ) : installProgress === null ? (
                   <button
                     id="playstore-install-btn"
                     onClick={handleInstallClick}
@@ -1469,24 +1492,6 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                         className="h-full bg-[#01875f] rounded-full transition-all duration-150"
                         style={{ width: `${installProgress}%` }}
                       />
-                    </div>
-                  </div>
-                )}
-
-                {installSuccess && (
-                  <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-3 text-[11px] text-[#01875f] leading-relaxed flex items-start gap-2 animate-fade-in text-left">
-                    <CheckCircle2 size={14} className="shrink-0 mt-0.5" />
-                    <div>
-                      <strong>Success! stand-alone app is ready.</strong>
-                      <p className="text-[10px] text-zinc-500 mt-0.5 leading-snug">
-                        The application has completed synchronization with secure ledger nodes. Follow the local instruction wizard below to open as a full standalone PWA.
-                      </p>
-                      <button 
-                        onClick={() => setShowPwaInstructions(true)}
-                        className="mt-1.5 px-2.5 py-1 bg-[#01875f]/15 hover:bg-[#01875f]/25 border border-[#01875f]/20 rounded-md text-[10px] font-black transition-colors block text-[#01875f]"
-                      >
-                        Launch Installation Wizard
-                      </button>
                     </div>
                   </div>
                 )}
@@ -1698,71 +1703,6 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
             </div>
 
           </div>
-
-          {/* Real instruction wizard helper card (Chrome & Safari PWA Instructions) */}
-          {showPwaInstructions && (
-            <div className="bg-slate-850 border border-emerald-500/30 rounded-3xl p-5 space-y-4 animate-fade-in text-left">
-              <div className="flex items-center gap-2 border-b border-slate-800 pb-2.5">
-                <Sparkles className="text-emerald-400" size={16} />
-                <h3 className="text-sm font-bold text-zinc-100">Step-by-Step Device Setup Wizard</h3>
-              </div>
-
-              <p className="text-xs text-zinc-400 leading-relaxed">
-                Since ARBITRAGE is a Progressive Web App (PWA), you can add it to your mobile phone's home screen. Follow these browser-specific instructions:
-              </p>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                
-                {/* Chrome / Android */}
-                <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl space-y-3">
-                  <h4 className="text-[11px] font-black text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
-                    <Smartphone size={12} />
-                    Android (Chrome Browser)
-                  </h4>
-                  <ol className="space-y-2 text-xs text-zinc-300 pl-4 list-decimal marker:text-emerald-500/60 font-medium">
-                    <li>Launch Google Chrome and open the ARBITRAGE website.</li>
-                    <li>Tap the three vertical dots menu icon <strong className="text-white">(⋮)</strong> on the top-right.</li>
-                    <li>Click <strong className="text-white">"Install App"</strong> or <strong className="text-white">"Add to Home screen"</strong>.</li>
-                    <li>Confirm the dialog. The icon is now pinned to your launcher!</li>
-                  </ol>
-                </div>
-
-                {/* Safari / iOS */}
-                <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl space-y-3">
-                  <h4 className="text-[11px] font-black text-teal-400 uppercase tracking-wider flex items-center gap-1.5">
-                    <Smartphone size={12} />
-                    iOS Apple iPhone (Safari)
-                  </h4>
-                  <ol className="space-y-2 text-xs text-zinc-300 pl-4 list-decimal marker:text-teal-500/60 font-medium">
-                    <li>Launch Apple Safari and browse to this website.</li>
-                    <li>Tap the central <strong className="text-white">Share</strong> icon (square with up arrow).</li>
-                    <li>Scroll down and select <strong className="text-white">"Add to Home Screen"</strong>.</li>
-                    <li>Name it ARBITRAGE and click <strong className="text-white">Add</strong>. Access standalone from home!</li>
-                  </ol>
-                </div>
-
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
-                <button
-                  onClick={() => {
-                    setInstallProgress(null);
-                    setInstallSuccess(false);
-                    setShowPwaInstructions(false);
-                  }}
-                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-zinc-300 border border-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer"
-                >
-                  Reset Installation State
-                </button>
-                <button
-                  onClick={() => setShowPwaInstructions(false)}
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all cursor-pointer"
-                >
-                  Got It!
-                </button>
-              </div>
-            </div>
-          )}
 
         </div>
       )}
