@@ -24,7 +24,13 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Active sub-page state
-  const [activeSubPage, setActiveSubPage] = useState<'menu' | 'personal' | 'referral' | 'pin' | '2fa' | 'support' | 'mobile_app'>('menu');
+  const [activeSubPage, setActiveSubPage] = useState<'menu' | 'personal' | 'referral' | 'pin' | '2fa' | 'support' | 'mobile_app'>(() => {
+    return (localStorage.getItem('profile_subpage') as any) || 'menu';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('profile_subpage', activeSubPage);
+  }, [activeSubPage]);
 
   // New PIN States
   const [newPin, setNewPin] = useState('');
@@ -333,6 +339,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
   };
 
   const handleOpenApp = () => {
+    localStorage.removeItem('profile_subpage');
     onBack();
   };
 
@@ -384,17 +391,16 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
         console.error('Error triggering native prompt:', err);
       }
     } else {
-      // If native browser prompt is null, determine the platform
+      // If native browser prompt is null, determine the platform and show PWA instructions
       const ua = navigator.userAgent.toLowerCase();
       const isIos = /ipad|iphone|ipod/.test(ua);
       
+      setShowPwaInstructions(true);
       if (isIos) {
-        // iOS requires manual "Add to Home Screen" instructions
         setDeviceTab('ios');
-        setShowPwaInstructions(true);
       } else {
-        // For Android and other platforms, immediately run the simplified, single-click install!
-        startApkDownload();
+        const isAndroid = /android/.test(ua);
+        setDeviceTab(isAndroid ? 'android' : 'desktop');
       }
     }
   };
@@ -416,7 +422,10 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
           <div className="flex items-center gap-3">
             <button 
               id="profile-back-btn"
-              onClick={onBack}
+              onClick={() => {
+                localStorage.removeItem('profile_subpage');
+                onBack();
+              }}
               className="p-2 rounded-full bg-slate-800 border border-slate-700 text-zinc-400 hover:text-white transition-colors cursor-pointer"
             >
               <ArrowLeft size={18} />
@@ -1504,6 +1513,9 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                           setInstallSuccess(false);
                           setShowPwaInstructions(false);
                           localStorage.removeItem('arbitrage_pwa_installed');
+                          localStorage.setItem('profile_subpage', 'mobile_app');
+                          // Reload the page to clear the browser's PWA install state so Chrome re-triggers beforeinstallprompt!
+                          window.location.reload();
                         }}
                         className="flex-1 py-2.5 bg-white hover:bg-zinc-50 border border-zinc-300 text-zinc-700 hover:text-zinc-900 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                       >
@@ -1577,6 +1589,29 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                             Hide
                           </button>
                         </div>
+
+                        {/* 1-Click Restore Alert */}
+                        {!deferredPrompt && (
+                          <div className="bg-emerald-50 border border-emerald-200/70 p-3.5 rounded-xl flex items-start gap-3 text-xs text-emerald-800 leading-normal font-medium shadow-sm animate-fade-in">
+                            <div className="p-1.5 bg-emerald-100 text-emerald-600 rounded-lg animate-pulse shrink-0">
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 4.89M9 11l3 3L22 4" />
+                              </svg>
+                            </div>
+                            <div className="space-y-1.5 flex-1 text-left">
+                              <strong className="text-emerald-950 text-[12px] block font-black">🔄 Just uninstalled ARBITRAGE?</strong>
+                              <p className="text-zinc-600 text-[11px] leading-relaxed">
+                                Browsers need a simple page refresh to reset their cache and restore the super-fast 1-click install prompt from the video!
+                              </p>
+                              <button
+                                onClick={() => window.location.reload()}
+                                className="mt-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-[10px] font-bold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
+                              >
+                                <span>Reload & Restore 1-Click Install</span>
+                              </button>
+                            </div>
+                          </div>
+                        )}
 
                         {/* OS Tabs */}
                         <div className="grid grid-cols-3 gap-1 bg-zinc-100 p-0.5 rounded-lg text-[10px] font-bold">
