@@ -1634,19 +1634,36 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
       
 
                         {/* Legacy APK Fallback Option */}
-                        <div className="border-t border-zinc-200/80 pt-3 mt-1.5 space-y-2">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-bold text-zinc-500 uppercase">Alternative Method</span>
-                            <button
-                              onClick={startApkDownload}
-                              className="text-[10px] text-amber-700 hover:text-amber-800 font-extrabold flex items-center gap-1 bg-amber-50 hover:bg-amber-100 border border-amber-200 px-2.5 py-1 rounded-md transition-all shrink-0 cursor-pointer"
-                            >
-                              <Download size={11} />
-                              <span>Download APK File</span>
-                            </button>
+                        <div className="border-t border-zinc-200/80 pt-4 mt-2">
+                          <div className="bg-gradient-to-br from-zinc-900 to-slate-950 text-white rounded-xl p-3.5 shadow-md border border-zinc-800/80 hover:border-emerald-500/30 transition-all duration-300 relative overflow-hidden group">
+                            {/* Subtle Background Glow Accent on Hover */}
+                            <div className="absolute -right-10 -bottom-10 w-24 h-24 bg-emerald-500/10 rounded-full blur-xl group-hover:bg-emerald-500/20 transition-all duration-500 pointer-events-none"></div>
+                            
+                            <div className="flex items-center justify-between gap-3 relative z-10">
+                              <div className="space-y-1 text-left">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-[9px] font-bold text-emerald-400 uppercase tracking-widest bg-emerald-500/15 px-1.5 py-0.5 rounded-md">
+                                    APK Fallback
+                                  </span>
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                                </div>
+                                <h4 className="text-[11px] font-black text-zinc-100 tracking-tight">
+                                  Manual Installation Pack
+                                </h4>
+                                <p className="text-[9px] text-zinc-400 font-medium leading-relaxed max-w-[160px]">
+                                  Secure, direct android package package (3.44 MB)
+                                </p>
+                              </div>
+                              
+                              <button
+                                onClick={startApkDownload}
+                                className="px-3.5 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 active:scale-95 text-white text-[10px] font-black rounded-lg transition-all flex items-center gap-1.5 cursor-pointer shadow-lg shadow-emerald-950/40 border border-emerald-400/20"
+                              >
+                                <Download size={12} className="stroke-[2.5]" />
+                                <span>Download APK</span>
+                              </button>
+                            </div>
                           </div>
-                          
-                          
                         </div>
 
                       </div>
