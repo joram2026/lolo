@@ -276,7 +276,7 @@ export default function StandardUserDashboard({
   const [tradeLoading, setTradeLoading] = useState(false);
 
   // Bottom Sticky Nav Tab
-  const [activeTab, setActiveTab] = useState<'home' | 'wallet' | 'trade' | 'history'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'wallet' | 'trade' | 'history' | 'earn'>('home');
   
   // Sync bottom tab selection with current path
   useEffect(() => {
@@ -284,6 +284,8 @@ export default function StandardUserDashboard({
       setActiveTab('wallet');
     } else if (path === '/trade') {
       setActiveTab('trade');
+    } else if (path === '/earn') {
+      setActiveTab('earn');
     } else if (path === '/history') {
       setActiveTab('history');
     } else {
@@ -291,7 +293,7 @@ export default function StandardUserDashboard({
     }
   }, [path]);
 
-  const handleTabChange = (tabId: 'home' | 'wallet' | 'trade' | 'history') => {
+  const handleTabChange = (tabId: 'home' | 'wallet' | 'trade' | 'history' | 'earn') => {
     setActiveTab(tabId);
     if (tabId === 'home') {
       navigate('/dashboard');
@@ -517,8 +519,19 @@ export default function StandardUserDashboard({
     const lockedAmount = getLockedAmount(selectedCoinForInvestment.symbol);
     const unlockedHolding = currentHolding - lockedAmount;
 
+    const minLimit = selectedCoinForInvestment.minInvestment ?? 10.0;
+    if (unlockedHolding < minLimit) {
+      setInvestmentError(`Your available balance of ${unlockedHolding.toFixed(4)} ${selectedCoinForInvestment.symbol} is below the minimum required investment of ${minLimit} ${selectedCoinForInvestment.symbol}. Please go to the deposit page to add deposit.`);
+      return;
+    }
+
+    if (amountVal < minLimit) {
+      setInvestmentError(`The minimum investment amount allowed for ${selectedCoinForInvestment.symbol} is ${minLimit} ${selectedCoinForInvestment.symbol}. Please enter at least ${minLimit} ${selectedCoinForInvestment.symbol}.`);
+      return;
+    }
+
     if (unlockedHolding < amountVal) {
-      setInvestmentError(`Insufficient unlocked ${selectedCoinForInvestment.symbol} balance. You hold ${currentHolding} but ${lockedAmount} is already locked in MMF.`);
+      setInvestmentError(`Insufficient available ${selectedCoinForInvestment.symbol} balance. You hold ${currentHolding} but ${lockedAmount} is already locked in MMF.`);
       return;
     }
 
@@ -1376,6 +1389,17 @@ export default function StandardUserDashboard({
                   minimumFractionDigits: liveCoin.symbol === 'BTC' || liveCoin.symbol === 'ETH' ? 6 : 2,
                   maximumFractionDigits: liveCoin.symbol === 'BTC' || liveCoin.symbol === 'ETH' ? 8 : 4
                 })} {liveCoin.symbol}
+                {getLockedAmount(liveCoin.symbol) > 0 && (
+                  <span className="text-[9px] text-amber-500 block font-bold mt-1">
+                    Available: {(holding - getLockedAmount(liveCoin.symbol)).toLocaleString(undefined, {
+                      minimumFractionDigits: liveCoin.symbol === 'BTC' || liveCoin.symbol === 'ETH' ? 6 : 2,
+                      maximumFractionDigits: liveCoin.symbol === 'BTC' || liveCoin.symbol === 'ETH' ? 8 : 4
+                    })} {liveCoin.symbol} (Locked: {getLockedAmount(liveCoin.symbol).toLocaleString(undefined, {
+                      minimumFractionDigits: liveCoin.symbol === 'BTC' || liveCoin.symbol === 'ETH' ? 6 : 2,
+                      maximumFractionDigits: liveCoin.symbol === 'BTC' || liveCoin.symbol === 'ETH' ? 8 : 4
+                    })})
+                  </span>
+                )}
               </span>
             </div>
             <div className="text-right">
@@ -1939,454 +1963,439 @@ export default function StandardUserDashboard({
           {/* TAB 3: TRADE SIMULATOR */}
           {activeTab === 'trade' && (
             <div className="space-y-5">
-              {/* Trade Mode Selector */}
-              <div className="grid grid-cols-2 bg-slate-950 p-1 border border-slate-850 rounded-2xl gap-1 select-none">
-                <button
-                  type="button"
-                  id="trade-mode-swap-btn"
-                  onClick={() => {
-                    setTradeMode('swap');
-                    setInvestmentError(null);
-                    setInvestmentSuccess(null);
-                  }}
-                  className={`py-2.5 text-[10px] font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                    tradeMode === 'swap'
-                      ? 'bg-gradient-to-tr from-emerald-600 to-teal-500 text-slate-950 shadow-md shadow-emerald-500/15'
-                      : 'bg-transparent text-zinc-400 hover:text-white'
-                  }`}
-                >
-                  <ArrowRightLeft size={14} />
-                  Quick Converter
-                </button>
-                <button
-                  type="button"
-                  id="trade-mode-mmf-btn"
-                  onClick={() => {
-                    setTradeMode('mmf');
-                    setMmfSubView('main');
-                    setInvestmentError(null);
-                    setInvestmentSuccess(null);
-                  }}
-                  className={`py-2.5 text-[10px] font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                    tradeMode === 'mmf'
-                      ? 'bg-gradient-to-tr from-emerald-600 to-teal-500 text-slate-950 shadow-md shadow-emerald-500/15'
-                      : 'bg-transparent text-zinc-400 hover:text-white'
-                  }`}
-                >
-                  <Coins size={14} />
-                  MMF Investment
-                </button>
-              </div>
-
               {/* swap mode */}
-              {tradeMode === 'swap' ? (
-                <div className="bg-slate-800 border border-slate-700/80 rounded-3xl p-5 space-y-5 animate-fade-in">
-                  <div>
-                    <h3 className="text-sm font-black text-zinc-300 tracking-tight flex items-center gap-1.5">
-                      <ArrowRightLeft size={16} className="text-emerald-400" />
-                      Quick Converter Simulator
-                    </h3>
-                    <p className="text-xs text-zinc-500 mt-0.5">Learn stablecoin rates and instantly swap between token balances.</p>
-                  </div>
-
-                  <div className="space-y-4">
-                    {/* From Asset */}
-                    <div className="space-y-1.5">
-                      <div className="flex justify-between items-center select-none">
-                        <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">From Asset</label>
-                        <span className="text-[10px] text-zinc-400 font-bold font-mono">
-                          Balance: {getCoinHolding(tradeFrom)} {tradeFrom}
-                        </span>
-                      </div>
-                      <CustomCoinSelect
-                        value={tradeFrom}
-                        onChange={(val) => {
-                          setTradeFrom(val);
-                          setSwapMessage(null);
-                        }}
-                        coins={cryptoPrices}
-                      />
-                    </div>
-
-                    {/* To Asset */}
-                    <div className="space-y-1.5">
-                      <div className="flex justify-between items-center select-none">
-                        <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">To Asset</label>
-                        <span className="text-[10px] text-zinc-400 font-bold font-mono">
-                          Balance: {getCoinHolding(tradeTo)} {tradeTo}
-                        </span>
-                      </div>
-                      <CustomCoinSelect
-                        value={tradeTo}
-                        onChange={(val) => {
-                          setTradeTo(val);
-                          setSwapMessage(null);
-                        }}
-                        coins={cryptoPrices}
-                      />
-                    </div>
-
-                    {/* Amount to convert */}
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Amount to convert</label>
-                      <div className="relative">
-                        <input
-                          id="trade-amount-input"
-                          type="number"
-                          placeholder="e.g. 0.5"
-                          value={tradeAmount}
-                          onChange={(e) => {
-                            setTradeAmount(e.target.value);
-                            setSwapMessage(null);
-                          }}
-                          className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-xs focus:outline-none focus:border-emerald-500 text-white font-mono"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setTradeAmount(getCoinHolding(tradeFrom).toString())}
-                          className="absolute right-2.5 top-2 px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-lg hover:bg-emerald-500/20 cursor-pointer"
-                        >
-                          MAX
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Output conversion */}
-                    {tradeResult !== null && (
-                      <div className="bg-slate-950 p-4 border border-slate-850 rounded-2xl flex flex-col gap-1 items-center justify-center relative overflow-hidden">
-                        <div className="absolute top-0 right-0 w-16 h-16 bg-emerald-500/5 rounded-full blur-xl" />
-                        <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider select-none">Live Conversion Value</span>
-                        <span className="text-xl font-black text-emerald-400 font-mono">
-                          {tradeResult} <span className="text-xs text-zinc-400 font-normal">{tradeTo}</span>
-                        </span>
-                        <span className="text-[9px] text-zinc-600 font-semibold mt-0.5 select-none">Dynamic rate applied</span>
-                      </div>
-                    )}
-
-                    {/* Messages feedback */}
-                    {swapMessage && (
-                      <div className={`p-3.5 rounded-xl border text-xs flex items-start gap-2.5 ${
-                        swapMessage.isError 
-                          ? 'bg-red-500/10 border-red-500/20 text-red-400' 
-                          : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
-                      }`}>
-                        <AlertCircle size={15} className="mt-0.5 shrink-0" />
-                        <span className="leading-relaxed font-medium">{swapMessage.text}</span>
-                      </div>
-                    )}
-
-                    {/* Execution Button */}
-                    <button
-                      type="button"
-                      disabled={swapLoading || !tradeAmount || parseFloat(tradeAmount) <= 0}
-                      onClick={handleSwapConvert}
-                      className="w-full py-3.5 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-slate-950 font-black text-xs uppercase tracking-wider shadow-lg shadow-emerald-500/10 active:scale-[0.985] transition-all disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center gap-1.5 cursor-pointer"
-                    >
-                      {swapLoading ? (
-                        <>
-                          <div className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin"></div>
-                          <span>Processing Conversion...</span>
-                        </>
-                      ) : (
-                        <>
-                          <ArrowRightLeft size={14} />
-                          <span>Execute Instant Swap</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
+              <div className="bg-slate-800 border border-slate-700/80 rounded-3xl p-5 space-y-5 animate-fade-in">
+                <div>
+                  <h3 className="text-sm font-black text-zinc-300 tracking-tight flex items-center gap-1.5">
+                    <ArrowRightLeft size={16} className="text-emerald-400" />
+                    Quick Converter Simulator
+                  </h3>
+                  <p className="text-xs text-zinc-500 mt-0.5">Learn stablecoin rates and instantly swap between token balances.</p>
                 </div>
-              ) : (
-                /* mmf investment mode */
-                <div className="bg-slate-800 border border-slate-700/80 rounded-3xl p-5 space-y-5 animate-fade-in">
-                  {mmfSubView === 'main' && (
-                    <div className="space-y-5">
-                      <div>
-                        <h3 className="text-sm font-black text-zinc-300 tracking-tight flex items-center gap-1.5">
-                          <Coins size={16} className="text-emerald-400" />
-                          Crypto MMF Investment
-                        </h3>
-                        <p className="text-[11px] text-zinc-500 mt-0.5">High-yield short term locked investments</p>
-                      </div>
 
-                      {/* Display Alert Message feedback */}
-                      {investmentSuccess && (
-                        <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-xl text-xs flex gap-2">
-                          <Check size={14} className="shrink-0 mt-0.5" />
-                          <span>{investmentSuccess}</span>
-                        </div>
-                      )}
-                      {investmentError && (
-                        <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl text-xs flex gap-2">
-                          <AlertCircle size={14} className="shrink-0 mt-0.5" />
-                          <span>{investmentError}</span>
-                        </div>
-                      )}
+                <div className="space-y-4">
+                  {/* From Asset */}
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between items-center select-none">
+                      <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">From Asset</label>
+                      <span className="text-[10px] text-zinc-400 font-bold font-mono">
+                        Available: {Math.max(0, getCoinHolding(tradeFrom) - getLockedAmount(tradeFrom))} {tradeFrom}
+                        {getLockedAmount(tradeFrom) > 0 && (
+                          <span className="text-zinc-500 text-[9px] font-normal"> ({getCoinHolding(tradeFrom)} total)</span>
+                        )}
+                      </span>
+                    </div>
+                    <CustomCoinSelect
+                      value={tradeFrom}
+                      onChange={(val) => {
+                        setTradeFrom(val);
+                        setSwapMessage(null);
+                      }}
+                      coins={cryptoPrices}
+                    />
+                  </div>
 
-                      {/* Coins Cards Grid */}
-                      <div className="grid grid-cols-1 gap-3">
-                        {cryptoPrices.map(coin => {
-                          const userHolding = getCoinHolding(coin.symbol);
-                          const locked = getLockedAmount(coin.symbol);
-                          const unlocked = Math.max(0, userHolding - locked);
-                          const dailyRate = coin.investmentRate ?? 5.0;
+                  {/* To Asset */}
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between items-center select-none">
+                      <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">To Asset</label>
+                      <span className="text-[10px] text-zinc-400 font-bold font-mono">
+                        Available: {Math.max(0, getCoinHolding(tradeTo) - getLockedAmount(tradeTo))} {tradeTo}
+                        {getLockedAmount(tradeTo) > 0 && (
+                          <span className="text-zinc-500 text-[9px] font-normal"> ({getCoinHolding(tradeTo)} total)</span>
+                        )}
+                      </span>
+                    </div>
+                    <CustomCoinSelect
+                      value={tradeTo}
+                      onChange={(val) => {
+                        setTradeTo(val);
+                        setSwapMessage(null);
+                      }}
+                      coins={cryptoPrices}
+                    />
+                  </div>
 
-                          return (
-                            <div 
-                              key={coin.symbol}
-                              className="bg-slate-950/45 border border-slate-850 hover:border-slate-800 p-4 rounded-2xl flex justify-between items-center transition-all group"
-                            >
-                              <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center p-1.5 shadow-inner">
-                                  <img 
-                                    src={getCoinLogoUrl(coin.symbol)} 
-                                    alt={coin.name} 
-                                    className="w-full h-full object-contain rounded-full"
-                                    referrerPolicy="no-referrer"
-                                  />
-                                </div>
-                                <div>
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="font-bold text-xs text-zinc-200">{coin.name}</span>
-                                    <span className="text-[9px] font-bold font-mono text-zinc-500 px-1.5 py-0.25 bg-slate-900 border border-slate-800 rounded">{coin.symbol}</span>
-                                  </div>
-                                  <div className="flex items-center gap-2 mt-1">
-                                    <span className="text-[10px] text-emerald-400 font-extrabold flex items-center gap-0.5 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded-md">
-                                      {dailyRate}% daily
-                                    </span>
-                                    <span className="text-[9px] text-zinc-500 font-bold">Lock: 1 Day</span>
-                                  </div>
-                                </div>
-                              </div>
+                  {/* Amount to convert */}
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Amount to convert</label>
+                    <div className="relative">
+                      <input
+                        id="trade-amount-input"
+                        type="number"
+                        placeholder="e.g. 0.5"
+                        value={tradeAmount}
+                        onChange={(e) => {
+                          setTradeAmount(e.target.value);
+                          setSwapMessage(null);
+                        }}
+                        className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-xs focus:outline-none focus:border-emerald-500 text-white font-mono"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setTradeAmount(Math.max(0, getCoinHolding(tradeFrom) - getLockedAmount(tradeFrom)).toString())}
+                        className="absolute right-2.5 top-2 px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-lg hover:bg-emerald-500/20 cursor-pointer"
+                      >
+                        MAX
+                      </button>
+                    </div>
+                  </div>
 
-                              <div className="text-right flex flex-col items-end gap-1.5">
-                                {userHolding > 0 && (
-                                  <span className="text-[9px] text-zinc-400 font-bold font-mono">
-                                    Holdings: {unlocked.toFixed(4)} {coin.symbol}
-                                    {locked > 0 && <span className="text-amber-500 font-bold"> (+{locked.toFixed(2)} locked)</span>}
-                                  </span>
-                                )}
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setSelectedCoinForInvestment(coin);
-                                    setInvestmentAmount('');
-                                    setMmfSubView('form');
-                                    setInvestmentError(null);
-                                    setInvestmentSuccess(null);
-                                  }}
-                                  className="px-4 py-2 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-slate-950 text-xs font-extrabold shadow-md shadow-emerald-500/5 active:scale-95 transition-all cursor-pointer"
-                                >
-                                  Invest
-                                </button>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-
-                      {/* Display Active/Completed Investments */}
-                      {activeInvestments.length > 0 && (
-                        <div className="space-y-3 pt-4 border-t border-slate-850">
-                          <div className="flex justify-between items-center select-none">
-                            <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
-                              <History size={12} className="text-zinc-400" />
-                              MMF Investment History
-                            </h4>
-                          </div>
-                          <div className="space-y-2.5 max-h-[300px] overflow-y-auto pr-1">
-                            {activeInvestments.map((inv: any) => {
-                              const createdDate = inv.createdAt?.toDate ? inv.createdAt.toDate().toLocaleDateString() : new Date(inv.createdAt).toLocaleDateString();
-                              const unlockDate = inv.unlockAt?.toDate ? inv.unlockAt.toDate().toLocaleDateString() : new Date(inv.unlockAt).toLocaleDateString();
-                              const isCompleted = inv.status === 'completed';
-
-                              return (
-                                <div 
-                                  key={inv.id} 
-                                  className={`p-3.5 rounded-xl border flex justify-between items-center text-xs font-mono select-none ${
-                                    isCompleted 
-                                      ? 'bg-slate-900/30 border-slate-850 text-zinc-500' 
-                                      : 'bg-emerald-950/10 border-emerald-500/10 text-emerald-300'
-                                  }`}
-                                >
-                                  <div>
-                                    <div className="flex items-center gap-1.5">
-                                      <span className="font-bold text-[11px] text-zinc-200">{inv.amount} {inv.coinSymbol}</span>
-                                      <span className="text-[9px] px-1 py-0.25 rounded bg-slate-950 border border-slate-850 text-emerald-400 font-bold">{inv.dailyRate}% Daily</span>
-                                    </div>
-                                    <div className="text-[9px] text-zinc-500 mt-1 flex flex-wrap items-center gap-2">
-                                      <span className="text-zinc-400 font-bold">Progress: {inv.daysPaid ?? 0}/{inv.totalDays ?? 5} Days</span>
-                                      <span>•</span>
-                                      <span>End: {unlockDate}</span>
-                                    </div>
-                                  </div>
-
-                                  <div className="text-right">
-                                    <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.75 rounded-md ${
-                                      isCompleted 
-                                        ? 'bg-zinc-800/30 text-zinc-500' 
-                                        : 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'
-                                    }`}>
-                                      {inv.status}
-                                    </span>
-                                    <div className="text-[9px] text-zinc-500 mt-1">
-                                      Earning: +{(inv.amount * (inv.dailyRate / 100)).toFixed(4)} / day
-                                    </div>
-                                    <div className="text-[9px] text-emerald-500/80 font-bold mt-0.5">
-                                      Earned: +{((inv.daysPaid ?? 0) * (inv.amount * (inv.dailyRate / 100))).toFixed(4)} {inv.coinSymbol}
-                                    </div>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
+                  {/* Output conversion */}
+                  {tradeResult !== null && (
+                    <div className="bg-slate-950 p-4 border border-slate-850 rounded-2xl flex flex-col gap-1 items-center justify-center relative overflow-hidden">
+                      <div className="absolute top-0 right-0 w-16 h-16 bg-emerald-500/5 rounded-full blur-xl" />
+                      <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider select-none">Live Conversion Value</span>
+                      <span className="text-xl font-black text-emerald-400 font-mono">
+                        {tradeResult} <span className="text-xs text-zinc-400 font-normal">{tradeTo}</span>
+                      </span>
+                      <span className="text-[9px] text-zinc-600 font-semibold mt-0.5 select-none">Dynamic rate applied</span>
                     </div>
                   )}
 
-                  {mmfSubView === 'form' && selectedCoinForInvestment && (
-                    <div className="space-y-5 animate-fade-in">
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setMmfSubView('main')}
-                          className="p-1.5 rounded-lg hover:bg-slate-900 border border-transparent hover:border-slate-800 text-zinc-400 hover:text-white transition-all cursor-pointer"
-                        >
-                          <ArrowLeft size={16} />
-                        </button>
-                        <div>
-                          <h4 className="text-xs font-black text-zinc-300 uppercase tracking-wider">Configure MMF Investment</h4>
-                          <p className="text-[10px] text-zinc-500 mt-0.5">Define your high-yield asset allocation</p>
+                  {/* Messages feedback */}
+                  {swapMessage && (
+                    <div className={`p-3.5 rounded-xl border text-xs flex items-start gap-2.5 ${
+                      swapMessage.isError 
+                        ? 'bg-red-500/10 border-red-500/20 text-red-400' 
+                        : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                    }`}>
+                      <AlertCircle size={15} className="mt-0.5 shrink-0" />
+                      <span className="leading-relaxed font-medium">{swapMessage.text}</span>
+                    </div>
+                  )}
+
+                  {/* Execution Button */}
+                  <button
+                    type="button"
+                    disabled={swapLoading || !tradeAmount || parseFloat(tradeAmount) <= 0}
+                    onClick={handleSwapConvert}
+                    className="w-full py-3.5 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-slate-950 font-black text-xs uppercase tracking-wider shadow-lg shadow-emerald-500/10 active:scale-[0.985] transition-all disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    {swapLoading ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin"></div>
+                        <span>Processing Conversion...</span>
+                      </>
+                    ) : (
+                      <>
+                        <ArrowRightLeft size={14} />
+                        <span>Execute Instant Swap</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 4: EARN (MMF INVESTMENT) */}
+          {activeTab === 'earn' && (
+            <div className="space-y-5">
+              {/* mmf investment mode */}
+              <div className="bg-slate-800 border border-slate-700/80 rounded-3xl p-5 space-y-5 animate-fade-in">
+                {mmfSubView === 'main' && (
+                  <div className="space-y-5">
+                    <div>
+                      <h3 className="text-sm font-black text-zinc-300 tracking-tight flex items-center gap-1.5">
+                        <Coins size={16} className="text-emerald-400" />
+                        Crypto MMF Investment
+                      </h3>
+                      <p className="text-[11px] text-zinc-500 mt-0.5">High-yield short term locked investments</p>
+                    </div>
+
+                    {/* Display Alert Message feedback */}
+                    {investmentSuccess && (
+                      <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-xl text-xs flex gap-2">
+                        <Check size={14} className="shrink-0 mt-0.5" />
+                        <span>{investmentSuccess}</span>
+                      </div>
+                    )}
+                    {investmentError && (
+                      <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl text-xs flex gap-2">
+                        <AlertCircle size={14} className="shrink-0 mt-0.5" />
+                        <span>{investmentError}</span>
+                      </div>
+                    )}
+
+                    {/* Coins Cards Grid */}
+                    <div className="grid grid-cols-1 gap-3">
+                      {cryptoPrices.map(coin => {
+                        const userHolding = getCoinHolding(coin.symbol);
+                        const locked = getLockedAmount(coin.symbol);
+                        const unlocked = Math.max(0, userHolding - locked);
+                        const dailyRate = coin.investmentRate ?? 5.0;
+
+                        return (
+                          <div 
+                            key={coin.symbol}
+                            className="bg-slate-950/45 border border-slate-850 hover:border-slate-800 p-4 rounded-2xl flex justify-between items-center transition-all group"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center p-1.5 shadow-inner">
+                                <img 
+                                  src={getCoinLogoUrl(coin.symbol)} 
+                                  alt={coin.name} 
+                                  className="w-full h-full object-contain rounded-full"
+                                  referrerPolicy="no-referrer"
+                                />
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-1.5">
+                                  <span className="font-bold text-xs text-zinc-200">{coin.name}</span>
+                                  <span className="text-[9px] font-bold font-mono text-zinc-500 px-1.5 py-0.25 bg-slate-900 border border-slate-800 rounded">{coin.symbol}</span>
+                                </div>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <span className="text-[10px] text-emerald-400 font-extrabold flex items-center gap-0.5 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded-md">
+                                    {dailyRate}% daily profit
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="text-right flex flex-col items-end gap-1.5">
+                              {userHolding > 0 && (
+                                <span className="text-[9px] text-zinc-400 font-bold font-mono">
+                                  Holdings: {unlocked.toFixed(4)} {coin.symbol}
+                                  {locked > 0 && <span className="text-amber-500 font-bold"> (+{locked.toFixed(2)} locked)</span>}
+                                </span>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedCoinForInvestment(coin);
+                                  setInvestmentAmount('');
+                                  setMmfSubView('form');
+                                  setInvestmentError(null);
+                                  setInvestmentSuccess(null);
+                                }}
+                                className="px-4 py-2 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-slate-950 text-xs font-extrabold shadow-md shadow-emerald-500/5 active:scale-95 transition-all cursor-pointer"
+                              >
+                                Invest
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Display Active/Completed Investments */}
+                    {activeInvestments.length > 0 && (
+                      <div className="space-y-3 pt-4 border-t border-slate-850">
+                        <div className="flex justify-between items-center select-none">
+                          <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
+                            <History size={12} className="text-zinc-400" />
+                            MMF Investment History
+                          </h4>
+                        </div>
+                        <div className="space-y-2.5 max-h-[300px] overflow-y-auto pr-1">
+                          {activeInvestments.map((inv: any) => {
+                            const createdDate = inv.createdAt?.toDate ? inv.createdAt.toDate().toLocaleDateString() : new Date(inv.createdAt).toLocaleDateString();
+                            const unlockDate = inv.unlockAt?.toDate ? inv.unlockAt.toDate().toLocaleDateString() : new Date(inv.unlockAt).toLocaleDateString();
+                            const isCompleted = inv.status === 'completed';
+
+                            return (
+                              <div 
+                                key={inv.id} 
+                                className={`p-3.5 rounded-xl border flex justify-between items-center text-xs font-mono select-none ${
+                                  isCompleted 
+                                    ? 'bg-slate-900/30 border-slate-850 text-zinc-500' 
+                                    : 'bg-emerald-950/10 border-emerald-500/10 text-emerald-300'
+                                }`}
+                              >
+                                <div>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="font-bold text-[11px] text-zinc-200">{inv.amount} {inv.coinSymbol}</span>
+                                    <span className="text-[9px] px-1 py-0.25 rounded bg-slate-950 border border-slate-850 text-emerald-400 font-bold">{inv.dailyRate}% Daily</span>
+                                  </div>
+                                  <div className="text-[9px] text-zinc-500 mt-1 flex flex-wrap items-center gap-2">
+                                    <span className="text-zinc-400 font-bold">Progress: {inv.daysPaid ?? 0}/{inv.totalDays ?? 5} Days</span>
+                                    <span>•</span>
+                                    <span>End: {unlockDate}</span>
+                                  </div>
+                                </div>
+
+                                <div className="text-right">
+                                  <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.75 rounded-md ${
+                                    isCompleted 
+                                      ? 'bg-zinc-800/30 text-zinc-500' 
+                                      : 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'
+                                  }`}>
+                                    {inv.status}
+                                  </span>
+                                  <div className="text-[9px] text-zinc-500 mt-1">
+                                    Earning: +{(inv.amount * (inv.dailyRate / 100)).toFixed(4)} / day
+                                  </div>
+                                  <div className="text-[9px] text-emerald-500/80 font-bold mt-0.5">
+                                    Earned: +{((inv.daysPaid ?? 0) * (inv.amount * (inv.dailyRate / 100))).toFixed(4)} {inv.coinSymbol}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
+                    )}
+                  </div>
+                )}
 
-                      {/* Chosen Coin Summary Card */}
-                      <div className="p-4 bg-slate-950/60 border border-slate-850 rounded-2xl flex justify-between items-center">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-slate-900 border border-slate-850 flex items-center justify-center p-1.5">
-                            <img 
-                              src={getCoinLogoUrl(selectedCoinForInvestment.symbol)} 
-                              alt={selectedCoinForInvestment.name} 
-                              className="w-full h-full object-contain rounded-full"
-                              referrerPolicy="no-referrer"
-                            />
-                          </div>
-                          <div>
-                            <span className="font-bold text-xs text-zinc-200 block">{selectedCoinForInvestment.name} MMF</span>
-                            <span className="text-[10px] text-emerald-400 font-extrabold block mt-0.5">
-                              Rate: {selectedCoinForInvestment.investmentRate ?? 5.0}% daily yield
-                            </span>
-                          </div>
+                {mmfSubView === 'form' && selectedCoinForInvestment && (
+                  <div className="space-y-5 animate-fade-in">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setMmfSubView('main')}
+                        className="p-1.5 rounded-lg hover:bg-slate-900 border border-transparent hover:border-slate-800 text-zinc-400 hover:text-white transition-all cursor-pointer"
+                      >
+                        <ArrowLeft size={16} />
+                      </button>
+                      <div>
+                        <h4 className="text-xs font-black text-zinc-300 uppercase tracking-wider">Configure MMF Investment</h4>
+                        <p className="text-[10px] text-zinc-500 mt-0.5">Define your high-yield asset allocation</p>
+                      </div>
+                    </div>
+
+                    {/* Chosen Coin Summary Card */}
+                    <div className="p-4 bg-slate-950/60 border border-slate-850 rounded-2xl flex justify-between items-center">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-slate-900 border border-slate-850 flex items-center justify-center p-1.5">
+                          <img 
+                            src={getCoinLogoUrl(selectedCoinForInvestment.symbol)} 
+                            alt={selectedCoinForInvestment.name} 
+                            className="w-full h-full object-contain rounded-full"
+                            referrerPolicy="no-referrer"
+                          />
                         </div>
-                        <div className="text-right">
-                          <span className="text-[9px] text-zinc-500 font-bold uppercase block">Holdings Unlocked</span>
-                          <span className="text-xs font-bold font-mono text-zinc-200 mt-0.5 block">
-                            {(getCoinHolding(selectedCoinForInvestment.symbol) - getLockedAmount(selectedCoinForInvestment.symbol)).toFixed(4)} {selectedCoinForInvestment.symbol}
+                        <div>
+                          <span className="font-bold text-xs text-zinc-200 block">{selectedCoinForInvestment.name} MMF</span>
+                          <span className="text-[10px] text-emerald-400 font-extrabold block mt-0.5">
+                            Rate: {selectedCoinForInvestment.investmentRate ?? 5.0}% daily yield
+                          </span>
+                          <span className="text-[9px] text-teal-400 font-bold block mt-1">
+                            Minimum Investment: {selectedCoinForInvestment.minInvestment ?? 10.0} {selectedCoinForInvestment.symbol}
                           </span>
                         </div>
                       </div>
+                      <div className="text-right">
+                        <span className="text-[9px] text-zinc-500 font-bold uppercase block">Available Balance</span>
+                        <span className="text-xs font-bold font-mono text-zinc-200 mt-0.5 block">
+                          {(getCoinHolding(selectedCoinForInvestment.symbol) - getLockedAmount(selectedCoinForInvestment.symbol)).toFixed(4)} {selectedCoinForInvestment.symbol}
+                        </span>
+                      </div>
+                    </div>
 
-                      {/* Form Controls */}
-                      <div className="space-y-4">
-                        <div className="space-y-1.5">
-                          <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block">Investment Amount</label>
-                          <div className="relative">
-                            <input
-                              id="investment-amount-input"
-                              type="number"
-                              placeholder="e.g. 50"
-                              value={investmentAmount}
-                              onChange={(e) => {
-                                  setInvestmentAmount(e.target.value);
-                                  setInvestmentError(null);
-                                  setInvestmentSuccess(null);
-                              }}
-                              className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-xs focus:outline-none focus:border-emerald-500 text-white font-mono"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const maxVal = Math.max(0, getCoinHolding(selectedCoinForInvestment.symbol) - getLockedAmount(selectedCoinForInvestment.symbol));
-                                setInvestmentAmount(maxVal.toString());
-                              }}
-                              className="absolute right-2.5 top-2 px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-lg hover:bg-emerald-500/20 cursor-pointer"
-                            >
-                              MAX
-                            </button>
-                          </div>
-                        </div>
-
-                        <div className="space-y-1.5">
-                          <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block">Lock Duration (Days)</label>
+                    {/* Form Controls */}
+                    <div className="space-y-4">
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block">Investment Amount</label>
+                        <div className="relative">
                           <input
-                            id="investment-days-input"
+                            id="investment-amount-input"
                             type="number"
-                            min="5"
-                            placeholder="Minimum 5 days"
-                            value={investmentDays}
+                            placeholder="e.g. 50"
+                            value={investmentAmount}
                             onChange={(e) => {
-                              setInvestmentDays(e.target.value);
-                              setInvestmentError(null);
-                              setInvestmentSuccess(null);
+                                setInvestmentAmount(e.target.value);
+                                setInvestmentError(null);
+                                setInvestmentSuccess(null);
                             }}
                             className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-xs focus:outline-none focus:border-emerald-500 text-white font-mono"
                           />
-                          <p className="text-[9px] text-zinc-500">Minimum duration is 5 days. Daily earnings accrue instantly to your main account.</p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const maxVal = Math.max(0, getCoinHolding(selectedCoinForInvestment.symbol) - getLockedAmount(selectedCoinForInvestment.symbol));
+                              setInvestmentAmount(maxVal.toString());
+                            }}
+                            className="absolute right-2.5 top-2 px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-lg hover:bg-emerald-500/20 cursor-pointer"
+                          >
+                            MAX
+                          </button>
                         </div>
+                      </div>
 
-                        {/* Profit preview calculator */}
-                        {parseFloat(investmentAmount) > 0 && (
-                          <div className="bg-slate-950/40 border border-slate-850 p-3 rounded-xl flex flex-col gap-2 select-none">
-                            <div className="flex justify-between items-center text-[10px]">
-                              <span className="text-zinc-500 font-bold uppercase tracking-wider">Daily Yield</span>
-                              <span className="font-bold font-mono text-emerald-400">
-                                +{(parseFloat(investmentAmount) * ((selectedCoinForInvestment.investmentRate ?? 5.0) / 100)).toFixed(4)} {selectedCoinForInvestment.symbol}
-                              </span>
-                            </div>
-                            <div className="flex justify-between items-center text-[10px] border-t border-slate-850/60 pt-2">
-                              <span className="text-zinc-500 font-bold uppercase tracking-wider">Total {parseInt(investmentDays) || 5} Days Yield</span>
-                              <span className="font-bold font-mono text-emerald-400">
-                                +{(parseFloat(investmentAmount) * ((selectedCoinForInvestment.investmentRate ?? 5.0) / 100) * (parseInt(investmentDays) || 5)).toFixed(4)} {selectedCoinForInvestment.symbol}
-                              </span>
-                            </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block">Lock Duration (Days)</label>
+                        <input
+                          id="investment-days-input"
+                          type="number"
+                          min="5"
+                          placeholder="Minimum 5 days"
+                          value={investmentDays}
+                          onChange={(e) => {
+                            setInvestmentDays(e.target.value);
+                            setInvestmentError(null);
+                            setInvestmentSuccess(null);
+                          }}
+                          className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-xs focus:outline-none focus:border-emerald-500 text-white font-mono"
+                        />
+                        <p className="text-[9px] text-zinc-500">Minimum duration is 5 days. Daily earnings accrue instantly to your main account.</p>
+                      </div>
+
+                      {/* Profit preview calculator */}
+                      {parseFloat(investmentAmount) > 0 && (
+                        <div className="bg-slate-950/40 border border-slate-850 p-3 rounded-xl flex flex-col gap-2 select-none">
+                          <div className="flex justify-between items-center text-[10px]">
+                            <span className="text-zinc-500 font-bold uppercase tracking-wider">Daily Yield</span>
+                            <span className="font-bold font-mono text-emerald-400">
+                              +{(parseFloat(investmentAmount) * ((selectedCoinForInvestment.investmentRate ?? 5.0) / 100)).toFixed(4)} {selectedCoinForInvestment.symbol}
+                            </span>
                           </div>
-                        )}
+                          <div className="flex justify-between items-center text-[10px] border-t border-slate-850/60 pt-2">
+                            <span className="text-zinc-500 font-bold uppercase tracking-wider">Total {parseInt(investmentDays) || 5} Days Yield</span>
+                            <span className="font-bold font-mono text-emerald-400">
+                              +{(parseFloat(investmentAmount) * ((selectedCoinForInvestment.investmentRate ?? 5.0) / 100) * (parseInt(investmentDays) || 5)).toFixed(4)} {selectedCoinForInvestment.symbol}
+                            </span>
+                          </div>
+                        </div>
+                      )}
 
-                        {/* Feedback messages */}
-                        {investmentError && (
-                          <div className="p-3.5 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl text-xs flex gap-2">
+                      {/* Feedback messages */}
+                      {investmentError && (
+                        <div className="p-3.5 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl text-xs flex flex-col gap-2">
+                          <div className="flex gap-2">
                             <AlertCircle size={15} className="shrink-0 mt-0.5" />
                             <span>{investmentError}</span>
                           </div>
-                        )}
-
-                        {/* Invest Submit button */}
-                        <button
-                          type="button"
-                          disabled={investmentLoading || !investmentAmount || parseFloat(investmentAmount) <= 0}
-                          onClick={handleInitiateInvestment}
-                          className="w-full py-3.5 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-slate-950 font-black text-xs uppercase tracking-wider shadow-lg shadow-emerald-500/10 active:scale-[0.985] transition-all disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center gap-1.5 cursor-pointer"
-                        >
-                          {investmentLoading ? (
-                            <>
-                              <div className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin"></div>
-                              <span>Locking Funds...</span>
-                            </>
-                          ) : (
-                            <>
-                              <ShieldCheck size={14} />
-                              <span>Authorize Investment</span>
-                            </>
+                          {investmentError.includes("deposit") && (
+                            <button
+                              type="button"
+                              onClick={onOpenDeposit}
+                              className="mt-1 w-full py-1.5 bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-200 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-colors cursor-pointer"
+                            >
+                              Go to Deposit Page
+                            </button>
                           )}
-                        </button>
-                      </div>
+                        </div>
+                      )}
+
+                      {/* Invest Submit button */}
+                      <button
+                        type="button"
+                        disabled={investmentLoading || !investmentAmount || parseFloat(investmentAmount) <= 0}
+                        onClick={handleInitiateInvestment}
+                        className="w-full py-3.5 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-slate-950 font-black text-xs uppercase tracking-wider shadow-lg shadow-emerald-500/10 active:scale-[0.985] transition-all disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        {investmentLoading ? (
+                          <>
+                            <div className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin"></div>
+                            <span>Locking Funds...</span>
+                          </>
+                        ) : (
+                          <>
+                            <ShieldCheck size={14} />
+                            <span>Authorize Investment</span>
+                          </>
+                        )}
+                      </button>
                     </div>
-                  )}
-                </div>
-              )}
+                  </div>
+                )}
+              </div>
             </div>
-          )}          {/* TAB 4: HISTORY */}
+          )}
+
+          {/* TAB 5: HISTORY */}
           {activeTab === 'history' && (
             <div className="space-y-4 animate-fade-in">
               <ActivityLog userId={user.uid} />
@@ -2402,6 +2411,7 @@ export default function StandardUserDashboard({
           { id: 'home', label: 'Home', icon: Coins },
           { id: 'wallet', label: 'Wallet', icon: Wallet },
           { id: 'trade', label: 'Trade', icon: ArrowRightLeft },
+          { id: 'earn', label: 'Earn', icon: TrendingUp },
           { id: 'history', label: 'History', icon: History }
         ] as const).map(tab => {
           const Icon = tab.icon;

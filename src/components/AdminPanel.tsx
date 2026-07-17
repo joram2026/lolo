@@ -85,6 +85,10 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
   const [editingRateSymbol, setEditingRateSymbol] = useState<string | null>(null);
   const [rateInput, setRateInput] = useState<string>('');
 
+  // Crypto MMF minimum investment states
+  const [editingMinInvestmentSymbol, setEditingMinInvestmentSymbol] = useState<string | null>(null);
+  const [minInvestmentInput, setMinInvestmentInput] = useState<string>('');
+
   // Selected details for inspection/modals
   const [selectedEvidence, setSelectedEvidence] = useState<string | null>(null);
   const [selectedUserHistory, setSelectedUserHistory] = useState<UserAccount | null>(null);
@@ -873,6 +877,26 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
     } catch (err: any) {
       console.error(err);
       showFeedback('error', 'Failed to update investment rate: ' + err.message);
+    }
+  };
+
+  const handleSaveMinInvestment = async (symbol: string) => {
+    const minVal = parseFloat(minInvestmentInput);
+    if (isNaN(minVal) || minVal < 0) {
+      alert('Please enter a valid minimum investment amount.');
+      return;
+    }
+    try {
+      const coinRef = doc(db, 'crypto_prices', symbol);
+      await updateDoc(coinRef, {
+        minInvestment: minVal
+      });
+      showFeedback('success', `Minimum Investment for ${symbol} updated to ${minVal}.`);
+      setEditingMinInvestmentSymbol(null);
+      await loadAllData(true);
+    } catch (err: any) {
+      console.error(err);
+      showFeedback('error', 'Failed to update minimum investment amount: ' + err.message);
     }
   };
 
@@ -1726,6 +1750,86 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                               <button
                                 id={`cancel-rate-btn-${cp.symbol}`}
                                 onClick={() => setEditingRateSymbol(null)}
+                                className="px-2 py-1 bg-zinc-900 hover:bg-zinc-850 text-zinc-400 text-[9px] rounded transition-colors cursor-pointer"
+                              >
+                                X
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Crypto MMF Minimum Investment Controller */}
+              <div id="crypto-mmf-min-investments-controller" className="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-800/80 pb-3">
+                  <div className="flex items-center gap-2">
+                    <Coins className="text-emerald-400" size={16} />
+                    <div>
+                      <h3 className="text-xs font-black text-zinc-300 uppercase tracking-wider">Crypto MMF Minimum Investments</h3>
+                      <p className="text-[10px] text-zinc-500 font-semibold mt-0.5">Define the minimum investment amount allowed for each cryptocurrency coin.</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                  {cryptoPricesList.map((cp) => {
+                    const isEditingMin = editingMinInvestmentSymbol === cp.symbol;
+                    const minVal = cp.minInvestment ?? 10.0;
+
+                    return (
+                      <div key={`min-invest-${cp.symbol}`} className="bg-zinc-950 p-3.5 rounded-2xl border border-zinc-900/60 flex flex-col justify-between space-y-3 relative overflow-hidden">
+                        <div className="absolute top-0 left-0 right-0 h-[2px] bg-teal-500/50" />
+                        
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <span className="text-[10px] text-zinc-500 font-bold block">{cp.name}</span>
+                            <span className="text-xs font-black text-zinc-200 font-mono tracking-wider">{cp.symbol}</span>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-[9px] text-zinc-500 block">Min Amount</span>
+                            <span className="text-sm font-black text-teal-400 font-mono">{minVal}</span>
+                          </div>
+                        </div>
+
+                        {!isEditingMin ? (
+                          <button
+                            id={`edit-min-btn-${cp.symbol}`}
+                            onClick={() => {
+                              setEditingMinInvestmentSymbol(cp.symbol);
+                              setMinInvestmentInput(minVal.toString());
+                            }}
+                            className="w-full py-2 bg-zinc-900 hover:bg-zinc-850 text-zinc-300 hover:text-white font-bold text-[10px] rounded-xl border border-zinc-800 transition-colors cursor-pointer"
+                          >
+                            Edit Min Limit
+                          </button>
+                        ) : (
+                          <div className="space-y-2 pt-2 border-t border-zinc-900/80">
+                            <div className="space-y-1">
+                              <label className="text-[9px] text-zinc-500 font-semibold block">Min Limit</label>
+                              <input
+                                id={`input-min-${cp.symbol}`}
+                                type="number"
+                                step="any"
+                                value={minInvestmentInput}
+                                onChange={(e) => setMinInvestmentInput(e.target.value)}
+                                className="w-full px-2 py-1 bg-zinc-900 border border-zinc-800 rounded text-[11px] text-white font-mono focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                              />
+                            </div>
+                            <div className="flex gap-1">
+                              <button
+                                id={`save-min-btn-${cp.symbol}`}
+                                onClick={() => handleSaveMinInvestment(cp.symbol)}
+                                className="flex-1 py-1 bg-teal-500 hover:bg-teal-400 text-zinc-950 font-black text-[9px] rounded transition-colors cursor-pointer"
+                              >
+                                Save
+                              </button>
+                              <button
+                                id={`cancel-min-btn-${cp.symbol}`}
+                                onClick={() => setEditingMinInvestmentSymbol(null)}
                                 className="px-2 py-1 bg-zinc-900 hover:bg-zinc-850 text-zinc-400 text-[9px] rounded transition-colors cursor-pointer"
                               >
                                 X

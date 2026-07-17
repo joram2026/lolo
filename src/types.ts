@@ -59,6 +59,7 @@ export interface CryptoPrice {
   mode?: 'live' | 'custom';
   lastSyncedAt?: string;
   investmentRate?: number; // Daily MMF investment rate in %
+  minInvestment?: number; // Minimum amount that can be invested
 }
 
 export interface NewsItem {

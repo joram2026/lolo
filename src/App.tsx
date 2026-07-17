@@ -140,6 +140,7 @@ export default function App() {
         '/dashboard',
         '/wallet',
         '/trade',
+        '/earn',
         '/history',
         '/profile',
         '/deposit',
@@ -199,7 +200,7 @@ export default function App() {
   }
 
   // 3. Standard User Account Flows
-  const showDashboard = ['/dashboard', '/wallet', '/trade', '/history'].includes(path);
+  const showDashboard = ['/dashboard', '/wallet', '/trade', '/earn', '/history'].includes(path);
 
   return (
     <div id="standard-user-app" className="bg-slate-900 min-h-screen">
