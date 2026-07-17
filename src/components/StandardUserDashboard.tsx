@@ -2119,7 +2119,7 @@ export default function StandardUserDashboard({
                     )}
 
                     {/* Coins Cards Grid */}
-                    <div className="grid grid-cols-1 gap-3">
+                    <div className="grid grid-cols-2 gap-3.5">
                       {cryptoPrices.map(coin => {
                         const userHolding = getCoinHolding(coin.symbol);
                         const locked = getLockedAmount(coin.symbol);
@@ -2129,51 +2129,63 @@ export default function StandardUserDashboard({
                         return (
                           <div 
                             key={coin.symbol}
-                            className="bg-slate-950/45 border border-slate-850 hover:border-slate-800 p-4 rounded-2xl flex justify-between items-center transition-all group"
+                            className="bg-slate-900/40 hover:bg-slate-900/70 border border-slate-850/70 hover:border-emerald-500/20 p-3.5 rounded-2xl flex flex-col justify-between transition-all duration-300 group hover:shadow-lg hover:shadow-emerald-950/5 relative overflow-hidden"
                           >
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center p-1.5 shadow-inner">
-                                <img 
-                                  src={getCoinLogoUrl(coin.symbol)} 
-                                  alt={coin.name} 
-                                  className="w-full h-full object-contain rounded-full"
-                                  referrerPolicy="no-referrer"
-                                />
+                            {/* Subtle hover gradient border glow */}
+                            <div className="absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-emerald-500/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                            
+                            <div>
+                              {/* Top row: Logo & Coin identifiers */}
+                              <div className="flex items-center gap-2 mb-3">
+                                <div className="w-8 h-8 rounded-full bg-slate-950 border border-slate-850 flex items-center justify-center p-1 shadow-inner shrink-0">
+                                  <img 
+                                    src={getCoinLogoUrl(coin.symbol)} 
+                                    alt={coin.name} 
+                                    className="w-full h-full object-contain rounded-full"
+                                    referrerPolicy="no-referrer"
+                                  />
+                                </div>
+                                <div className="min-w-0">
+                                  <span className="font-extrabold text-[11px] text-zinc-100 block truncate leading-tight">{coin.name}</span>
+                                  <span className="text-[9px] font-bold font-mono text-zinc-500">{coin.symbol}</span>
+                                </div>
                               </div>
-                              <div>
-                                <div className="flex items-center gap-1.5">
-                                  <span className="font-bold text-xs text-zinc-200">{coin.name}</span>
-                                  <span className="text-[9px] font-bold font-mono text-zinc-500 px-1.5 py-0.25 bg-slate-900 border border-slate-800 rounded">{coin.symbol}</span>
-                                </div>
-                                <div className="flex items-center gap-2 mt-1">
-                                  <span className="text-[10px] text-emerald-400 font-extrabold flex items-center gap-0.5 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded-md">
-                                    {dailyRate}% daily profit
+
+                              {/* Yield Rate Badge */}
+                              <div className="mb-3.5">
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/15 text-emerald-400 font-extrabold text-[9px] font-mono tracking-wide">
+                                  {dailyRate}% daily yield
+                                </span>
+                              </div>
+
+                              {/* Balance details section */}
+                              <div className="pt-2 border-t border-slate-900/80 mb-4">
+                                <span className="text-[8px] text-zinc-500 font-bold uppercase tracking-wider block">Available Balance</span>
+                                <span className="text-[10px] font-extrabold font-mono text-zinc-200 truncate block mt-0.5">
+                                  {unlocked.toFixed(4)} <span className="text-[8px] text-zinc-500 font-normal">{coin.symbol}</span>
+                                </span>
+                                {locked > 0 && (
+                                  <span className="text-[8px] text-amber-500/80 font-bold block mt-0.5 truncate">
+                                    (+{locked.toFixed(2)} invested)
                                   </span>
-                                </div>
+                                )}
                               </div>
                             </div>
 
-                            <div className="text-right flex flex-col items-end gap-1.5">
-                              {userHolding > 0 && (
-                                <span className="text-[9px] text-zinc-400 font-bold font-mono">
-                                  Holdings: {unlocked.toFixed(4)} {coin.symbol}
-                                  {locked > 0 && <span className="text-amber-500 font-bold"> (+{locked.toFixed(2)} locked)</span>}
-                                </span>
-                              )}
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setSelectedCoinForInvestment(coin);
-                                  setInvestmentAmount('');
-                                  setMmfSubView('form');
-                                  setInvestmentError(null);
-                                  setInvestmentSuccess(null);
-                                }}
-                                className="px-4 py-2 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-slate-950 text-xs font-extrabold shadow-md shadow-emerald-500/5 active:scale-95 transition-all cursor-pointer"
-                              >
-                                Invest
-                              </button>
-                            </div>
+                            {/* Actions footer */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedCoinForInvestment(coin);
+                                setInvestmentAmount('');
+                                setMmfSubView('form');
+                                setInvestmentError(null);
+                                setInvestmentSuccess(null);
+                              }}
+                              className="w-full py-2 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-slate-950 text-[10px] font-black uppercase tracking-wider shadow-md shadow-emerald-500/5 active:scale-95 transition-all cursor-pointer text-center"
+                            >
+                              Invest
+                            </button>
                           </div>
                         );
                       })}
@@ -2188,46 +2200,105 @@ export default function StandardUserDashboard({
                             MMF Investment History
                           </h4>
                         </div>
-                        <div className="space-y-2.5 max-h-[300px] overflow-y-auto pr-1">
+                        <div className="space-y-3.5 max-h-[380px] overflow-y-auto pr-1">
                           {activeInvestments.map((inv: any) => {
                             const createdDate = inv.createdAt?.toDate ? inv.createdAt.toDate().toLocaleDateString() : new Date(inv.createdAt).toLocaleDateString();
                             const unlockDate = inv.unlockAt?.toDate ? inv.unlockAt.toDate().toLocaleDateString() : new Date(inv.unlockAt).toLocaleDateString();
                             const isCompleted = inv.status === 'completed';
+                            const progressPercentage = Math.min(100, (((inv.daysPaid ?? 0) / (inv.totalDays ?? 5)) * 100));
+                            const dailyEarning = inv.amount * (inv.dailyRate / 100);
+                            const totalEarned = (inv.daysPaid ?? 0) * dailyEarning;
 
                             return (
                               <div 
                                 key={inv.id} 
-                                className={`p-3.5 rounded-xl border flex justify-between items-center text-xs font-mono select-none ${
+                                className={`group p-4 rounded-2xl border transition-all duration-300 relative overflow-hidden select-none ${
                                   isCompleted 
-                                    ? 'bg-slate-900/30 border-slate-850 text-zinc-500' 
-                                    : 'bg-emerald-950/10 border-emerald-500/10 text-emerald-300'
+                                    ? 'bg-slate-900/30 border-slate-850/60 hover:border-slate-800' 
+                                    : 'bg-gradient-to-br from-slate-900 via-slate-900/90 to-zinc-950 border-emerald-500/10 hover:border-emerald-500/25 hover:shadow-lg hover:shadow-emerald-950/10'
                                 }`}
                               >
-                                <div>
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="font-bold text-[11px] text-zinc-200">{inv.amount} {inv.coinSymbol}</span>
-                                    <span className="text-[9px] px-1 py-0.25 rounded bg-slate-950 border border-slate-850 text-emerald-400 font-bold">{inv.dailyRate}% Daily</span>
+                                {/* Active subtle glowing indicator */}
+                                {!isCompleted && (
+                                  <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-emerald-500 to-teal-400" />
+                                )}
+
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                  {/* Left side: Principal & Rate info */}
+                                  <div className="space-y-2">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <div className="flex items-center gap-1.5">
+                                        <div className={`p-1.5 rounded-lg ${isCompleted ? 'bg-zinc-850/50 text-zinc-500' : 'bg-emerald-500/10 text-emerald-400'}`}>
+                                          <Coins size={14} />
+                                        </div>
+                                        <span className="font-extrabold text-xs text-zinc-100 tracking-tight font-mono">
+                                          {inv.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 8 })} {inv.coinSymbol}
+                                        </span>
+                                      </div>
+                                      <span className="text-[10px] px-2 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-extrabold font-mono tracking-wider">
+                                        {inv.dailyRate}% Daily Profit
+                                      </span>
+                                    </div>
+
+                                    {/* Date details */}
+                                    <div className="flex items-center gap-3 text-[10px] text-zinc-500 font-semibold">
+                                      <div className="flex items-center gap-1">
+                                        <span>Start:</span>
+                                        <span className="text-zinc-400 font-mono">{createdDate}</span>
+                                      </div>
+                                      <span className="text-zinc-800 font-bold">•</span>
+                                      <div className="flex items-center gap-1">
+                                        <span>End:</span>
+                                        <span className="text-zinc-400 font-mono">{unlockDate}</span>
+                                      </div>
+                                    </div>
                                   </div>
-                                  <div className="text-[9px] text-zinc-500 mt-1 flex flex-wrap items-center gap-2">
-                                    <span className="text-zinc-400 font-bold">Progress: {inv.daysPaid ?? 0}/{inv.totalDays ?? 5} Days</span>
-                                    <span>•</span>
-                                    <span>End: {unlockDate}</span>
+
+                                  {/* Right side: Status and accrued earnings */}
+                                  <div className="flex sm:flex-col justify-between sm:text-right items-center sm:items-end gap-2.5 pt-3 sm:pt-0 border-t sm:border-t-0 border-slate-850/50">
+                                    <div className="flex items-center gap-2">
+                                      {isCompleted ? (
+                                        <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-zinc-800/40 text-zinc-400 border border-zinc-800/50">
+                                          Completed
+                                        </span>
+                                      ) : (
+                                        <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1 animate-pulse">
+                                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                                          Active
+                                        </span>
+                                      )}
+                                    </div>
+
+                                    <div className="space-y-0.5">
+                                      <div className="text-[10px] text-zinc-500 font-bold flex items-center justify-end gap-1 font-mono">
+                                        <span>Daily:</span>
+                                        <span className="text-zinc-300">+{dailyEarning.toFixed(4)} {inv.coinSymbol}</span>
+                                      </div>
+                                      <div className="text-[10px] text-emerald-400 font-extrabold flex items-center justify-end gap-1 font-mono">
+                                        <span>Earned:</span>
+                                        <span className="bg-emerald-500/5 border border-emerald-500/10 px-1.5 py-0.25 rounded">
+                                          +{totalEarned.toFixed(4)} {inv.coinSymbol}
+                                        </span>
+                                      </div>
+                                    </div>
                                   </div>
                                 </div>
 
-                                <div className="text-right">
-                                  <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.75 rounded-md ${
-                                    isCompleted 
-                                      ? 'bg-zinc-800/30 text-zinc-500' 
-                                      : 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'
-                                  }`}>
-                                    {inv.status}
-                                  </span>
-                                  <div className="text-[9px] text-zinc-500 mt-1">
-                                    Earning: +{(inv.amount * (inv.dailyRate / 100)).toFixed(4)} / day
+                                {/* Progress Bar Track & Bar */}
+                                <div className="mt-3.5 pt-3 border-t border-slate-850/30">
+                                  <div className="flex justify-between items-center text-[10px] font-bold text-zinc-500 mb-1.5 select-none font-mono">
+                                    <span>Duration Progress</span>
+                                    <span className="text-zinc-400">{inv.daysPaid ?? 0} / {inv.totalDays ?? 5} Days</span>
                                   </div>
-                                  <div className="text-[9px] text-emerald-500/80 font-bold mt-0.5">
-                                    Earned: +{((inv.daysPaid ?? 0) * (inv.amount * (inv.dailyRate / 100))).toFixed(4)} {inv.coinSymbol}
+                                  <div className="w-full h-2 bg-slate-950 border border-slate-900 rounded-full overflow-hidden p-[2px]">
+                                    <div 
+                                      className={`h-full rounded-full transition-all duration-500 ${
+                                        isCompleted 
+                                          ? 'bg-zinc-700' 
+                                          : 'bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.3)]'
+                                      }`}
+                                      style={{ width: `${progressPercentage}%` }}
+                                    />
                                   </div>
                                 </div>
                               </div>
