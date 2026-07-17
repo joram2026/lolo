@@ -85,9 +85,10 @@ interface CustomCoinSelectProps {
   value: string;
   onChange: (value: string) => void;
   coins: CryptoPrice[];
+  isLightTheme?: boolean;
 }
 
-function CustomCoinSelect({ value, onChange, coins }: CustomCoinSelectProps) {
+function CustomCoinSelect({ value, onChange, coins, isLightTheme = false }: CustomCoinSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const selectedCoin = coins.find(c => c.symbol === value) || coins[0];
 
@@ -105,25 +106,33 @@ function CustomCoinSelect({ value, onChange, coins }: CustomCoinSelectProps) {
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between p-3.5 bg-slate-950 border border-slate-850 rounded-2xl text-xs text-white font-bold cursor-pointer hover:border-emerald-500/50 hover:bg-slate-900/40 transition-all focus:outline-none focus:border-emerald-500"
+        className={`w-full flex items-center justify-between p-3.5 border rounded-2xl text-xs font-bold cursor-pointer transition-all focus:outline-none ${
+          isLightTheme 
+            ? 'bg-zinc-50/50 border-zinc-200 text-zinc-800 hover:border-amber-500/50 hover:bg-zinc-100/50 focus:border-amber-500'
+            : 'bg-slate-950 border-slate-850 text-white hover:border-emerald-500/50 hover:bg-slate-900/40 focus:border-emerald-500'
+        }`}
       >
         <div className="flex items-center gap-2.5">
           <CoinIcon symbol={selectedCoin.symbol} className="w-5 h-5 rounded-md" />
           <div className="flex flex-col items-start leading-none gap-1">
-            <span className="text-zinc-100 font-extrabold text-xs">{selectedCoin.symbol}</span>
+            <span className={`font-extrabold text-xs ${isLightTheme ? 'text-zinc-800' : 'text-zinc-100'}`}>{selectedCoin.symbol}</span>
             <span className="text-[9px] text-zinc-500 font-bold">{selectedCoin.name}</span>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-zinc-400 font-mono text-xs">
+          <span className={`font-mono text-xs ${isLightTheme ? 'text-zinc-600' : 'text-zinc-400'}`}>
             ${selectedCoin.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
           </span>
-          <ChevronDown size={14} className={`text-zinc-500 transition-transform duration-200 ${isOpen ? 'rotate-180 text-emerald-400' : ''}`} />
+          <ChevronDown size={14} className={`text-zinc-500 transition-transform duration-200 ${isOpen ? (isLightTheme ? 'rotate-180 text-amber-500' : 'rotate-180 text-emerald-400') : ''}`} />
         </div>
       </button>
 
       {isOpen && (
-        <div className="absolute left-0 right-0 mt-1.5 max-h-60 overflow-y-auto bg-slate-950 border border-slate-850 rounded-2xl shadow-2xl z-50 scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent animate-fade-in">
+        <div className={`absolute left-0 right-0 mt-1.5 max-h-60 overflow-y-auto border rounded-2xl shadow-2xl z-50 scrollbar-thin scrollbar-track-transparent animate-fade-in ${
+          isLightTheme 
+            ? 'bg-white border-zinc-200 scrollbar-thumb-zinc-200' 
+            : 'bg-slate-950 border-slate-850 scrollbar-thumb-slate-800'
+        }`}>
           <div className="p-1.5 space-y-1">
             {coins.map((coin) => {
               const isSelected = coin.symbol === value;
@@ -137,18 +146,18 @@ function CustomCoinSelect({ value, onChange, coins }: CustomCoinSelectProps) {
                   }}
                   className={`w-full flex items-center justify-between p-2.5 rounded-xl text-xs font-bold transition-all text-left ${
                     isSelected 
-                      ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
-                      : 'text-zinc-300 hover:bg-slate-900/60 hover:text-white'
+                      ? (isLightTheme ? 'bg-amber-500/10 text-amber-600 border border-amber-500/20' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20') 
+                      : (isLightTheme ? 'text-zinc-700 hover:bg-zinc-100/80 hover:text-zinc-900' : 'text-zinc-300 hover:bg-slate-900/60 hover:text-white')
                   }`}
                 >
                   <div className="flex items-center gap-2.5">
                     <CoinIcon symbol={coin.symbol} className="w-5 h-5 rounded-md" />
                     <div className="flex flex-col leading-none gap-1">
-                      <span className={isSelected ? "text-emerald-400" : "text-zinc-200"}>{coin.symbol}</span>
+                      <span className={isSelected ? (isLightTheme ? "text-amber-600 font-extrabold" : "text-emerald-400") : (isLightTheme ? "text-zinc-800" : "text-zinc-200")}>{coin.symbol}</span>
                       <span className="text-[9px] text-zinc-500 font-bold">{coin.name}</span>
                     </div>
                   </div>
-                  <span className="font-mono text-zinc-400 text-xs">
+                  <span className={`font-mono text-xs ${isLightTheme ? 'text-zinc-500 font-medium' : 'text-zinc-400'}`}>
                     ${coin.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
                   </span>
                 </button>
@@ -303,6 +312,7 @@ export default function StandardUserDashboard({
   };
   
   // UI States
+  const isLightTheme = true;
   const [searchQuery, setSearchQuery] = useState('');
   const [userLoaded, setUserLoaded] = useState(false);
   const [pricesLoaded, setPricesLoaded] = useState(false);
@@ -1550,16 +1560,31 @@ export default function StandardUserDashboard({
   }
 
   return (
-    <div id="user-dashboard-root" className="min-h-screen bg-slate-900 text-zinc-100 font-sans pb-28">
+    <div 
+      id="user-dashboard-root" 
+      className={`min-h-screen font-sans pb-28 transition-colors duration-300 ${
+        isLightTheme ? 'bg-[#FFF3D6] text-zinc-800' : 'bg-slate-900 text-zinc-100'
+      }`}
+    >
       {/* Top Header */}
-      <header className="px-4 py-4 border-b border-slate-800 sticky top-0 bg-slate-900/85 backdrop-blur-md z-20 flex justify-between items-center">
+      <header className={`px-4 py-4 border-b sticky top-0 backdrop-blur-md z-20 flex justify-between items-center transition-colors duration-300 ${
+        isLightTheme 
+          ? 'bg-[#FFF3D6]/85 border-zinc-200/80' 
+          : 'bg-slate-900/85 border-slate-800'
+      }`}>
         <div className="flex items-center gap-2">
           <button 
             id="profile-toggle-btn"
             onClick={onOpenProfile}
-            className="w-12 h-12 rounded-full bg-gradient-to-tr from-emerald-400 via-teal-500 to-indigo-500 p-[1.5px] hover:scale-105 active:scale-95 transition-all duration-300 shadow-[0_0_12px_rgba(16,185,129,0.15)] hover:shadow-[0_0_16px_rgba(16,185,129,0.3)] group cursor-pointer relative"
+            className={`w-12 h-12 rounded-full p-[1.5px] hover:scale-105 active:scale-95 transition-all duration-300 group cursor-pointer relative ${
+              isLightTheme
+                ? 'bg-gradient-to-tr from-amber-400 via-amber-500 to-yellow-500 shadow-[0_0_12px_rgba(245,158,11,0.15)] hover:shadow-[0_0_16px_rgba(245,158,11,0.3)]'
+                : 'bg-gradient-to-tr from-emerald-400 via-teal-500 to-indigo-500 shadow-[0_0_12px_rgba(16,185,129,0.15)] hover:shadow-[0_0_16px_rgba(16,185,129,0.3)]'
+            }`}
           >
-            <div className="w-full h-full rounded-full bg-slate-900 flex items-center justify-center text-emerald-400 group-hover:text-white transition-all relative overflow-hidden">
+            <div className={`w-full h-full rounded-full flex items-center justify-center transition-all relative overflow-hidden ${
+              isLightTheme ? 'bg-white text-amber-500 group-hover:text-amber-600' : 'bg-slate-900 text-emerald-400 group-hover:text-white'
+            }`}>
               <div className="absolute z-10">
                 <User size={14} className="group-hover:scale-110 transition-transform duration-300" />
               </div>
@@ -1570,7 +1595,9 @@ export default function StandardUserDashboard({
                     d="M 50,50 m -36,0 a 36,36 0 1,1 72,0 a 36,36 0 1,1 -72,0"
                   />
                 </defs>
-                <text className="text-[9.5px] font-black uppercase tracking-[0.16em] fill-emerald-400/70 group-hover:fill-emerald-300 transition-colors">
+                <text className={`text-[9.5px] font-black uppercase tracking-[0.16em] transition-colors duration-300 ${
+                  isLightTheme ? 'fill-amber-500/70 group-hover:fill-amber-600' : 'fill-emerald-400/70 group-hover:fill-emerald-300'
+                }`}>
                   <textPath href="#dashboardHeaderProfileCirclePath" startOffset="0%">
                     PROFILE • PROFILE • PROFILE 
                   </textPath>
@@ -1579,8 +1606,8 @@ export default function StandardUserDashboard({
             </div>
           </button>
           <div>
-            <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block">Logged In</span>
-            <span className="text-xs font-black tracking-tight text-zinc-200">
+            <span className={`text-[10px] font-bold uppercase tracking-wider block ${isLightTheme ? 'text-zinc-400' : 'text-zinc-500'}`}>Logged In</span>
+            <span className={`text-xs font-black tracking-tight transition-colors duration-300 ${isLightTheme ? 'text-zinc-800' : 'text-zinc-200'}`}>
               {profile?.displayName || user.displayName || user.email.split('@')[0]}
             </span>
           </div>
@@ -1590,7 +1617,11 @@ export default function StandardUserDashboard({
           <button
             id="dashboard-logout-btn"
             onClick={onLogout}
-            className="px-3 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/25 text-rose-400 hover:text-rose-300 text-[10px] font-black uppercase tracking-wider rounded-xl transition-all active:scale-95 cursor-pointer flex items-center gap-1.5"
+            className={`px-3 py-1.5 border text-[10px] font-black uppercase tracking-wider rounded-xl transition-all active:scale-95 cursor-pointer flex items-center gap-1.5 ${
+              isLightTheme
+                ? 'bg-rose-50 hover:bg-rose-100 border-rose-200 text-rose-600'
+                : 'bg-rose-500/10 hover:bg-rose-500/20 border-rose-500/25 text-rose-400 hover:text-rose-300'
+            }`}
             title="Log Out"
           >
             <LogOut size={11} />
@@ -1601,14 +1632,18 @@ export default function StandardUserDashboard({
 
       {loading ? (
         <div className="flex flex-col items-center justify-center min-h-[350px] gap-3">
-          <RefreshCw size={28} className="text-emerald-500 animate-spin" />
+          <RefreshCw size={28} className={`${isLightTheme ? 'text-amber-500' : 'text-emerald-500'} animate-spin`} />
           <span className="text-xs text-zinc-500 font-semibold">Decrypting wallet keys...</span>
         </div>
       ) : (
         <main className="max-w-md mx-auto px-4 mt-5 space-y-6">
           {pricesLoadError && (
-            <div className="flex items-start gap-2.5 p-3.5 bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-2xl text-[11px] font-medium leading-relaxed shadow-lg animate-fade-in">
-              <AlertCircle size={15} className="shrink-0 mt-0.5 text-amber-400" />
+            <div className={`flex items-start gap-2.5 p-3.5 border rounded-2xl text-[11px] font-medium leading-relaxed shadow-lg animate-fade-in transition-colors duration-300 ${
+              isLightTheme
+                ? 'bg-amber-50 border-amber-200 text-amber-800'
+                : 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+            }`}>
+              <AlertCircle size={15} className={`shrink-0 mt-0.5 ${activeTab === 'home' ? 'text-amber-600' : 'text-amber-400'}`} />
               <div className="flex-1">
                 <span className="font-bold">Offline Rates Active: </span>
                 {pricesLoadError}
@@ -1621,7 +1656,7 @@ export default function StandardUserDashboard({
             <>
               {/* Search Bar */}
               <div className="relative">
-                <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 text-zinc-500">
+                <span className={`absolute inset-y-0 left-0 flex items-center pl-3.5 transition-colors ${activeTab === 'home' ? 'text-zinc-400' : 'text-zinc-500'}`}>
                   <Search size={14} />
                 </span>
                 <input
@@ -1641,14 +1676,20 @@ export default function StandardUserDashboard({
                       }
                     }
                   }}
-                  className="w-full pl-9 pr-10 py-2.5 bg-slate-800 border border-slate-700/80 rounded-xl text-xs focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/25 text-white placeholder-zinc-600"
+                  className={`w-full pl-9 pr-10 py-2.5 border rounded-xl text-xs focus:outline-none transition-all duration-300 ${
+                    activeTab === 'home' 
+                      ? 'bg-white border-zinc-200/80 text-zinc-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500/25 placeholder-zinc-400 shadow-xs' 
+                      : 'bg-slate-800 border-slate-700/80 text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/25 placeholder-zinc-600'
+                  }`}
                 />
                 {searchQuery && (
                   <button
                     id="clear-search-btn"
                     type="button"
                     onClick={() => setSearchQuery('')}
-                    className="absolute inset-y-0 right-0 flex items-center pr-3.5 text-zinc-400 hover:text-white cursor-pointer"
+                    className={`absolute inset-y-0 right-0 flex items-center pr-3.5 cursor-pointer transition-colors ${
+                      activeTab === 'home' ? 'text-zinc-400 hover:text-zinc-700' : 'text-zinc-400 hover:text-white'
+                    }`}
                     title="Clear Search"
                   >
                     <X size={14} />
@@ -1657,7 +1698,7 @@ export default function StandardUserDashboard({
               </div>
 
               {/* Wallet Card */}
-              <div id="wallet-balance-card" className="relative overflow-hidden rounded-3xl bg-gradient-to-tr from-emerald-600 via-teal-600 to-emerald-400 p-6 text-white shadow-xl shadow-emerald-500/10">
+              <div id="wallet-balance-card" className="relative overflow-hidden rounded-3xl bg-gradient-to-tr from-amber-600 via-amber-500 to-yellow-500 p-6 text-white shadow-xl shadow-amber-500/10">
                 {/* Micro Ambient Details */}
                 <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-3xl -mr-10 -mt-10" />
                 <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/10 rounded-full blur-2xl -ml-10 -mb-10" />
@@ -1670,8 +1711,8 @@ export default function StandardUserDashboard({
                     </h2>
                     <div className="flex items-center gap-1 mt-1.5 text-[11px] font-bold">
                       {portfolioDailyChange.isPositive ? (
-                        <span className="flex items-center gap-1 text-emerald-100 bg-emerald-750/30 px-2 py-0.5 rounded-full border border-emerald-400/20 shadow-sm">
-                          <TrendingUp size={11} className="text-emerald-300 shrink-0" />
+                        <span className="flex items-center gap-1 text-amber-100 bg-amber-700/30 px-2 py-0.5 rounded-full border border-amber-400/20 shadow-sm">
+                          <TrendingUp size={11} className="text-amber-300 shrink-0" />
                           <span>+${Math.abs(portfolioDailyChange.diffUSD).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                           <span className="text-[9px] opacity-85 font-medium shrink-0">({portfolioDailyChange.pctChange.toFixed(2)}% today)</span>
                         </span>
@@ -1684,7 +1725,7 @@ export default function StandardUserDashboard({
                       )}
                     </div>
                   </div>
-                  <div className="px-2 py-1 rounded-lg bg-black/15 border border-white/10 text-[9px] font-black uppercase tracking-wider text-white">
+                  <div className="px-2 py-1 rounded-lg bg-white border border-white/20 text-[9px] font-black uppercase tracking-wider text-black shadow-sm">
                     USDT WALLET
                   </div>
                 </div>
@@ -1694,18 +1735,18 @@ export default function StandardUserDashboard({
                   <button
                     id="add-funds-btn"
                     onClick={onOpenDeposit}
-                    className="flex items-center justify-center gap-2 py-3 bg-slate-950 hover:bg-slate-900 border border-slate-800 text-white font-bold text-xs rounded-2xl transition-all shadow-md active:scale-95 cursor-pointer"
+                    className="flex items-center justify-center gap-2 py-3 bg-slate-950 hover:bg-slate-900 border border-slate-800 text-white font-extrabold text-xs rounded-2xl transition-all shadow-md active:scale-95 cursor-pointer"
                   >
-                    <ArrowDownLeft size={16} className="text-emerald-400" />
+                    <ArrowDownLeft size={16} strokeWidth={3} className="text-white" />
                     <span>Add Funds</span>
                   </button>
 
                   <button
                     id="withdraw-funds-btn"
                     onClick={onOpenWithdraw}
-                    className="flex items-center justify-center gap-2 py-3 bg-white/10 hover:bg-white/20 border border-white/25 text-white font-bold text-xs rounded-2xl transition-all active:scale-95 cursor-pointer"
+                    className="flex items-center justify-center gap-2 py-3 bg-white hover:bg-zinc-100 border border-white/20 text-slate-950 font-extrabold text-xs rounded-2xl transition-all shadow-sm active:scale-95 cursor-pointer"
                   >
-                    <ArrowUpRight size={16} className="text-white" />
+                    <ArrowUpRight size={16} strokeWidth={3} className="text-slate-950" />
                     <span>Withdraw</span>
                   </button>
                 </div>
@@ -1717,8 +1758,8 @@ export default function StandardUserDashboard({
               {/* Live Crypto Prices container with search bar */}
               <div className="space-y-3">
                 <div className="flex justify-between items-center">
-                  <h3 className="text-xs font-black text-zinc-400 uppercase tracking-wider">CRYPTO MARKET</h3>
-                  <span className="text-[10px] text-zinc-500 font-semibold">Live Feed</span>
+                  <h3 className={`text-xs font-black uppercase tracking-wider transition-colors duration-300 ${activeTab === 'home' ? 'text-zinc-500' : 'text-zinc-400'}`}>CRYPTO MARKET</h3>
+                  <span className={`text-[10px] font-semibold transition-colors duration-300 ${activeTab === 'home' ? 'text-zinc-400' : 'text-zinc-500'}`}>Live Feed</span>
                 </div>
 
                 {/* Token grid list */}
@@ -1732,29 +1773,43 @@ export default function StandardUserDashboard({
                         setQuickTradeAmount('');
                         setQuickTradeType('BUY');
                       }}
-                      className="bg-slate-800/60 border border-slate-750 rounded-2xl p-3.5 hover:bg-slate-800/90 hover:scale-[1.01] active:scale-[0.99] transition-all cursor-pointer group flex flex-col justify-between gap-3 min-h-[105px]"
+                      className={`border rounded-2xl p-3.5 hover:scale-[1.01] active:scale-[0.99] transition-all duration-300 cursor-pointer group flex flex-col justify-between gap-3 min-h-[105px] ${
+                        activeTab === 'home'
+                          ? 'bg-white border-zinc-200/80 hover:bg-zinc-50/80 shadow-xs'
+                          : 'bg-slate-800/60 border-slate-750 hover:bg-slate-800/90'
+                      }`}
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <CoinIcon symbol={coin.symbol} className="w-8 h-8" />
                           <div className="min-w-0">
-                            <span className="font-bold text-xs text-zinc-200 block truncate group-hover:text-white transition-colors">{coin.name}</span>
-                            <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold block">{coin.symbol}</span>
+                            <span className={`font-bold text-xs block truncate transition-colors duration-300 ${
+                              activeTab === 'home' ? 'text-zinc-800 group-hover:text-amber-500' : 'text-zinc-200 group-hover:text-white'
+                            }`}>{coin.name}</span>
+                            <span className={`text-[10px] uppercase tracking-wider font-semibold block transition-colors duration-300 ${
+                              activeTab === 'home' ? 'text-zinc-400' : 'text-zinc-500'
+                            }`}>{coin.symbol}</span>
                           </div>
                         </div>
-                        <div className="text-zinc-600 group-hover:text-emerald-400 transition-colors shrink-0">
+                        <div className={`transition-colors duration-300 shrink-0 ${
+                          activeTab === 'home' ? 'text-zinc-300 group-hover:text-amber-500' : 'text-zinc-600 group-hover:text-emerald-400'
+                        }`}>
                           <ArrowRight size={13} className="transform group-hover:translate-x-0.5 transition-transform" />
                         </div>
                       </div>
 
                       <div className="flex items-end justify-between">
                         <div>
-                          <span className="font-bold text-xs font-mono block text-zinc-200">
+                          <span className={`font-bold text-xs font-mono block transition-colors duration-300 ${
+                            activeTab === 'home' ? 'text-zinc-800' : 'text-zinc-200'
+                          }`}>
                             ${coin.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
                           </span>
                         </div>
-                        <div className={`flex items-center gap-0.5 text-[10px] font-bold shrink-0 ${
-                          coin.change24h >= 0 ? 'text-emerald-400' : 'text-red-400'
+                        <div className={`flex items-center gap-0.5 text-[10px] font-bold shrink-0 transition-colors duration-300 ${
+                          coin.change24h >= 0 
+                            ? (activeTab === 'home' ? 'text-emerald-600' : 'text-emerald-400') 
+                            : (activeTab === 'home' ? 'text-rose-600' : 'text-rose-400')
                         }`}>
                           {coin.change24h >= 0 ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
                           <span>{coin.change24h >= 0 ? '+' : ''}{coin.change24h.toFixed(2)}%</span>
@@ -1776,7 +1831,7 @@ export default function StandardUserDashboard({
           {activeTab === 'wallet' && (
             <div className="space-y-5 animate-fade-in">
               {/* Wallet Card */}
-              <div id="wallet-tab-balance-card" className="relative overflow-hidden rounded-3xl bg-gradient-to-tr from-emerald-600 via-teal-600 to-emerald-400 p-6 text-white shadow-xl shadow-emerald-500/10">
+              <div id="wallet-tab-balance-card" className="relative overflow-hidden rounded-3xl bg-gradient-to-tr from-amber-600 via-amber-500 to-yellow-500 p-6 text-white shadow-xl shadow-amber-500/10">
                 {/* Micro Ambient Details */}
                 <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-3xl -mr-10 -mt-10" />
                 <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/10 rounded-full blur-2xl -ml-10 -mb-10" />
@@ -1789,8 +1844,8 @@ export default function StandardUserDashboard({
                     </h2>
                     <div className="flex items-center gap-1 mt-1.5 text-[11px] font-bold">
                       {portfolioDailyChange.isPositive ? (
-                        <span className="flex items-center gap-1 text-emerald-100 bg-emerald-700/30 px-2 py-0.5 rounded-full border border-emerald-400/20 shadow-sm">
-                          <TrendingUp size={11} className="text-emerald-300 shrink-0" />
+                        <span className="flex items-center gap-1 text-amber-100 bg-amber-700/30 px-2 py-0.5 rounded-full border border-amber-400/20 shadow-sm">
+                          <TrendingUp size={11} className="text-amber-300 shrink-0" />
                           <span>+${Math.abs(portfolioDailyChange.diffUSD).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                           <span className="text-[9px] opacity-85 font-medium shrink-0">({portfolioDailyChange.pctChange.toFixed(2)}% today)</span>
                         </span>
@@ -1803,7 +1858,7 @@ export default function StandardUserDashboard({
                       )}
                     </div>
                   </div>
-                  <div className="px-2 py-1 rounded-lg bg-black/15 border border-white/10 text-[9px] font-black uppercase tracking-wider text-white">
+                  <div className="px-2 py-1 rounded-lg bg-white border border-white/20 text-[9px] font-black uppercase tracking-wider text-black shadow-sm">
                     USDT WALLET
                   </div>
                 </div>
@@ -1813,18 +1868,18 @@ export default function StandardUserDashboard({
                   <button
                     id="add-funds-btn-wallet-tab"
                     onClick={onOpenDeposit}
-                    className="flex items-center justify-center gap-2 py-3 bg-slate-950 hover:bg-slate-900 border border-slate-800 text-white font-bold text-xs rounded-2xl transition-all shadow-md active:scale-95 cursor-pointer"
+                    className="flex items-center justify-center gap-2 py-3 bg-slate-950 hover:bg-slate-900 border border-slate-800 text-white font-extrabold text-xs rounded-2xl transition-all shadow-md active:scale-95 cursor-pointer"
                   >
-                    <ArrowDownLeft size={16} className="text-emerald-400" />
+                    <ArrowDownLeft size={16} strokeWidth={3} className="text-white" />
                     <span>Add Funds</span>
                   </button>
 
                   <button
                     id="withdraw-funds-btn-wallet-tab"
                     onClick={onOpenWithdraw}
-                    className="flex items-center justify-center gap-2 py-3 bg-white/10 hover:bg-white/20 border border-white/25 text-white font-bold text-xs rounded-2xl transition-all active:scale-95 cursor-pointer"
+                    className="flex items-center justify-center gap-2 py-3 bg-white hover:bg-zinc-100 border border-white/20 text-slate-950 font-extrabold text-xs rounded-2xl transition-all shadow-sm active:scale-95 cursor-pointer"
                   >
-                    <ArrowUpRight size={16} className="text-white" />
+                    <ArrowUpRight size={16} strokeWidth={3} className="text-slate-950" />
                     <span>Withdraw</span>
                   </button>
                 </div>
@@ -1862,7 +1917,7 @@ export default function StandardUserDashboard({
                     );
                   })}
                   {totalPortfolioValue === 0 && (
-                    <div className="w-full h-full bg-slate-800" />
+                    <div className={`w-full h-full ${isLightTheme ? 'bg-zinc-200' : 'bg-slate-800'}`} />
                   )}
                 </div>
 
@@ -1883,19 +1938,27 @@ export default function StandardUserDashboard({
                             setQuickTradeType('BUY');
                           }
                         }}
-                        className="flex flex-col p-4 bg-slate-800/80 border border-slate-700/65 rounded-2xl hover:border-slate-500 hover:bg-slate-800/95 hover:scale-[1.01] active:scale-[0.99] transition-all cursor-pointer group"
+                        className={`flex flex-col p-4 border rounded-2xl hover:scale-[1.01] active:scale-[0.99] transition-all cursor-pointer group ${
+                          isLightTheme 
+                            ? 'bg-white border-zinc-200/80 hover:border-amber-500/30 hover:bg-zinc-50/50 shadow-xs' 
+                            : 'bg-slate-800/80 border-slate-700/65 hover:border-slate-500 hover:bg-slate-800/95'
+                        }`}
                       >
                         <div className="flex justify-between items-center">
                           <div className="flex items-center gap-3">
                             <CoinIcon symbol={asset.symbol} className="w-10 h-10" />
                             <div>
                               <div className="flex items-center gap-1.5">
-                                <span className="font-bold text-xs text-zinc-200 group-hover:text-white transition-colors">{asset.name}</span>
-                                <span className="text-[9px] text-zinc-400 font-bold px-1.5 py-0.5 bg-slate-900 border border-slate-800 rounded">
+                                <span className={`font-bold text-xs transition-colors ${isLightTheme ? 'text-zinc-800 group-hover:text-amber-500' : 'text-zinc-200 group-hover:text-white'}`}>{asset.name}</span>
+                                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${
+                                  isLightTheme 
+                                    ? 'text-zinc-600 bg-zinc-100 border-zinc-200' 
+                                    : 'text-zinc-400 bg-slate-900 border-slate-800'
+                                }`}>
                                   {assetPct.toFixed(1)}%
                                 </span>
                               </div>
-                              <span className="text-[10px] text-zinc-500 font-mono mt-0.5 block">
+                              <span className={`text-[10px] font-mono mt-0.5 block ${isLightTheme ? 'text-zinc-400' : 'text-zinc-500'}`}>
                                 1 {asset.symbol} ≈ ${asset.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
                               </span>
                             </div>
@@ -1903,39 +1966,39 @@ export default function StandardUserDashboard({
 
                           <div className="flex items-center gap-3">
                             <div className="text-right">
-                              <span className="font-extrabold text-xs text-zinc-100 block font-mono">
+                              <span className={`font-extrabold text-xs block font-mono ${isLightTheme ? 'text-zinc-800' : 'text-zinc-100'}`}>
                                 {asset.coinAmount.toLocaleString(undefined, {
                                   minimumFractionDigits: asset.symbol === 'BTC' || asset.symbol === 'ETH' ? 6 : 2,
                                   maximumFractionDigits: asset.symbol === 'BTC' || asset.symbol === 'ETH' ? 8 : 4
                                 })} {asset.symbol}
                               </span>
-                              <span className="text-[10px] font-extrabold text-emerald-400 font-mono block mt-0.5">
+                              <span className="text-[10px] font-extrabold text-emerald-600 font-mono block mt-0.5">
                                 $ {asset.usdValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                               </span>
                             </div>
 
-                            <div className="text-zinc-600 group-hover:text-emerald-400 transition-colors">
+                            <div className={`transition-colors ${isLightTheme ? 'text-zinc-300 group-hover:text-amber-500' : 'text-zinc-600 group-hover:text-emerald-400'}`}>
                               <ArrowRight size={14} className="transform group-hover:translate-x-0.5 transition-transform" />
                             </div>
                           </div>
                         </div>
 
                         {asset.lockedAmount > 0 && (
-                          <div className="mt-3 pt-2.5 border-t border-slate-700/40 flex justify-between items-center text-[10px] font-mono">
-                            <div className="flex items-center gap-1 text-zinc-400 font-bold">
-                              <Unlock size={11} className="text-emerald-400 shrink-0" />
+                          <div className={`mt-3 pt-2.5 border-t flex justify-between items-center text-[10px] font-mono ${isLightTheme ? 'border-zinc-200/60' : 'border-slate-700/40'}`}>
+                            <div className={`flex items-center gap-1 font-bold ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                              <Unlock size={11} className={`${isLightTheme ? 'text-emerald-600' : 'text-emerald-400'} shrink-0`} />
                               <span>Free:</span>
-                              <span className="text-emerald-400 font-extrabold">
+                              <span className={`${isLightTheme ? 'text-emerald-600' : 'text-emerald-400'} font-extrabold`}>
                                 {asset.unlockedAmount.toLocaleString(undefined, {
                                   minimumFractionDigits: asset.symbol === 'BTC' || asset.symbol === 'ETH' ? 4 : 2,
                                   maximumFractionDigits: 6
                                 })} {asset.symbol}
                               </span>
                             </div>
-                            <div className="flex items-center gap-1 text-zinc-400 font-bold">
-                              <Lock size={11} className="text-amber-400 shrink-0" />
+                            <div className={`flex items-center gap-1 font-bold ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                              <Lock size={11} className={`${isLightTheme ? 'text-amber-600' : 'text-amber-400'} shrink-0`} />
                               <span>Invested:</span>
-                              <span className="text-amber-400 font-extrabold">
+                              <span className={`${isLightTheme ? 'text-amber-600' : 'text-amber-400'} font-extrabold`}>
                                 {asset.lockedAmount.toLocaleString(undefined, {
                                   minimumFractionDigits: asset.symbol === 'BTC' || asset.symbol === 'ETH' ? 4 : 2,
                                   maximumFractionDigits: 6
@@ -1948,9 +2011,11 @@ export default function StandardUserDashboard({
                     );
                   })}
                   {userAssets.filter(asset => asset.coinAmount > 0).length === 0 && (
-                    <div className="text-center py-8 px-4 bg-slate-900/40 border border-slate-800/80 rounded-2xl select-none">
+                    <div className={`text-center py-8 px-4 border rounded-2xl select-none ${
+                      isLightTheme ? 'bg-zinc-50/50 border-zinc-200/60' : 'bg-slate-900/40 border-slate-800/80'
+                    }`}>
                       <p className="text-zinc-500 text-xs font-semibold">Your asset holdings list is currently empty.</p>
-                      <p className="text-zinc-600 text-[10px] mt-1.5 leading-relaxed max-w-[280px] mx-auto">
+                      <p className="text-zinc-400 text-[10px] mt-1.5 leading-relaxed max-w-[280px] mx-auto">
                         Please convert your available USD wallet balance, or choose a coin from the Market list on the home screen to buy it.
                       </p>
                     </div>
@@ -1964,13 +2029,15 @@ export default function StandardUserDashboard({
           {activeTab === 'trade' && (
             <div className="space-y-5">
               {/* swap mode */}
-              <div className="bg-slate-800 border border-slate-700/80 rounded-3xl p-5 space-y-5 animate-fade-in">
+              <div className={`border rounded-3xl p-5 space-y-5 animate-fade-in ${
+                isLightTheme ? 'bg-white border-zinc-200/80 shadow-xs' : 'bg-slate-800 border-slate-700/80'
+              }`}>
                 <div>
-                  <h3 className="text-sm font-black text-zinc-300 tracking-tight flex items-center gap-1.5">
-                    <ArrowRightLeft size={16} className="text-emerald-400" />
+                  <h3 className={`text-sm font-black tracking-tight flex items-center gap-1.5 ${isLightTheme ? 'text-zinc-800' : 'text-zinc-300'}`}>
+                    <ArrowRightLeft size={16} className={isLightTheme ? 'text-amber-500' : 'text-emerald-400'} />
                     Quick Converter Simulator
                   </h3>
-                  <p className="text-xs text-zinc-500 mt-0.5">Learn stablecoin rates and instantly swap between token balances.</p>
+                  <p className={`text-xs mt-0.5 ${isLightTheme ? 'text-zinc-400' : 'text-zinc-500'}`}>Learn stablecoin rates and instantly swap between token balances.</p>
                 </div>
 
                 <div className="space-y-4">
@@ -1978,10 +2045,10 @@ export default function StandardUserDashboard({
                   <div className="space-y-1.5">
                     <div className="flex justify-between items-center select-none">
                       <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">From Asset</label>
-                      <span className="text-[10px] text-zinc-400 font-bold font-mono">
+                      <span className={`text-[10px] font-bold font-mono ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>
                         Available: {Math.max(0, getCoinHolding(tradeFrom) - getLockedAmount(tradeFrom))} {tradeFrom}
                         {getLockedAmount(tradeFrom) > 0 && (
-                          <span className="text-zinc-500 text-[9px] font-normal"> ({getCoinHolding(tradeFrom)} total)</span>
+                          <span className="text-zinc-400 text-[9px] font-normal"> ({getCoinHolding(tradeFrom)} total)</span>
                         )}
                       </span>
                     </div>
@@ -1992,6 +2059,7 @@ export default function StandardUserDashboard({
                         setSwapMessage(null);
                       }}
                       coins={cryptoPrices}
+                      isLightTheme={isLightTheme}
                     />
                   </div>
 
@@ -1999,10 +2067,10 @@ export default function StandardUserDashboard({
                   <div className="space-y-1.5">
                     <div className="flex justify-between items-center select-none">
                       <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">To Asset</label>
-                      <span className="text-[10px] text-zinc-400 font-bold font-mono">
+                      <span className={`text-[10px] font-bold font-mono ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>
                         Available: {Math.max(0, getCoinHolding(tradeTo) - getLockedAmount(tradeTo))} {tradeTo}
                         {getLockedAmount(tradeTo) > 0 && (
-                          <span className="text-zinc-500 text-[9px] font-normal"> ({getCoinHolding(tradeTo)} total)</span>
+                          <span className="text-zinc-400 text-[9px] font-normal"> ({getCoinHolding(tradeTo)} total)</span>
                         )}
                       </span>
                     </div>
@@ -2013,6 +2081,7 @@ export default function StandardUserDashboard({
                         setSwapMessage(null);
                       }}
                       coins={cryptoPrices}
+                      isLightTheme={isLightTheme}
                     />
                   </div>
 
@@ -2029,12 +2098,20 @@ export default function StandardUserDashboard({
                           setTradeAmount(e.target.value);
                           setSwapMessage(null);
                         }}
-                        className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-xs focus:outline-none focus:border-emerald-500 text-white font-mono"
+                        className={`w-full p-3 border rounded-xl text-xs focus:outline-none font-mono ${
+                          isLightTheme 
+                            ? 'bg-zinc-50/50 border-zinc-200 focus:border-amber-500 text-zinc-800 placeholder-zinc-400' 
+                            : 'bg-slate-950 border-slate-800 focus:border-emerald-500 text-white'
+                        }`}
                       />
                       <button
                         type="button"
                         onClick={() => setTradeAmount(Math.max(0, getCoinHolding(tradeFrom) - getLockedAmount(tradeFrom)).toString())}
-                        className="absolute right-2.5 top-2 px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-lg hover:bg-emerald-500/20 cursor-pointer"
+                        className={`absolute right-2.5 top-2 px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider rounded-lg cursor-pointer ${
+                          isLightTheme 
+                            ? 'text-amber-600 bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/20' 
+                            : 'text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20'
+                        }`}
                       >
                         MAX
                       </button>
@@ -2043,13 +2120,15 @@ export default function StandardUserDashboard({
 
                   {/* Output conversion */}
                   {tradeResult !== null && (
-                    <div className="bg-slate-950 p-4 border border-slate-850 rounded-2xl flex flex-col gap-1 items-center justify-center relative overflow-hidden">
-                      <div className="absolute top-0 right-0 w-16 h-16 bg-emerald-500/5 rounded-full blur-xl" />
+                    <div className={`p-4 border rounded-2xl flex flex-col gap-1 items-center justify-center relative overflow-hidden ${
+                      isLightTheme ? 'bg-amber-50/50 border-amber-200/50' : 'bg-slate-950 border-slate-850'
+                    }`}>
+                      <div className={`absolute top-0 right-0 w-16 h-16 rounded-full blur-xl ${isLightTheme ? 'bg-amber-500/5' : 'bg-emerald-500/5'}`} />
                       <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider select-none">Live Conversion Value</span>
-                      <span className="text-xl font-black text-emerald-400 font-mono">
-                        {tradeResult} <span className="text-xs text-zinc-400 font-normal">{tradeTo}</span>
+                      <span className={`text-xl font-black font-mono ${isLightTheme ? 'text-amber-600' : 'text-emerald-400'}`}>
+                        {tradeResult} <span className={`text-xs font-normal ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>{tradeTo}</span>
                       </span>
-                      <span className="text-[9px] text-zinc-600 font-semibold mt-0.5 select-none">Dynamic rate applied</span>
+                      <span className={`text-[9px] font-semibold mt-0.5 select-none ${isLightTheme ? 'text-zinc-400' : 'text-zinc-600'}`}>Dynamic rate applied</span>
                     </div>
                   )}
 
@@ -2057,8 +2136,8 @@ export default function StandardUserDashboard({
                   {swapMessage && (
                     <div className={`p-3.5 rounded-xl border text-xs flex items-start gap-2.5 ${
                       swapMessage.isError 
-                        ? 'bg-red-500/10 border-red-500/20 text-red-400' 
-                        : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                        ? (isLightTheme ? 'bg-red-50 border-red-200 text-red-800' : 'bg-red-500/10 border-red-500/20 text-red-400') 
+                        : (isLightTheme ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400')
                     }`}>
                       <AlertCircle size={15} className="mt-0.5 shrink-0" />
                       <span className="leading-relaxed font-medium">{swapMessage.text}</span>
@@ -2070,11 +2149,15 @@ export default function StandardUserDashboard({
                     type="button"
                     disabled={swapLoading || !tradeAmount || parseFloat(tradeAmount) <= 0}
                     onClick={handleSwapConvert}
-                    className="w-full py-3.5 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-slate-950 font-black text-xs uppercase tracking-wider shadow-lg shadow-emerald-500/10 active:scale-[0.985] transition-all disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center gap-1.5 cursor-pointer"
+                    className={`w-full py-3.5 rounded-2xl font-black text-xs uppercase tracking-wider active:scale-[0.985] transition-all disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center gap-1.5 cursor-pointer ${
+                      isLightTheme 
+                        ? 'bg-gradient-to-tr from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-white shadow-md shadow-amber-500/10' 
+                        : 'bg-gradient-to-tr from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-slate-950 shadow-lg shadow-emerald-500/10'
+                    }`}
                   >
                     {swapLoading ? (
                       <>
-                        <div className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin"></div>
+                        <div className={`w-4 h-4 border-2 border-t-transparent rounded-full animate-spin ${isLightTheme ? 'border-white' : 'border-slate-950'}`}></div>
                         <span>Processing Conversion...</span>
                       </>
                     ) : (
@@ -2093,26 +2176,32 @@ export default function StandardUserDashboard({
           {activeTab === 'earn' && (
             <div className="space-y-5">
               {/* mmf investment mode */}
-              <div className="bg-slate-800 border border-slate-700/80 rounded-3xl p-5 space-y-5 animate-fade-in">
+              <div className={`border rounded-3xl p-5 space-y-5 animate-fade-in ${
+                isLightTheme ? 'bg-white border-zinc-200/80 shadow-xs' : 'bg-slate-800 border-slate-700/80'
+              }`}>
                 {mmfSubView === 'main' && (
                   <div className="space-y-5">
                     <div>
-                      <h3 className="text-sm font-black text-zinc-300 tracking-tight flex items-center gap-1.5">
-                        <Coins size={16} className="text-emerald-400" />
+                      <h3 className={`text-sm font-black tracking-tight flex items-center gap-1.5 ${isLightTheme ? 'text-zinc-800' : 'text-zinc-300'}`}>
+                        <Coins size={16} className={isLightTheme ? 'text-amber-500' : 'text-emerald-400'} />
                         Crypto MMF Investment
                       </h3>
-                      <p className="text-[11px] text-zinc-500 mt-0.5">High-yield short term locked investments</p>
+                      <p className={`text-[11px] mt-0.5 ${isLightTheme ? 'text-zinc-400' : 'text-zinc-500'}`}>High-yield short term locked investments</p>
                     </div>
 
                     {/* Display Alert Message feedback */}
                     {investmentSuccess && (
-                      <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-xl text-xs flex gap-2">
+                      <div className={`p-3 border rounded-xl text-xs flex gap-2 ${
+                        isLightTheme ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                      }`}>
                         <Check size={14} className="shrink-0 mt-0.5" />
                         <span>{investmentSuccess}</span>
                       </div>
                     )}
                     {investmentError && (
-                      <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl text-xs flex gap-2">
+                      <div className={`p-3 border rounded-xl text-xs flex gap-2 ${
+                        isLightTheme ? 'bg-red-50 border-red-200 text-red-800' : 'bg-red-500/10 border-red-500/20 text-red-400'
+                      }`}>
                         <AlertCircle size={14} className="shrink-0 mt-0.5" />
                         <span>{investmentError}</span>
                       </div>
@@ -2129,15 +2218,21 @@ export default function StandardUserDashboard({
                         return (
                           <div 
                             key={coin.symbol}
-                            className="bg-slate-900/40 hover:bg-slate-900/70 border border-slate-850/70 hover:border-emerald-500/20 p-3.5 rounded-2xl flex flex-col justify-between transition-all duration-300 group hover:shadow-lg hover:shadow-emerald-950/5 relative overflow-hidden"
+                            className={`border p-3.5 rounded-2xl flex flex-col justify-between transition-all duration-300 group hover:shadow-lg relative overflow-hidden ${
+                              isLightTheme 
+                                ? 'bg-zinc-50/50 border-zinc-200 hover:bg-white hover:border-amber-500/30 hover:shadow-amber-500/5' 
+                                : 'bg-slate-900/40 border-slate-850/70 hover:bg-slate-900/70 hover:border-emerald-500/20 hover:shadow-emerald-950/5'
+                            }`}
                           >
                             {/* Subtle hover gradient border glow */}
-                            <div className="absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-emerald-500/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                            <div className={`absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-amber-500/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300`} />
                             
                             <div>
                               {/* Top row: Logo & Coin identifiers */}
                               <div className="flex items-center gap-2 mb-3">
-                                <div className="w-8 h-8 rounded-full bg-slate-950 border border-slate-850 flex items-center justify-center p-1 shadow-inner shrink-0">
+                                <div className={`w-8 h-8 rounded-full border flex items-center justify-center p-1 shadow-inner shrink-0 ${
+                                  isLightTheme ? 'bg-white border-zinc-200' : 'bg-slate-950 border-slate-850'
+                                }`}>
                                   <img 
                                     src={getCoinLogoUrl(coin.symbol)} 
                                     alt={coin.name} 
@@ -2146,26 +2241,30 @@ export default function StandardUserDashboard({
                                   />
                                 </div>
                                 <div className="min-w-0">
-                                  <span className="font-extrabold text-[11px] text-zinc-100 block truncate leading-tight">{coin.name}</span>
+                                  <span className={`font-extrabold text-[11px] block truncate leading-tight ${isLightTheme ? 'text-zinc-800' : 'text-zinc-100'}`}>{coin.name}</span>
                                   <span className="text-[9px] font-bold font-mono text-zinc-500">{coin.symbol}</span>
                                 </div>
                               </div>
 
                               {/* Yield Rate Badge */}
                               <div className="mb-3.5">
-                                <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/15 text-emerald-400 font-extrabold text-[9px] font-mono tracking-wide">
-                                  {dailyRate}% daily yield
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded-md font-extrabold text-[9px] font-mono tracking-wide ${
+                                  isLightTheme 
+                                    ? 'bg-emerald-50 border border-emerald-200 text-emerald-800' 
+                                    : 'bg-emerald-500/10 border border-emerald-500/15 text-emerald-400'
+                                }`}>
+                                  {dailyRate}% daily profit
                                 </span>
                               </div>
 
                               {/* Balance details section */}
-                              <div className="pt-2 border-t border-slate-900/80 mb-4">
+                              <div className={`pt-2 border-t mb-4 ${isLightTheme ? 'border-zinc-200/60' : 'border-slate-900/80'}`}>
                                 <span className="text-[8px] text-zinc-500 font-bold uppercase tracking-wider block">Available Balance</span>
-                                <span className="text-[10px] font-extrabold font-mono text-zinc-200 truncate block mt-0.5">
-                                  {unlocked.toFixed(4)} <span className="text-[8px] text-zinc-500 font-normal">{coin.symbol}</span>
+                                <span className={`text-[10px] font-extrabold font-mono truncate block mt-0.5 ${isLightTheme ? 'text-zinc-700' : 'text-zinc-200'}`}>
+                                  {unlocked.toFixed(4)} <span className="text-[8px] text-zinc-400 font-normal">{coin.symbol}</span>
                                 </span>
                                 {locked > 0 && (
-                                  <span className="text-[8px] text-amber-500/80 font-bold block mt-0.5 truncate">
+                                  <span className="text-[8px] text-amber-600 font-bold block mt-0.5 truncate">
                                     (+{locked.toFixed(2)} invested)
                                   </span>
                                 )}
@@ -2182,7 +2281,11 @@ export default function StandardUserDashboard({
                                 setInvestmentError(null);
                                 setInvestmentSuccess(null);
                               }}
-                              className="w-full py-2 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-slate-950 text-[10px] font-black uppercase tracking-wider shadow-md shadow-emerald-500/5 active:scale-95 transition-all cursor-pointer text-center"
+                              className={`w-full py-2 rounded-xl text-[10px] font-black uppercase tracking-wider shadow-md active:scale-95 transition-all cursor-pointer text-center ${
+                                isLightTheme 
+                                  ? 'bg-gradient-to-tr from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-white' 
+                                  : 'bg-gradient-to-tr from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-slate-950'
+                              }`}
                             >
                               Invest
                             </button>
@@ -2193,7 +2296,7 @@ export default function StandardUserDashboard({
 
                     {/* Display Active/Completed Investments */}
                     {activeInvestments.length > 0 && (
-                      <div className="space-y-3 pt-4 border-t border-slate-850">
+                      <div className={`space-y-3 pt-4 border-t ${isLightTheme ? 'border-zinc-200/60' : 'border-slate-850'}`}>
                         <div className="flex justify-between items-center select-none">
                           <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
                             <History size={12} className="text-zinc-400" />
@@ -2340,7 +2443,7 @@ export default function StandardUserDashboard({
                         <div>
                           <span className="font-bold text-xs text-zinc-200 block">{selectedCoinForInvestment.name} MMF</span>
                           <span className="text-[10px] text-emerald-400 font-extrabold block mt-0.5">
-                            Rate: {selectedCoinForInvestment.investmentRate ?? 5.0}% daily yield
+                            Rate: {selectedCoinForInvestment.investmentRate ?? 5.0}% daily profit
                           </span>
                           <span className="text-[9px] text-teal-400 font-bold block mt-1">
                             Minimum Investment: {selectedCoinForInvestment.minInvestment ?? 10.0} {selectedCoinForInvestment.symbol}
@@ -2370,7 +2473,11 @@ export default function StandardUserDashboard({
                                 setInvestmentError(null);
                                 setInvestmentSuccess(null);
                             }}
-                            className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-xs focus:outline-none focus:border-emerald-500 text-white font-mono"
+                            className={`w-full p-3 border rounded-xl text-xs focus:outline-none font-mono ${
+                              isLightTheme 
+                                ? 'bg-zinc-50/50 border-zinc-200 focus:border-amber-500 text-zinc-800 placeholder-zinc-400' 
+                                : 'bg-slate-950 border-slate-800 focus:border-emerald-500 text-white'
+                            }`}
                           />
                           <button
                             type="button"
@@ -2378,7 +2485,11 @@ export default function StandardUserDashboard({
                               const maxVal = Math.max(0, getCoinHolding(selectedCoinForInvestment.symbol) - getLockedAmount(selectedCoinForInvestment.symbol));
                               setInvestmentAmount(maxVal.toString());
                             }}
-                            className="absolute right-2.5 top-2 px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-lg hover:bg-emerald-500/20 cursor-pointer"
+                            className={`absolute right-2.5 top-2 px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider rounded-lg cursor-pointer ${
+                              isLightTheme 
+                                ? 'text-amber-600 bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/20' 
+                                : 'text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20'
+                            }`}
                           >
                             MAX
                           </button>
@@ -2398,23 +2509,29 @@ export default function StandardUserDashboard({
                             setInvestmentError(null);
                             setInvestmentSuccess(null);
                           }}
-                          className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-xs focus:outline-none focus:border-emerald-500 text-white font-mono"
+                          className={`w-full p-3 border rounded-xl text-xs focus:outline-none font-mono ${
+                            isLightTheme 
+                              ? 'bg-zinc-50/50 border-zinc-200 focus:border-amber-500 text-zinc-800 placeholder-zinc-400' 
+                              : 'bg-slate-950 border-slate-800 focus:border-emerald-500 text-white'
+                          }`}
                         />
                         <p className="text-[9px] text-zinc-500">Minimum duration is 5 days. Daily earnings accrue instantly to your main account.</p>
                       </div>
 
                       {/* Profit preview calculator */}
                       {parseFloat(investmentAmount) > 0 && (
-                        <div className="bg-slate-950/40 border border-slate-850 p-3 rounded-xl flex flex-col gap-2 select-none">
+                        <div className={`border p-3 rounded-xl flex flex-col gap-2 select-none ${
+                          isLightTheme ? 'bg-zinc-50/50 border-zinc-200' : 'bg-slate-950/40 border-slate-850'
+                        }`}>
                           <div className="flex justify-between items-center text-[10px]">
                             <span className="text-zinc-500 font-bold uppercase tracking-wider">Daily Yield</span>
-                            <span className="font-bold font-mono text-emerald-400">
+                            <span className={`font-bold font-mono ${isLightTheme ? 'text-emerald-700' : 'text-emerald-400'}`}>
                               +{(parseFloat(investmentAmount) * ((selectedCoinForInvestment.investmentRate ?? 5.0) / 100)).toFixed(4)} {selectedCoinForInvestment.symbol}
                             </span>
                           </div>
-                          <div className="flex justify-between items-center text-[10px] border-t border-slate-850/60 pt-2">
+                          <div className={`flex justify-between items-center text-[10px] border-t pt-2 ${isLightTheme ? 'border-zinc-200' : 'border-slate-850/60'}`}>
                             <span className="text-zinc-500 font-bold uppercase tracking-wider">Total {parseInt(investmentDays) || 5} Days Yield</span>
-                            <span className="font-bold font-mono text-emerald-400">
+                            <span className={`font-bold font-mono ${isLightTheme ? 'text-emerald-700' : 'text-emerald-400'}`}>
                               +{(parseFloat(investmentAmount) * ((selectedCoinForInvestment.investmentRate ?? 5.0) / 100) * (parseInt(investmentDays) || 5)).toFixed(4)} {selectedCoinForInvestment.symbol}
                             </span>
                           </div>
@@ -2423,7 +2540,9 @@ export default function StandardUserDashboard({
 
                       {/* Feedback messages */}
                       {investmentError && (
-                        <div className="p-3.5 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl text-xs flex flex-col gap-2">
+                        <div className={`p-3.5 border rounded-xl text-xs flex flex-col gap-2 ${
+                          isLightTheme ? 'bg-red-50 border-red-200 text-red-800' : 'bg-red-500/10 border-red-500/20 text-red-400'
+                        }`}>
                           <div className="flex gap-2">
                             <AlertCircle size={15} className="shrink-0 mt-0.5" />
                             <span>{investmentError}</span>
@@ -2432,7 +2551,11 @@ export default function StandardUserDashboard({
                             <button
                               type="button"
                               onClick={onOpenDeposit}
-                              className="mt-1 w-full py-1.5 bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-200 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-colors cursor-pointer"
+                              className={`mt-1 w-full py-1.5 border text-[10px] font-bold uppercase tracking-wider rounded-lg transition-colors cursor-pointer ${
+                                isLightTheme 
+                                  ? 'bg-amber-550/10 hover:bg-amber-500/20 border-amber-500/30 text-amber-850' 
+                                  : 'bg-emerald-500/15 hover:bg-emerald-500/25 border-emerald-500/30 text-emerald-200'
+                              }`}
                             >
                               Go to Deposit Page
                             </button>
@@ -2445,11 +2568,15 @@ export default function StandardUserDashboard({
                         type="button"
                         disabled={investmentLoading || !investmentAmount || parseFloat(investmentAmount) <= 0}
                         onClick={handleInitiateInvestment}
-                        className="w-full py-3.5 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-slate-950 font-black text-xs uppercase tracking-wider shadow-lg shadow-emerald-500/10 active:scale-[0.985] transition-all disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center gap-1.5 cursor-pointer"
+                        className={`w-full py-3.5 rounded-2xl font-black text-xs uppercase tracking-wider active:scale-[0.985] transition-all disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center gap-1.5 cursor-pointer ${
+                          isLightTheme 
+                            ? 'bg-gradient-to-tr from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-white shadow-md shadow-amber-500/10' 
+                            : 'bg-gradient-to-tr from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-slate-950 shadow-lg shadow-emerald-500/10'
+                        }`}
                       >
                         {investmentLoading ? (
                           <>
-                            <div className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin"></div>
+                            <div className={`w-4 h-4 border-2 border-t-transparent rounded-full animate-spin ${isLightTheme ? 'border-white' : 'border-slate-950'}`}></div>
                             <span>Locking Funds...</span>
                           </>
                         ) : (
@@ -2469,7 +2596,7 @@ export default function StandardUserDashboard({
           {/* TAB 5: HISTORY */}
           {activeTab === 'history' && (
             <div className="space-y-4 animate-fade-in">
-              <ActivityLog userId={user.uid} />
+              <ActivityLog userId={user.uid} isLightTheme={isLightTheme} />
             </div>
           )}
 
@@ -2477,7 +2604,11 @@ export default function StandardUserDashboard({
       )}
 
       {/* STICKY BOTTOM NAVIGATION */}
-      <footer className="fixed bottom-0 left-0 right-0 z-30 bg-slate-900 border-t border-slate-800/80 px-4 py-2 flex justify-around max-w-md mx-auto">
+      <footer className={`fixed bottom-0 left-0 right-0 z-30 px-4 py-2 flex justify-around max-w-md mx-auto border-t ${
+        isLightTheme 
+          ? 'bg-white border-zinc-200/80 shadow-[0_-4px_12px_rgba(0,0,0,0.03)]' 
+          : 'bg-slate-900 border-slate-800/80'
+      }`}>
         {([
           { id: 'home', label: 'Home', icon: Coins },
           { id: 'wallet', label: 'Wallet', icon: Wallet },
@@ -2493,7 +2624,9 @@ export default function StandardUserDashboard({
               id={`nav-tab-btn-${tab.id}`}
               onClick={() => handleTabChange(tab.id)}
               className={`flex flex-col items-center gap-1 py-1.5 px-3 rounded-xl transition-all cursor-pointer ${
-                isSelected ? 'text-emerald-400 bg-emerald-500/5' : 'text-zinc-500 hover:text-zinc-300'
+                isSelected 
+                  ? (isLightTheme ? 'text-amber-600 bg-amber-500/10 font-black' : 'text-amber-400 bg-amber-500/10 font-black') 
+                  : (isLightTheme ? 'text-zinc-400 hover:text-zinc-600' : 'text-white hover:text-zinc-300')
               }`}
             >
               <Icon size={18} className={isSelected ? 'scale-110 transition-transform' : ''} />

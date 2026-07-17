@@ -1044,7 +1044,7 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
 
       {loading ? (
         <div className="flex flex-col items-center justify-center min-h-[350px] gap-3">
-          <Loader size={32} className="text-emerald-500 animate-spin" />
+          <Loader size={32} className="text-amber-500 animate-spin" />
           <span className="text-xs text-zinc-500 font-medium">Retrieving database snapshots...</span>
         </div>
       ) : (

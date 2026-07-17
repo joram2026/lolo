@@ -185,7 +185,7 @@ export default function DepositWorkflow({ user, onBack, onSuccess }: DepositWork
   };
 
   return (
-    <div id="deposit-workflow-container" className="max-w-md mx-auto p-4 sm:p-5 bg-slate-900 text-zinc-100 min-h-[calc(100vh-140px)]">
+    <div id="deposit-workflow-container" className="max-w-md mx-auto p-4 sm:p-5 bg-[#FFF3D6] text-zinc-800 min-h-[calc(100vh-140px)]">
       {/* Dynamic Header */}
       <div className="flex items-center gap-3 mb-6">
         <button 
@@ -200,12 +200,12 @@ export default function DepositWorkflow({ user, onBack, onSuccess }: DepositWork
             else if (method === 'p2p_instructions') setMethod('p2p_calc');
             else if (method === 'p2p_confirm') setMethod('p2p_instructions');
           }}
-          className="p-2 rounded-full bg-slate-850 border border-slate-700 text-zinc-400 hover:text-white transition-colors"
+          className="p-2 rounded-full bg-white border border-zinc-200 text-zinc-600 hover:text-zinc-900 hover:bg-zinc-50 transition-colors"
         >
           <ArrowLeft size={18} />
         </button>
         <div>
-          <h2 className="text-lg font-black tracking-tight">
+          <h2 className="text-lg font-black tracking-tight text-zinc-800">
             {method === 'selection' && 'Add Funds'}
             {method === 'crypto_coin_select' && 'Select Coin'}
             {method === 'crypto' && 'Crypto Deposit Details'}
@@ -229,7 +229,7 @@ export default function DepositWorkflow({ user, onBack, onSuccess }: DepositWork
       </div>
 
       {error && (
-        <div id="deposit-error-banner" className="p-3 mb-5 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl text-xs flex items-start gap-2.5">
+        <div id="deposit-error-banner" className="p-3 mb-5 bg-red-50 border border-red-200 text-red-800 rounded-xl text-xs flex items-start gap-2.5">
           <AlertCircle size={16} className="mt-0.5 shrink-0" />
           <span>{error}</span>
         </div>
@@ -237,7 +237,7 @@ export default function DepositWorkflow({ user, onBack, onSuccess }: DepositWork
 
       {loading && (
         <div className="flex flex-col items-center justify-center min-h-[250px] gap-3">
-          <RefreshCw size={24} className="text-emerald-500 animate-spin" />
+          <RefreshCw size={24} className="text-amber-500 animate-spin" />
           <span className="text-xs text-zinc-500 font-medium">Fetching active integrations...</span>
         </div>
       )}
@@ -250,35 +250,35 @@ export default function DepositWorkflow({ user, onBack, onSuccess }: DepositWork
               <button
                 id="deposit-method-crypto"
                 onClick={() => setMethod('crypto_coin_select')}
-                className="w-full flex items-center justify-between p-4 bg-slate-800 hover:bg-slate-750 border border-slate-700/80 rounded-2xl transition-all text-left"
+                className="w-full flex items-center justify-between p-4 bg-white hover:bg-zinc-50/80 border border-zinc-200 rounded-2xl transition-all text-left"
               >
                 <div className="flex items-center gap-4">
-                  <div className="w-11 h-11 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
+                  <div className="w-11 h-11 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-600 shrink-0">
                     <Coins size={20} />
                   </div>
                   <div>
-                    <h3 className="font-bold text-sm text-zinc-100">Crypto Stablecoin Deposit</h3>
+                    <h3 className="font-bold text-sm text-zinc-800">Crypto Stablecoin Deposit</h3>
                     <p className="text-xs text-zinc-500 mt-0.5">Deposit USDT or USDC on Tron, Ethereum, or Solana</p>
                   </div>
                 </div>
-                <ChevronRight size={16} className="text-zinc-500" />
+                <ChevronRight size={16} className="text-zinc-400" />
               </button>
 
               <button
                 id="deposit-method-p2p"
                 onClick={() => setMethod('p2p')}
-                className="w-full flex items-center justify-between p-4 bg-slate-800 hover:bg-slate-750 border border-slate-700/80 rounded-2xl transition-all text-left"
+                className="w-full flex items-center justify-between p-4 bg-white hover:bg-zinc-50/80 border border-zinc-200 rounded-2xl transition-all text-left"
               >
                 <div className="flex items-center gap-4">
-                  <div className="w-11 h-11 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
+                  <div className="w-11 h-11 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-600 shrink-0">
                     <Users size={20} />
                   </div>
                   <div>
-                    <h3 className="font-bold text-sm text-zinc-100">P2P Escrow Deposit (Mobile Money)</h3>
+                    <h3 className="font-bold text-sm text-zinc-800">P2P Escrow Deposit (Mobile Money)</h3>
                     <p className="text-xs text-zinc-500 mt-0.5">Pay local currency (KES/UGX) to buy USD instantly</p>
                   </div>
                 </div>
-                <ChevronRight size={16} className="text-zinc-500" />
+                <ChevronRight size={16} className="text-zinc-400" />
               </button>
             </div>
           )}
@@ -301,12 +301,12 @@ export default function DepositWorkflow({ user, onBack, onSuccess }: DepositWork
                       }
                       setMethod('crypto');
                     }}
-                    className="w-full flex items-center justify-between p-4 bg-slate-800 hover:bg-slate-750 border border-slate-700/80 rounded-2xl transition-all text-left group"
+                    className="w-full flex items-center justify-between p-4 bg-white hover:bg-zinc-50 border border-zinc-200 rounded-2xl transition-all text-left group"
                   >
                     <div className="flex items-center gap-3.5">
                       <CoinIcon symbol={net.id.toUpperCase()} className="w-10 h-10" />
                       <div>
-                        <h4 className="font-bold text-sm text-zinc-100 group-hover:text-emerald-400 transition-colors">
+                        <h4 className="font-bold text-sm text-zinc-800 group-hover:text-amber-600 transition-colors">
                           {formattedName}
                         </h4>
                         <p className="text-[10px] text-zinc-500 mt-0.5">
@@ -314,7 +314,7 @@ export default function DepositWorkflow({ user, onBack, onSuccess }: DepositWork
                         </p>
                       </div>
                     </div>
-                    <ChevronRight size={16} className="text-zinc-500 group-hover:text-zinc-300 transition-colors" />
+                    <ChevronRight size={16} className="text-zinc-400 group-hover:text-zinc-600 transition-colors" />
                   </button>
                 );
               })}
@@ -325,17 +325,17 @@ export default function DepositWorkflow({ user, onBack, onSuccess }: DepositWork
           {method === 'crypto' && selectedCoin && (
             <div className="space-y-5">
               {/* Selected Coin Banner */}
-              <div className="bg-slate-800/50 border border-slate-700/60 rounded-2xl p-4 flex items-center gap-3.5">
+              <div className="bg-white border border-zinc-200 rounded-2xl p-4 flex items-center gap-3.5">
                 <CoinIcon symbol={selectedCoin.id.toUpperCase()} className="w-11 h-11 rounded-xl" />
                 <div>
                   <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block">Selected Asset</span>
-                  <span className="text-sm font-black text-white">{formatCoinName(selectedCoin.tokenName)}</span>
+                  <span className="text-sm font-black text-zinc-800">{formatCoinName(selectedCoin.tokenName)}</span>
                 </div>
               </div>
 
               {/* Network Picker */}
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-zinc-400">Select Network</label>
+                <label className="text-xs font-semibold text-zinc-500">Select Network</label>
                 <div className="grid grid-cols-3 gap-2">
                   {selectedCoin.networks.map(net => (
                     <button
@@ -345,8 +345,8 @@ export default function DepositWorkflow({ user, onBack, onSuccess }: DepositWork
                       onClick={() => setSelectedNetwork(net)}
                       className={`py-2 px-3 rounded-xl border text-xs font-semibold transition-all text-center ${
                         selectedNetwork === net
-                          ? 'bg-emerald-500/10 border-emerald-500 text-emerald-400'
-                          : 'bg-slate-800 border-slate-700 text-zinc-500 hover:text-zinc-300'
+                          ? 'bg-amber-500/10 border-amber-500 text-amber-600'
+                          : 'bg-white border-zinc-200 text-zinc-500 hover:text-zinc-800'
                       }`}
                     >
                       {net}
@@ -358,7 +358,7 @@ export default function DepositWorkflow({ user, onBack, onSuccess }: DepositWork
               {/* Amount Input */}
               <div className="space-y-1.5">
                 <div className="flex justify-between items-center">
-                  <label className="text-xs font-semibold text-zinc-400">Amount (USD)</label>
+                  <label className="text-xs font-semibold text-zinc-500">Amount (USD)</label>
                   <span className="text-[10px] text-zinc-500 font-semibold">Max: $10,000.00</span>
                 </div>
                 <div className="relative">
@@ -370,14 +370,14 @@ export default function DepositWorkflow({ user, onBack, onSuccess }: DepositWork
                     placeholder="100.00"
                     value={amountUSD}
                     onChange={(e) => setAmountUSD(e.target.value)}
-                    className="w-full pl-8 pr-16 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-white font-mono"
+                    className="w-full pl-8 pr-16 py-3 bg-white border border-zinc-200 rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 text-zinc-800 font-mono"
                   />
                   <button
                     type="button"
                     onClick={() => setAmountUSD('10000')}
                     className="absolute inset-y-0 right-0 pr-3 flex items-center"
                   >
-                    <span className="bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 font-black text-[10px] px-2.5 py-1 rounded-md border border-emerald-500/30 transition-all cursor-pointer">
+                    <span className="bg-amber-500/15 hover:bg-amber-500/25 text-amber-600 font-black text-[10px] px-2.5 py-1 rounded-md border border-amber-500/30 transition-all cursor-pointer">
                       MAX
                     </span>
                   </button>
@@ -385,19 +385,19 @@ export default function DepositWorkflow({ user, onBack, onSuccess }: DepositWork
               </div>
 
               {/* Wallet Address Display Card */}
-              <div className="bg-slate-800 border border-slate-700 rounded-2xl p-4 space-y-3">
+              <div className="bg-white border border-zinc-200 rounded-2xl p-4 space-y-3">
                 <div className="flex justify-between items-center">
                   <span className="text-[10px] text-zinc-500 font-semibold uppercase tracking-wider">Receiver Address ({selectedNetwork})</span>
                   <button
                     id="crypto-copy-address"
                     onClick={() => handleCopy(selectedCoin.addresses[selectedNetwork] || '')}
-                    className="p-1.5 rounded-lg bg-slate-950 hover:bg-slate-900 border border-slate-850 text-zinc-400 hover:text-white transition-colors flex items-center gap-1 text-[10px]"
+                    className="p-1.5 rounded-lg bg-zinc-50 hover:bg-zinc-100 border border-zinc-200 text-zinc-600 hover:text-zinc-800 transition-colors flex items-center gap-1 text-[10px]"
                   >
-                    {copied ? <Check size={11} className="text-emerald-400" /> : <Copy size={11} />}
+                    {copied ? <Check size={11} className="text-amber-600" /> : <Copy size={11} />}
                     <span>{copied ? 'Copied' : 'Copy'}</span>
                   </button>
                 </div>
-                <div className="bg-slate-950 border border-slate-850 p-3 rounded-xl font-mono text-[11px] text-emerald-400 break-all select-all font-semibold leading-relaxed">
+                <div className="bg-zinc-50 border border-zinc-200 p-3 rounded-xl font-mono text-[11px] text-amber-700 break-all select-all font-semibold leading-relaxed">
                   {selectedCoin.addresses[selectedNetwork] || 'No Address configured'}
                 </div>
                 <p className="text-[10px] text-zinc-500 text-center">Transfer strictly using the {selectedNetwork} network to avoid assets loss.</p>
@@ -415,7 +415,7 @@ export default function DepositWorkflow({ user, onBack, onSuccess }: DepositWork
                   }
                   setMethod('crypto_confirm');
                 }}
-                className="w-full flex items-center justify-center gap-2 py-3.5 bg-gradient-to-r from-emerald-600 to-teal-500 text-white hover:from-emerald-500 hover:to-teal-400 disabled:bg-slate-800 disabled:text-zinc-500 rounded-xl text-sm font-bold transition-all shadow-md mt-6 cursor-pointer uppercase tracking-wider"
+                className="w-full flex items-center justify-center gap-2 py-3.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600 disabled:bg-zinc-200 disabled:text-zinc-400 rounded-xl text-sm font-bold transition-all shadow-md mt-6 cursor-pointer uppercase tracking-wider"
               >
                 <span>Proceed to Evidence Upload</span>
                 <ChevronRight size={16} />
@@ -426,43 +426,43 @@ export default function DepositWorkflow({ user, onBack, onSuccess }: DepositWork
           {/* Crypto Confirm & Upload Proof Page */}
           {method === 'crypto_confirm' && selectedCoin && (
             <div className="space-y-5">
-              <div className="bg-slate-800 border border-slate-700 rounded-2xl p-4 space-y-4">
-                <div className="flex flex-col items-center justify-center text-center gap-2 pb-2 border-b border-slate-700/60">
-                  <div className="w-12 h-12 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-400">
+              <div className="bg-white border border-zinc-200 rounded-2xl p-4 space-y-4">
+                <div className="flex flex-col items-center justify-center text-center gap-2 pb-2 border-b border-zinc-200/60">
+                  <div className="w-12 h-12 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-500">
                     <Coins size={22} />
                   </div>
                   <div>
-                    <h3 className="text-sm font-black text-zinc-100">Upload Deposit Proof</h3>
+                    <h3 className="text-sm font-black text-zinc-800">Upload Deposit Proof</h3>
                     <p className="text-[11px] text-zinc-500">Provide evidence of stablecoin transfer</p>
                   </div>
                 </div>
 
                 <div className="space-y-3 text-xs">
-                  <div className="flex justify-between items-center pb-1.5 border-b border-slate-700/30">
+                  <div className="flex justify-between items-center pb-1.5 border-b border-zinc-100">
                     <span className="text-zinc-500">Selected Asset</span>
-                    <span className="font-bold text-zinc-200">{formatCoinName(selectedCoin.tokenName)}</span>
+                    <span className="font-bold text-zinc-800">{formatCoinName(selectedCoin.tokenName)}</span>
                   </div>
-                  <div className="flex justify-between items-center pb-1.5 border-b border-slate-700/30">
+                  <div className="flex justify-between items-center pb-1.5 border-b border-zinc-100">
                     <span className="text-zinc-500">Selected Network</span>
-                    <span className="font-mono font-bold text-emerald-400">{selectedNetwork}</span>
+                    <span className="font-mono font-bold text-amber-600">{selectedNetwork}</span>
                   </div>
-                  <div className="flex justify-between items-center pb-1.5 border-b border-slate-700/30">
+                  <div className="flex justify-between items-center pb-1.5 border-b border-zinc-100">
                     <span className="text-zinc-500">Recipient Address</span>
-                    <span className="font-mono font-bold text-zinc-300 break-all max-w-[200px] text-right">{selectedCoin.addresses[selectedNetwork]}</span>
+                    <span className="font-mono font-bold text-zinc-600 break-all max-w-[200px] text-right">{selectedCoin.addresses[selectedNetwork]}</span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-zinc-500">Amount Sent</span>
-                    <span className="font-mono font-bold text-emerald-400">${parseFloat(amountUSD).toLocaleString(undefined, { minimumFractionDigits: 2 })} USD</span>
+                    <span className="font-mono font-bold text-amber-600">${parseFloat(amountUSD).toLocaleString(undefined, { minimumFractionDigits: 2 })} USD</span>
                   </div>
                 </div>
               </div>
 
               {/* Evidence Upload */}
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-zinc-400 block">
+                <label className="text-xs font-semibold text-zinc-500 block">
                   Evidence of Payment (Upload Screenshot)
                 </label>
-                <div className="relative border border-dashed border-slate-700 bg-slate-800/40 rounded-2xl p-5 hover:bg-slate-800/80 transition-all text-center flex flex-col items-center justify-center cursor-pointer">
+                <div className="relative border border-dashed border-zinc-300 bg-white rounded-2xl p-5 hover:bg-zinc-50 transition-all text-center flex flex-col items-center justify-center cursor-pointer">
                   <input
                     id="crypto-evidence-upload-final"
                     type="file"
@@ -472,14 +472,14 @@ export default function DepositWorkflow({ user, onBack, onSuccess }: DepositWork
                   />
                   {evidence ? (
                     <div className="space-y-2">
-                      <img src={evidence} alt="Proof of payment" className="max-h-24 mx-auto rounded-lg border border-slate-700" />
-                      <p className="text-[11px] text-emerald-400 font-semibold">Image loaded successfully! Tap to change.</p>
+                      <img src={evidence} alt="Proof of payment" className="max-h-24 mx-auto rounded-lg border border-zinc-200" />
+                      <p className="text-[11px] text-amber-600 font-semibold">Image loaded successfully! Tap to change.</p>
                     </div>
                   ) : (
                     <>
-                      <Upload size={24} className="text-zinc-500 mb-2" />
-                      <p className="text-xs font-bold text-zinc-300">Drag & Drop or Click to Upload</p>
-                      <p className="text-[10px] text-zinc-500 mt-1">Accepts PNG, JPG, JPEG (will be converted to secure proof)</p>
+                      <Upload size={24} className="text-zinc-400 mb-2" />
+                      <p className="text-xs font-bold text-zinc-600">Drag & Drop or Click to Upload</p>
+                      <p className="text-[10px] text-zinc-400 mt-1">Accepts PNG, JPG, JPEG (will be converted to secure proof)</p>
                     </>
                   )}
                 </div>
@@ -490,7 +490,7 @@ export default function DepositWorkflow({ user, onBack, onSuccess }: DepositWork
                 id="crypto-deposit-submit-final"
                 onClick={handleCryptoSubmit}
                 disabled={submitting || !evidence}
-                className="w-full flex items-center justify-center gap-2 py-3.5 bg-gradient-to-r from-emerald-600 to-teal-500 text-white hover:from-emerald-500 hover:to-teal-400 disabled:bg-slate-800 disabled:text-zinc-500 rounded-xl text-sm font-black transition-all shadow-md cursor-pointer uppercase tracking-wider"
+                className="w-full flex items-center justify-center gap-2 py-3.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600 disabled:bg-zinc-200 disabled:text-zinc-400 rounded-xl text-sm font-black transition-all shadow-md cursor-pointer uppercase tracking-wider"
               >
                 {submitting ? (
                   <>
@@ -511,7 +511,7 @@ export default function DepositWorkflow({ user, onBack, onSuccess }: DepositWork
                   setError(null);
                   setMethod('crypto');
                 }}
-                className="w-full py-2.5 bg-slate-850 hover:bg-slate-800 text-zinc-400 hover:text-zinc-300 rounded-xl text-xs font-bold transition-all cursor-pointer text-center"
+                className="w-full py-2.5 bg-white hover:bg-zinc-50 border border-zinc-200 text-zinc-500 hover:text-zinc-700 rounded-xl text-xs font-bold transition-all cursor-pointer text-center"
               >
                 Cancel & Go Back
               </button>
@@ -533,27 +533,27 @@ export default function DepositWorkflow({ user, onBack, onSuccess }: DepositWork
                       <div
                         key={merch.id}
                         id={`p2p-merchant-${merch.id}`}
-                        className="bg-slate-800 border border-slate-700/80 rounded-2xl p-4 hover:border-slate-700 transition-all flex flex-col justify-between gap-4"
+                        className="bg-white border border-zinc-200 rounded-2xl p-4 hover:border-amber-400 transition-all flex flex-col justify-between gap-4"
                       >
                         <div className="flex justify-between items-start">
                           {/* Rating top-left */}
-                          <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-bold text-[10px]">
-                            <Star size={10} className="fill-emerald-400 text-emerald-400" />
+                          <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-600 font-bold text-[10px]">
+                            <Star size={10} className="fill-amber-500 text-amber-500" />
                             <span>{merch.rating.toFixed(2)} Rating</span>
                           </div>
                           {/* Merchant Name top-right */}
-                          <span className="text-xs font-black text-zinc-300 tracking-tight">{merch.name}</span>
+                          <span className="text-xs font-black text-zinc-700 tracking-tight">{merch.name}</span>
                         </div>
 
                         <div className="flex justify-between items-end">
                           <div>
                             <div className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">Conversion Rate</div>
-                            <div className="text-base font-black text-emerald-400 font-mono mt-0.5">
+                            <div className="text-base font-black text-amber-600 font-mono mt-0.5">
                               {merch.rate.toLocaleString()} Shs <span className="text-xs text-zinc-400 font-normal">/ 1 USD</span>
                             </div>
                             <div className="flex gap-1.5 mt-1.5">
                               {merch.providers.map(prov => (
-                                <span key={prov} className="text-[9px] px-2 py-0.5 bg-slate-950 border border-slate-800 text-zinc-400 rounded-md font-semibold">
+                                <span key={prov} className="text-[9px] px-2 py-0.5 bg-zinc-50 border border-zinc-200 text-zinc-500 rounded-md font-semibold">
                                   {prov}
                                 </span>
                               ))}
@@ -566,7 +566,7 @@ export default function DepositWorkflow({ user, onBack, onSuccess }: DepositWork
                               setSelectedMerchant(merch);
                               setMethod('p2p_calc');
                             }}
-                            className="px-5 py-2 bg-gradient-to-r from-emerald-600 to-teal-500 text-white hover:from-emerald-500 hover:to-teal-400 rounded-xl text-xs font-bold shadow-md shadow-emerald-500/10 cursor-pointer"
+                            className="px-5 py-2 bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600 rounded-xl text-xs font-bold shadow-md shadow-amber-500/10 cursor-pointer"
                           >
                             BUY
                           </button>
@@ -583,17 +583,17 @@ export default function DepositWorkflow({ user, onBack, onSuccess }: DepositWork
           {method === 'p2p_calc' && selectedMerchant && (
             <div className="space-y-5">
               {/* Merchant Details Card */}
-              <div className="bg-slate-800 border border-slate-700 rounded-2xl p-4">
+              <div className="bg-white border border-zinc-200 rounded-2xl p-4">
                 <div className="flex justify-between">
-                  <span className="text-xs text-zinc-400 font-bold">{selectedMerchant.name}</span>
-                  <div className="flex items-center gap-1 text-[11px] text-emerald-400 font-bold">
-                    <Star size={12} className="fill-emerald-400 text-emerald-400" />
+                  <span className="text-xs text-zinc-500 font-bold">{selectedMerchant.name}</span>
+                  <div className="flex items-center gap-1 text-[11px] text-amber-600 font-bold">
+                    <Star size={12} className="fill-amber-500 text-amber-500" />
                     <span>{selectedMerchant.rating}</span>
                   </div>
                 </div>
                 <div className="mt-2 text-xs text-zinc-500">
                   <span>Merchant Rate: </span>
-                  <span className="font-mono font-bold text-zinc-200">{selectedMerchant.rate} Shs = 1.00 USD</span>
+                  <span className="font-mono font-bold text-zinc-700">{selectedMerchant.rate} Shs = 1.00 USD</span>
                 </div>
               </div>
 
@@ -601,8 +601,8 @@ export default function DepositWorkflow({ user, onBack, onSuccess }: DepositWork
               <div className="space-y-4">
                 <div className="space-y-1.5">
                   <div className="flex justify-between items-center">
-                    <label className="text-xs font-semibold text-zinc-400">Amount (Local Currency - Shillings)</label>
-                    <span className="text-[10px] text-zinc-500 font-semibold">Max Limit: 1,000,000 Shs</span>
+                    <label className="text-xs font-semibold text-zinc-500">Amount (Local Currency - Shillings)</label>
+                    <span className="text-[10px] text-zinc-400 font-semibold">Max Limit: 1,000,000 Shs</span>
                   </div>
                   <div className="relative">
                     <input
@@ -612,23 +612,23 @@ export default function DepositWorkflow({ user, onBack, onSuccess }: DepositWork
                       placeholder="e.g. 50000"
                       value={amountShillings}
                       onChange={(e) => setAmountShillings(e.target.value)}
-                      className="w-full pl-4 pr-16 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-white font-mono"
+                      className="w-full pl-4 pr-16 py-3 bg-white border border-zinc-200 rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 text-zinc-800 font-mono"
                     />
                     <button
                       type="button"
                       onClick={() => setAmountShillings('1000000')}
                       className="absolute inset-y-0 right-0 pr-3 flex items-center"
                     >
-                      <span className="bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 font-black text-[10px] px-2.5 py-1 rounded-md border border-emerald-500/30 transition-all cursor-pointer">
+                      <span className="bg-amber-500/15 hover:bg-amber-500/25 text-amber-600 font-black text-[10px] px-2.5 py-1 rounded-md border border-amber-500/30 transition-all cursor-pointer">
                         MAX
                       </span>
                     </button>
                   </div>
                 </div>
 
-                <div className="bg-slate-950 border border-slate-850 rounded-2xl p-4 flex justify-between items-center">
+                <div className="bg-white border border-zinc-200 rounded-2xl p-4 flex justify-between items-center">
                   <span className="text-xs text-zinc-500 font-semibold">Live-calculated USD Equivalent</span>
-                  <span className="text-lg font-black text-emerald-400 font-mono">
+                  <span className="text-lg font-black text-amber-600 font-mono">
                     $ {calculatedUSD.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </span>
                 </div>
@@ -639,7 +639,7 @@ export default function DepositWorkflow({ user, onBack, onSuccess }: DepositWork
                 id="p2p-proceed-to-pay"
                 disabled={calculatedUSD <= 0}
                 onClick={() => setMethod('p2p_instructions')}
-                className="w-full flex items-center justify-between py-3 px-5 bg-gradient-to-r from-emerald-600 to-teal-500 text-white hover:from-emerald-500 hover:to-teal-400 disabled:bg-slate-800 disabled:text-zinc-500 rounded-xl text-sm font-bold transition-all shadow-md mt-6 cursor-pointer"
+                className="w-full flex items-center justify-between py-3 px-5 bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600 disabled:bg-zinc-200 disabled:text-zinc-400 rounded-xl text-sm font-bold transition-all shadow-md mt-6 cursor-pointer"
               >
                 <span>Proceed to Pay</span>
                 <ChevronRight size={16} />
@@ -650,38 +650,38 @@ export default function DepositWorkflow({ user, onBack, onSuccess }: DepositWork
           {/* P2P Instructions Screen */}
           {method === 'p2p_instructions' && selectedMerchant && (
             <div className="space-y-5">
-              <div className="bg-slate-800 border border-slate-700 rounded-2xl p-5 space-y-4">
-                <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider text-center">Payment Escrow Instructions</h3>
+              <div className="bg-white border border-zinc-200 rounded-2xl p-5 space-y-4">
+                <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider text-center">Payment Escrow Instructions</h3>
                 
                 <div className="space-y-3">
-                  <div className="flex justify-between items-center text-xs border-b border-slate-700/60 pb-2">
+                  <div className="flex justify-between items-center text-xs border-b border-zinc-100 pb-2">
                     <span className="text-zinc-500">Pay Merchant Name</span>
-                    <span className="font-bold text-zinc-100">{selectedMerchant.name}</span>
+                    <span className="font-bold text-zinc-800">{selectedMerchant.name}</span>
                   </div>
-                  <div className="flex justify-between items-center text-xs border-b border-slate-700/60 pb-2">
+                  <div className="flex justify-between items-center text-xs border-b border-zinc-100 pb-2">
                     <span className="text-zinc-500">Merchant Payment Phone</span>
                     <div className="flex items-center gap-1.5">
-                      <span className="font-mono font-bold text-emerald-400">{selectedMerchant.paymentNumber}</span>
+                      <span className="font-mono font-bold text-amber-600">{selectedMerchant.paymentNumber}</span>
                       <button 
                         id="copy-merchant-phone"
                         onClick={() => handleCopy(selectedMerchant.paymentNumber)}
-                        className="text-zinc-500 hover:text-white p-0.5"
+                        className="text-zinc-400 hover:text-zinc-600 p-0.5"
                       >
                         <Copy size={12} />
                       </button>
                     </div>
                   </div>
-                  <div className="flex justify-between items-center text-xs border-b border-slate-700/60 pb-2">
+                  <div className="flex justify-between items-center text-xs border-b border-zinc-100 pb-2">
                     <span className="text-zinc-500">Exact Shillings to Transfer</span>
-                    <span className="font-mono font-bold text-zinc-100">{parseFloat(amountShillings).toLocaleString()} Shs</span>
+                    <span className="font-mono font-bold text-zinc-800">{parseFloat(amountShillings).toLocaleString()} Shs</span>
                   </div>
-                  <div className="flex justify-between items-center text-xs border-b border-slate-700/60 pb-2">
+                  <div className="flex justify-between items-center text-xs border-b border-zinc-100 pb-2">
                     <span className="text-zinc-500">Transaction ID (ARBITRAGE Ref)</span>
-                    <span className="font-mono font-bold text-zinc-400 text-[10px]">{p2pTxId}</span>
+                    <span className="font-mono font-bold text-zinc-500 text-[10px]">{p2pTxId}</span>
                   </div>
                 </div>
 
-                <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] rounded-xl leading-relaxed">
+                <div className="p-3 bg-amber-50 border border-amber-100 text-amber-800 text-[10px] rounded-xl leading-relaxed">
                   <strong>Notice:</strong> Please send the exact amount of local money. Include the reference <strong>{p2pTxId}</strong> in the payment description if your mobile wallet supports it.
                 </div>
               </div>
@@ -693,7 +693,7 @@ export default function DepositWorkflow({ user, onBack, onSuccess }: DepositWork
                   setError(null);
                   setMethod('p2p_confirm');
                 }}
-                className="w-full flex items-center justify-between py-3.5 px-5 bg-gradient-to-r from-emerald-600 to-teal-500 text-white hover:from-emerald-500 hover:to-teal-400 rounded-xl text-sm font-bold transition-all shadow-md mt-4 cursor-pointer"
+                className="w-full flex items-center justify-between py-3.5 px-5 bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600 rounded-xl text-sm font-bold transition-all shadow-md mt-4 cursor-pointer"
               >
                 <span>Proceed to Receipt paste</span>
                 <ChevronRight size={16} />
@@ -704,25 +704,25 @@ export default function DepositWorkflow({ user, onBack, onSuccess }: DepositWork
           {/* P2P Paste Receipt / Confirm Page */}
           {method === 'p2p_confirm' && selectedMerchant && (
             <div className="space-y-5">
-              <div className="bg-slate-800 border border-slate-700 rounded-2xl p-4 space-y-4">
-                <div className="flex justify-between items-center text-xs border-b border-slate-700/60 pb-2">
+              <div className="bg-white border border-zinc-200 rounded-2xl p-4 space-y-4">
+                <div className="flex justify-between items-center text-xs border-b border-zinc-100 pb-2">
                   <span className="text-zinc-500">Merchant</span>
-                  <span className="font-bold text-zinc-100">{selectedMerchant.name}</span>
+                  <span className="font-bold text-zinc-800">{selectedMerchant.name}</span>
                 </div>
-                <div className="flex justify-between items-center text-xs border-b border-slate-700/60 pb-2">
+                <div className="flex justify-between items-center text-xs border-b border-zinc-100 pb-2">
                   <span className="text-zinc-500">Exact Amount Paid</span>
-                  <span className="font-mono font-bold text-emerald-400">{parseFloat(amountShillings).toLocaleString()} Shs</span>
+                  <span className="font-mono font-bold text-amber-600">{parseFloat(amountShillings).toLocaleString()} Shs</span>
                 </div>
                 <div className="flex justify-between items-center text-xs">
                   <span className="text-zinc-500">Required Reference</span>
-                  <span className="font-mono font-bold text-zinc-300">{p2pTxId}</span>
+                  <span className="font-mono font-bold text-zinc-600">{p2pTxId}</span>
                 </div>
               </div>
 
               {/* Paste Confirmation Text */}
               <div className="space-y-2">
-                <label className="text-xs font-semibold text-zinc-400 flex items-center gap-1.5">
-                  <MessageSquare size={14} className="text-emerald-400" />
+                <label className="text-xs font-semibold text-zinc-500 flex items-center gap-1.5">
+                  <MessageSquare size={14} className="text-amber-500" />
                   Paste payment receipt / Mobile Money SMS text
                 </label>
                 <textarea
@@ -732,7 +732,7 @@ export default function DepositWorkflow({ user, onBack, onSuccess }: DepositWork
                   placeholder="Paste the raw M-Pesa / MTN message or reference SMS here as verification."
                   value={p2pMessage}
                   onChange={(e) => setP2pMessage(e.target.value)}
-                  className="w-full p-4 bg-slate-950 border border-slate-800 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-white font-mono placeholder-zinc-600 leading-normal"
+                  className="w-full p-4 bg-white border border-zinc-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 text-zinc-800 font-mono placeholder-zinc-400 leading-normal"
                 />
               </div>
 
@@ -741,7 +741,7 @@ export default function DepositWorkflow({ user, onBack, onSuccess }: DepositWork
                 id="p2p-deposit-submit-final"
                 onClick={handleP2PSubmit}
                 disabled={submitting || !p2pMessage.trim()}
-                className="w-full flex items-center justify-center gap-2 py-3.5 bg-gradient-to-r from-emerald-600 to-teal-500 text-white hover:from-emerald-500 hover:to-teal-400 disabled:bg-slate-800 disabled:text-zinc-500 rounded-xl text-sm font-black transition-all shadow-md mt-4 cursor-pointer uppercase tracking-wider"
+                className="w-full flex items-center justify-center gap-2 py-3.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600 disabled:bg-zinc-200 disabled:text-zinc-400 rounded-xl text-sm font-black transition-all shadow-md mt-4 cursor-pointer uppercase tracking-wider"
               >
                 {submitting ? (
                   <>
@@ -759,7 +759,7 @@ export default function DepositWorkflow({ user, onBack, onSuccess }: DepositWork
                   setError(null);
                   setMethod('p2p_instructions');
                 }}
-                className="w-full py-2.5 bg-slate-850 hover:bg-slate-800 text-zinc-400 hover:text-zinc-300 rounded-xl text-xs font-bold transition-all cursor-pointer text-center"
+                className="w-full py-2.5 bg-white hover:bg-zinc-50 border border-zinc-200 text-zinc-500 hover:text-zinc-700 rounded-xl text-xs font-bold transition-all cursor-pointer text-center"
               >
                 Cancel & Go Back
               </button>

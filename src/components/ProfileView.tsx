@@ -425,190 +425,191 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[300px] gap-3">
-        <div className="w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
-        <p className="text-xs text-zinc-500 font-medium">Loading profile details...</p>
+      <div className="flex flex-col items-center justify-center w-full min-h-screen bg-[#FFF3D6] gap-3 font-sans">
+        <div className="w-8 h-8 border-4 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
+        <p className="text-xs text-zinc-600 font-medium">Loading profile details...</p>
       </div>
     );
   }
 
   return (
-    <div id="profile-view-container" className="max-w-md mx-auto p-4 sm:p-6 bg-slate-900 text-zinc-100 min-h-[calc(100vh-140px)]">
-      {activeSubPage === 'menu' && (
-        <div className="space-y-6">
-          {/* Header */}
-          <div className="flex items-center gap-3">
-            <button 
-              id="profile-back-btn"
-              onClick={() => {
-                localStorage.removeItem('profile_subpage');
-                onBack();
-              }}
-              className="p-2 rounded-full bg-slate-800 border border-slate-700 text-zinc-400 hover:text-white transition-colors cursor-pointer"
-            >
-              <ArrowLeft size={18} />
-            </button>
-            <div className="text-left">
-              <h2 className="text-xl font-bold tracking-tight">Security & Profile</h2>
-              <p className="text-xs text-zinc-500">Manage security settings and credentials</p>
+    <div className="w-full min-h-screen bg-[#FFF3D6] font-sans pb-12 text-zinc-800 transition-colors duration-300">
+      <div id="profile-view-container" className="max-w-md mx-auto p-4 sm:p-6">
+        {activeSubPage === 'menu' && (
+          <div className="space-y-6">
+            {/* Header */}
+            <div className="flex items-center gap-3">
+              <button 
+                id="profile-back-btn"
+                onClick={() => {
+                  localStorage.removeItem('profile_subpage');
+                  onBack();
+                }}
+                className="p-2.5 rounded-full bg-white border border-zinc-200 text-zinc-650 hover:text-zinc-900 transition-colors cursor-pointer shadow-sm active:scale-95"
+              >
+                <ArrowLeft size={18} />
+              </button>
+              <div className="text-left">
+                <h2 className="text-xl font-bold tracking-tight text-zinc-850">Security & Profile</h2>
+                <p className="text-xs text-zinc-500">Manage security settings and credentials</p>
+              </div>
+            </div>
+
+            {/* User profile banner */}
+            <div className="bg-white border border-zinc-200/80 rounded-2xl p-4 flex items-center gap-3.5 text-left shadow-sm">
+              <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-amber-500 to-yellow-500 flex items-center justify-center text-white font-extrabold text-base shadow-md uppercase">
+                {displayName ? displayName.charAt(0) : (user.email ? user.email.charAt(0) : 'U')}
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-sm font-bold text-zinc-800 truncate">{displayName || 'Anonymous User'}</h3>
+                <p className="text-[11px] text-zinc-500 font-mono truncate">{user.email}</p>
+              </div>
+              <div className="bg-emerald-50 border border-emerald-100 text-emerald-600 text-[10px] px-2.5 py-1 rounded-full font-bold flex items-center gap-1 shrink-0">
+                <Shield size={10} />
+                <span>Verified</span>
+              </div>
+            </div>
+
+            {/* Navigation Links List */}
+            <div className="space-y-3.5 text-left">
+              {/* Personal Info */}
+              <button
+                id="nav-personal-info"
+                onClick={() => { setActiveSubPage('personal'); setMessage(null); }}
+                className="w-full bg-white border border-zinc-200/60 hover:border-amber-400/50 hover:bg-zinc-50 p-4 rounded-2xl flex items-center gap-4 transition-all cursor-pointer group shadow-sm"
+              >
+                <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-600 shrink-0 group-hover:bg-amber-500/20 group-hover:text-amber-700 transition-all">
+                  <User size={18} />
+                </div>
+                <div className="flex-1 min-w-0 text-left">
+                  <h4 className="text-sm font-bold text-zinc-700 group-hover:text-zinc-900 transition-colors">Personal Details</h4>
+                  <p className="text-[11px] text-zinc-500 mt-0.5 leading-tight">Display name and basic account settings</p>
+                </div>
+                <ChevronRight size={16} className="text-zinc-400 group-hover:text-zinc-600 transition-colors shrink-0" />
+              </button>
+
+              {/* Referral Program */}
+              <button
+                id="nav-referral-program"
+                onClick={() => { setActiveSubPage('referral'); setMessage(null); }}
+                className="w-full bg-white border border-zinc-200/60 hover:border-amber-400/50 hover:bg-zinc-50 p-4 rounded-2xl flex items-center gap-4 transition-all cursor-pointer group shadow-sm"
+              >
+                <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-600 shrink-0 group-hover:bg-amber-500/20 group-hover:text-amber-700 transition-all">
+                  <Gift size={18} />
+                </div>
+                <div className="flex-1 min-w-0 text-left">
+                  <h4 className="text-sm font-bold text-zinc-700 group-hover:text-zinc-900 transition-colors">Referral Program</h4>
+                  <p className="text-[11px] text-zinc-500 mt-0.5 leading-tight">Invite friends and track your referral list</p>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-zinc-100 border border-zinc-200 text-zinc-550">
+                    {referredUsers.length}
+                  </span>
+                  <ChevronRight size={16} className="text-zinc-400 group-hover:text-zinc-600 transition-colors shrink-0" />
+                </div>
+              </button>
+
+              {/* Wallet PIN */}
+              <button
+                id="nav-wallet-pin"
+                onClick={() => { setActiveSubPage('pin'); setPinMessage(null); }}
+                className="w-full bg-white border border-zinc-200/60 hover:border-amber-400/50 hover:bg-zinc-50 p-4 rounded-2xl flex items-center gap-4 transition-all cursor-pointer group shadow-sm"
+              >
+                <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-600 shrink-0 group-hover:bg-amber-500/20 group-hover:text-amber-700 transition-all">
+                  <Lock size={18} />
+                </div>
+                <div className="flex-1 min-w-0 text-left">
+                  <h4 className="text-sm font-bold text-zinc-700 group-hover:text-zinc-900 transition-colors">Wallet Security PIN</h4>
+                  <p className="text-[11px] text-zinc-500 mt-0.5 leading-tight">4-digit security PIN for secure cashouts</p>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {profile?.walletPassword ? (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-100 text-emerald-600">
+                      Active
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 border border-amber-100 text-amber-600 animate-pulse">
+                      Not Set
+                    </span>
+                  )}
+                  <ChevronRight size={16} className="text-zinc-400 group-hover:text-zinc-600 transition-colors shrink-0" />
+                </div>
+              </button>
+
+              {/* Google Authenticator */}
+              <button
+                id="nav-google-authenticator"
+                onClick={() => { setActiveSubPage('2fa'); }}
+                className="w-full bg-white border border-zinc-200/60 hover:border-amber-400/50 hover:bg-zinc-50 p-4 rounded-2xl flex items-center gap-4 transition-all cursor-pointer group shadow-sm"
+              >
+                <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-600 shrink-0 group-hover:bg-amber-500/20 group-hover:text-amber-700 transition-all">
+                  <Smartphone size={18} />
+                </div>
+                <div className="flex-1 min-w-0 text-left">
+                  <h4 className="text-sm font-bold text-zinc-700 group-hover:text-zinc-900 transition-colors">Google Authenticator</h4>
+                  <p className="text-[11px] text-zinc-500 mt-0.5 leading-tight">Add dynamic passcode 2FA protection</p>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {profile?.twoFactorEnabled ? (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-100 text-emerald-600">
+                      Active
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-zinc-100 border border-zinc-200 text-zinc-500">
+                      Disabled
+                    </span>
+                  )}
+                  <ChevronRight size={16} className="text-zinc-400 group-hover:text-zinc-600 transition-colors shrink-0" />
+                </div>
+              </button>
+
+              {/* Customer Support */}
+              <button
+                id="nav-customer-support"
+                onClick={() => { setActiveSubPage('support'); setMessage(null); }}
+                className="w-full bg-white border border-zinc-200/60 hover:border-amber-400/50 hover:bg-zinc-50 p-4 rounded-2xl flex items-center gap-4 transition-all cursor-pointer group shadow-sm"
+              >
+                <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-600 shrink-0 group-hover:bg-amber-500/20 group-hover:text-amber-700 transition-all">
+                  <HelpCircle size={18} />
+                </div>
+                <div className="flex-1 min-w-0 text-left">
+                  <h4 className="text-sm font-bold text-zinc-700 group-hover:text-zinc-900 transition-colors">Customer Support</h4>
+                  <p className="text-[11px] text-zinc-500 mt-0.5 leading-tight">Get 24/7 assistance via WhatsApp & Telegram</p>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-100 text-emerald-600">
+                    Online
+                  </span>
+                  <ChevronRight size={16} className="text-zinc-400 group-hover:text-zinc-600 transition-colors shrink-0" />
+                </div>
+              </button>
+
+              {/* Mobile App & Android Sync */}
+              <button
+                id="nav-mobile-app"
+                onClick={() => { setActiveSubPage('mobile_app'); setMessage(null); }}
+                className="w-full bg-gradient-to-r from-amber-50 to-amber-100/30 border border-amber-300 hover:border-amber-400 hover:bg-amber-100/50 p-4 rounded-2xl flex items-center gap-4 transition-all cursor-pointer group shadow-sm"
+              >
+                <div className="w-10 h-10 rounded-xl bg-amber-500/15 flex items-center justify-center text-amber-600 shrink-0 group-hover:scale-105 transition-all">
+                  <Smartphone size={18} />
+                </div>
+                <div className="flex-1 min-w-0 text-left">
+                  <h4 className="text-sm font-bold text-zinc-800 flex items-center gap-1.5">
+                    Mobile App (Android/iOS)
+                    <span className="text-[8px] bg-amber-500/15 text-amber-700 border border-amber-500/20 px-1 rounded-full font-extrabold uppercase tracking-wider animate-pulse">Sync</span>
+                  </h4>
+                  <p className="text-[11px] text-zinc-600 mt-0.5 leading-tight font-medium">Install on your Android home screen in 5 seconds</p>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-600">
+                    Ready
+                  </span>
+                  <ChevronRight size={16} className="text-amber-600 group-hover:translate-x-0.5 transition-transform" />
+                </div>
+              </button>
             </div>
           </div>
-
-          {/* User profile banner */}
-          <div className="bg-slate-800/40 border border-slate-800 rounded-2xl p-4 flex items-center gap-3.5 text-left">
-            <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center text-white font-extrabold text-base shadow-md uppercase">
-              {displayName ? displayName.charAt(0) : (user.email ? user.email.charAt(0) : 'U')}
-            </div>
-            <div className="flex-1 min-w-0">
-              <h3 className="text-sm font-bold text-zinc-100 truncate">{displayName || 'Anonymous User'}</h3>
-              <p className="text-[11px] text-zinc-500 font-mono truncate">{user.email}</p>
-            </div>
-            <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] px-2.5 py-1 rounded-full font-bold flex items-center gap-1 shrink-0">
-              <Shield size={10} />
-              <span>Verified</span>
-            </div>
-          </div>
-
-          {/* Navigation Links List */}
-          <div className="space-y-3.5 text-left">
-            {/* Personal Info */}
-            <button
-              id="nav-personal-info"
-              onClick={() => { setActiveSubPage('personal'); setMessage(null); }}
-              className="w-full bg-slate-800/50 border border-slate-800/60 hover:border-slate-700 hover:bg-slate-800/90 p-4 rounded-2xl flex items-center gap-4 transition-all cursor-pointer group"
-            >
-              <div className="w-10 h-10 rounded-xl bg-slate-900 border border-slate-700/50 flex items-center justify-center text-emerald-400 shrink-0 group-hover:bg-emerald-500/10 group-hover:text-emerald-300 transition-all">
-                <User size={18} />
-              </div>
-              <div className="flex-1 min-w-0 text-left">
-                <h4 className="text-sm font-bold text-zinc-200 group-hover:text-white transition-colors">Personal Details</h4>
-                <p className="text-[11px] text-zinc-500 mt-0.5 leading-tight">Display name and basic account settings</p>
-              </div>
-              <ChevronRight size={16} className="text-zinc-500 group-hover:text-zinc-300 transition-colors shrink-0" />
-            </button>
-
-            {/* Referral Program */}
-            <button
-              id="nav-referral-program"
-              onClick={() => { setActiveSubPage('referral'); setMessage(null); }}
-              className="w-full bg-slate-800/50 border border-slate-800/60 hover:border-slate-700 hover:bg-slate-800/90 p-4 rounded-2xl flex items-center gap-4 transition-all cursor-pointer group"
-            >
-              <div className="w-10 h-10 rounded-xl bg-slate-900 border border-slate-700/50 flex items-center justify-center text-emerald-400 shrink-0 group-hover:bg-emerald-500/10 group-hover:text-emerald-300 transition-all">
-                <Gift size={18} />
-              </div>
-              <div className="flex-1 min-w-0 text-left">
-                <h4 className="text-sm font-bold text-zinc-200 group-hover:text-white transition-colors">Referral Program</h4>
-                <p className="text-[11px] text-zinc-500 mt-0.5 leading-tight">Invite friends and track your referral list</p>
-              </div>
-              <div className="flex items-center gap-1.5 shrink-0">
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-900 border border-slate-700/60 text-zinc-400">
-                  {referredUsers.length}
-                </span>
-                <ChevronRight size={16} className="text-zinc-500 group-hover:text-zinc-300 transition-colors" />
-              </div>
-            </button>
-
-            {/* Wallet PIN */}
-            <button
-              id="nav-wallet-pin"
-              onClick={() => { setActiveSubPage('pin'); setPinMessage(null); }}
-              className="w-full bg-slate-800/50 border border-slate-800/60 hover:border-slate-700 hover:bg-slate-800/90 p-4 rounded-2xl flex items-center gap-4 transition-all cursor-pointer group"
-            >
-              <div className="w-10 h-10 rounded-xl bg-slate-900 border border-slate-700/50 flex items-center justify-center text-emerald-400 shrink-0 group-hover:bg-emerald-500/10 group-hover:text-emerald-300 transition-all">
-                <Lock size={18} />
-              </div>
-              <div className="flex-1 min-w-0 text-left">
-                <h4 className="text-sm font-bold text-zinc-200 group-hover:text-white transition-colors">Wallet Security PIN</h4>
-                <p className="text-[11px] text-zinc-500 mt-0.5 leading-tight">4-digit security PIN for secure cashouts</p>
-              </div>
-              <div className="flex items-center gap-1.5 shrink-0">
-                {profile?.walletPassword ? (
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
-                    Active
-                  </span>
-                ) : (
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400">
-                    Not Set
-                  </span>
-                )}
-                <ChevronRight size={16} className="text-zinc-500 group-hover:text-zinc-300 transition-colors" />
-              </div>
-            </button>
-
-            {/* Google Authenticator */}
-            <button
-              id="nav-google-authenticator"
-              onClick={() => { setActiveSubPage('2fa'); }}
-              className="w-full bg-slate-800/50 border border-slate-800/60 hover:border-slate-700 hover:bg-slate-800/90 p-4 rounded-2xl flex items-center gap-4 transition-all cursor-pointer group"
-            >
-              <div className="w-10 h-10 rounded-xl bg-slate-900 border border-slate-700/50 flex items-center justify-center text-emerald-400 shrink-0 group-hover:bg-emerald-500/10 group-hover:text-emerald-300 transition-all">
-                <Smartphone size={18} />
-              </div>
-              <div className="flex-1 min-w-0 text-left">
-                <h4 className="text-sm font-bold text-zinc-200 group-hover:text-white transition-colors">Google Authenticator</h4>
-                <p className="text-[11px] text-zinc-500 mt-0.5 leading-tight">Add dynamic passcode 2FA protection</p>
-              </div>
-              <div className="flex items-center gap-1.5 shrink-0">
-                {profile?.twoFactorEnabled ? (
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
-                    Active
-                  </span>
-                ) : (
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-900 border border-slate-700/60 text-zinc-400">
-                    Disabled
-                  </span>
-                )}
-                <ChevronRight size={16} className="text-zinc-500 group-hover:text-zinc-300 transition-colors" />
-              </div>
-            </button>
-
-            {/* Customer Support */}
-            <button
-              id="nav-customer-support"
-              onClick={() => { setActiveSubPage('support'); setMessage(null); }}
-              className="w-full bg-slate-800/50 border border-slate-800/60 hover:border-slate-700 hover:bg-slate-800/90 p-4 rounded-2xl flex items-center gap-4 transition-all cursor-pointer group"
-            >
-              <div className="w-10 h-10 rounded-xl bg-slate-900 border border-slate-700/50 flex items-center justify-center text-emerald-400 shrink-0 group-hover:bg-emerald-500/10 group-hover:text-emerald-300 transition-all">
-                <HelpCircle size={18} />
-              </div>
-              <div className="flex-1 min-w-0 text-left">
-                <h4 className="text-sm font-bold text-zinc-200 group-hover:text-white transition-colors">Customer Support</h4>
-                <p className="text-[11px] text-zinc-500 mt-0.5 leading-tight">Get 24/7 assistance via WhatsApp & Telegram</p>
-              </div>
-              <div className="flex items-center gap-1.5 shrink-0">
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
-                  Online
-                </span>
-                <ChevronRight size={16} className="text-zinc-500 group-hover:text-zinc-300 transition-colors" />
-              </div>
-            </button>
-
-            {/* Mobile App & Android Sync */}
-            <button
-              id="nav-mobile-app"
-              onClick={() => { setActiveSubPage('mobile_app'); setMessage(null); }}
-              className="w-full bg-gradient-to-r from-slate-850 to-slate-800/60 border border-emerald-500/30 hover:border-emerald-400/60 hover:bg-slate-850/90 p-4 rounded-2xl flex items-center gap-4 transition-all cursor-pointer group shadow-[0_0_12px_rgba(16,185,129,0.06)]"
-            >
-              <div className="w-10 h-10 rounded-xl bg-emerald-500/15 flex items-center justify-center text-emerald-400 shrink-0 group-hover:scale-105 transition-all">
-                <Smartphone size={18} />
-              </div>
-              <div className="flex-1 min-w-0 text-left">
-                <h4 className="text-sm font-bold text-zinc-100 flex items-center gap-1.5">
-                  Mobile App (Android/iOS)
-                  <span className="text-[8px] bg-emerald-400/15 text-emerald-400 border border-emerald-500/20 px-1 rounded-full font-extrabold uppercase tracking-wider animate-pulse">Sync</span>
-                </h4>
-                <p className="text-[11px] text-zinc-400 mt-0.5 leading-tight">Install on your Android home screen in 5 seconds</p>
-              </div>
-              <div className="flex items-center gap-1.5 shrink-0">
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
-                  Ready
-                </span>
-                <ChevronRight size={16} className="text-emerald-400 group-hover:translate-x-0.5 transition-transform" />
-              </div>
-            </button>
-          </div>
-        </div>
-      )}
+        )}
 
       {/* Subpage: Personal details */}
       {activeSubPage === 'personal' && (
@@ -618,12 +619,12 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
             <button 
               id="personal-back-btn"
               onClick={() => { setActiveSubPage('menu'); setMessage(null); }}
-              className="p-2 rounded-full bg-slate-800 border border-slate-700 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+              className="p-2.5 rounded-full bg-white border border-zinc-200 text-zinc-650 hover:text-zinc-900 transition-colors cursor-pointer shadow-sm active:scale-95"
             >
               <ArrowLeft size={18} />
             </button>
             <div className="text-left">
-              <h2 className="text-xl font-bold tracking-tight">Personal Details</h2>
+              <h2 className="text-xl font-bold tracking-tight text-zinc-800">Personal Details</h2>
               <p className="text-xs text-zinc-500">View and edit display configuration</p>
             </div>
           </div>
@@ -631,10 +632,10 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
           {message && (
             <div id="profile-feedback-message" className={`p-3.5 rounded-xl border flex items-center gap-2.5 text-xs text-left ${
               message.type === 'success' 
-                ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
-                : 'bg-red-500/10 border-red-500/20 text-red-400'
+                ? 'bg-emerald-550/10 border-emerald-500/25 text-emerald-650' 
+                : 'bg-red-50 border-red-100 text-red-600'
             }`}>
-              {message.type === 'success' ? <Check size={16} /> : <AlertCircle size={16} />}
+              {message.type === 'success' ? <Check size={16} className="text-emerald-600" /> : <AlertCircle size={16} className="text-red-500" />}
               <span>{message.text}</span>
             </div>
           )}
@@ -643,18 +644,18 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
           <form onSubmit={handleSave} className="space-y-5">
             
             {/* Read-Only Account Details */}
-            <div className="bg-slate-800/60 border border-slate-700 rounded-xl p-4 space-y-2.5 text-left">
+            <div className="bg-white border border-zinc-200 shadow-sm rounded-xl p-4 space-y-2.5 text-left">
               <div className="flex justify-between items-center text-xs">
                 <span className="text-zinc-500">Account Email</span>
-                <span className="font-mono text-zinc-300 font-medium">{user.email}</span>
+                <span className="font-mono text-zinc-600 font-medium">{user.email}</span>
               </div>
-              <div className="flex justify-between items-center text-xs border-t border-slate-700 pt-2.5">
+              <div className="flex justify-between items-center text-xs border-t border-zinc-100 pt-2.5">
                 <span className="text-zinc-500">Unique CODE</span>
-                <span className="font-mono text-emerald-400 font-bold select-all tracking-wider text-sm">{(profile as any)?.uniqueCode || '-----'}</span>
+                <span className="font-mono text-amber-600 font-bold select-all tracking-wider text-sm">{(profile as any)?.uniqueCode || '-----'}</span>
               </div>
-              <div className="flex justify-between items-center text-xs border-t border-slate-700 pt-2.5">
+              <div className="flex justify-between items-center text-xs border-t border-zinc-100 pt-2.5">
                 <span className="text-zinc-500">Wallet Status</span>
-                <span className="font-semibold flex items-center gap-1 text-emerald-400">
+                <span className="font-semibold flex items-center gap-1 text-emerald-600">
                   <Shield size={12} />
                   {profile?.withdrawalEnabled ? 'Active / Approved' : 'Suspended by Admin'}
                 </span>
@@ -663,8 +664,8 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
 
             {/* Display Name Input */}
             <div className="space-y-1.5 text-left">
-              <label className="text-xs font-semibold text-zinc-400 flex items-center gap-1.5">
-                <User size={14} className="text-emerald-400" />
+              <label className="text-xs font-semibold text-zinc-650 flex items-center gap-1.5">
+                <User size={14} className="text-amber-500" />
                 Display Name
               </label>
               <input
@@ -674,7 +675,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                 placeholder="Enter display name"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
-                className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 placeholder-zinc-600 text-white"
+                className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 placeholder-zinc-400 text-zinc-800"
               />
             </div>
 
@@ -683,7 +684,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
               id="profile-save-btn"
               type="submit"
               disabled={saving}
-              className="w-full flex items-center justify-center gap-2 py-3 bg-gradient-to-r from-emerald-600 to-teal-500 text-white hover:from-emerald-500 hover:to-teal-400 disabled:bg-slate-800 disabled:text-zinc-500 rounded-xl text-sm font-bold transition-all shadow-md mt-6 cursor-pointer"
+              className="w-full flex items-center justify-center gap-2 py-3 bg-gradient-to-r from-amber-500 to-amber-600 text-white hover:from-amber-600 hover:to-amber-700 disabled:bg-zinc-100 disabled:text-zinc-400 rounded-xl text-sm font-bold transition-all shadow-md shadow-amber-500/10 mt-6 cursor-pointer"
             >
               {saving ? (
                 <>
@@ -709,37 +710,37 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
             <button 
               id="referral-back-btn"
               onClick={() => { setActiveSubPage('menu'); }}
-              className="p-2 rounded-full bg-slate-800 border border-slate-700 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+              className="p-2.5 rounded-full bg-white border border-zinc-200 text-zinc-650 hover:text-zinc-900 transition-colors cursor-pointer shadow-sm active:scale-95"
             >
               <ArrowLeft size={18} />
             </button>
             <div className="text-left">
-              <h2 className="text-xl font-bold tracking-tight">Referral Program</h2>
+              <h2 className="text-xl font-bold tracking-tight text-zinc-800">Referral Program</h2>
               <p className="text-xs text-zinc-500">Invite friends and track achievements</p>
             </div>
           </div>
 
           <div id="referral-program-section" className="space-y-4 text-left">
             {/* Promo / Motivation Banner */}
-            <div className="bg-gradient-to-br from-emerald-500/20 via-slate-800/80 to-slate-800 border border-emerald-500/30 rounded-2xl p-4 relative overflow-hidden">
+            <div className="bg-gradient-to-br from-amber-500/10 via-white to-white border border-amber-200/85 rounded-2xl p-4 relative overflow-hidden shadow-sm">
               <div className="absolute top-0 right-0 p-3 opacity-15">
-                <Gift className="text-emerald-400" size={80} />
+                <Gift className="text-amber-500" size={80} />
               </div>
               <div className="space-y-1 relative z-10">
-                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] font-bold uppercase tracking-wider border border-emerald-500/20">
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-700 text-[10px] font-bold uppercase tracking-wider border border-amber-500/20">
                   <Sparkles size={11} className="animate-pulse" /> Limited Time Event
                 </div>
-                <h3 className="text-base font-bold text-white pt-1">Earn 0.50 USDT per Invite!</h3>
-                <p className="text-xs text-zinc-300 leading-relaxed max-w-[85%]">
+                <h3 className="text-base font-bold text-zinc-800 pt-1">Earn 0.50 USDT per Invite!</h3>
+                <p className="text-xs text-zinc-600 leading-relaxed max-w-[85%]">
                   Get paid instantly when your friends register using your link or code. Unlimited rewards, credited directly to your account.
                 </p>
-                <div className="flex gap-4 pt-3 text-[11px] text-zinc-400 font-medium">
+                <div className="flex gap-4 pt-3 text-[11px] text-zinc-500 font-medium">
                   <div className="flex items-center gap-1">
-                    <CheckCircle2 size={12} className="text-emerald-400" />
+                    <CheckCircle2 size={12} className="text-amber-500" />
                     <span>Instant Credit</span>
                   </div>
                   <div className="flex items-center gap-1">
-                    <CheckCircle2 size={12} className="text-emerald-400" />
+                    <CheckCircle2 size={12} className="text-amber-500" />
                     <span>Zero Caps</span>
                   </div>
                 </div>
@@ -748,11 +749,11 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
 
             {/* Referral Earnings & Stats Card */}
             <div className="grid grid-cols-2 gap-3">
-              <div className="bg-slate-800/40 border border-slate-700/60 rounded-2xl p-4 flex flex-col justify-between">
+              <div className="bg-white border border-zinc-200/80 shadow-sm rounded-2xl p-4 flex flex-col justify-between">
                 <div>
                   <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Total Earned</span>
                   <div className="mt-1 flex items-baseline gap-1">
-                    <span className="text-2xl font-bold text-emerald-400 font-mono">
+                    <span className="text-2xl font-bold text-amber-600 font-mono">
                       {(() => {
                         let total = 0;
                         for (let i = 1; i <= referredUsers.length; i++) {
@@ -764,17 +765,17 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                         return total.toFixed(2);
                       })()}
                     </span>
-                    <span className="text-xs text-zinc-400 font-bold">USDT</span>
+                    <span className="text-xs text-zinc-450 font-bold">USDT</span>
                   </div>
                 </div>
                 <p className="text-[10px] text-zinc-500 mt-2">Paid directly to your balance</p>
               </div>
 
-              <div className="bg-slate-800/40 border border-slate-700/60 rounded-2xl p-4 flex flex-col justify-between">
+              <div className="bg-white border border-zinc-200/80 shadow-sm rounded-2xl p-4 flex flex-col justify-between">
                 <div>
                   <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Successful Invites</span>
                   <div className="mt-1 flex items-baseline gap-1">
-                    <span className="text-2xl font-bold text-white font-mono">{referredUsers.length}</span>
+                    <span className="text-2xl font-bold text-zinc-800 font-mono">{referredUsers.length}</span>
                     <span className="text-xs text-zinc-500 font-bold ml-1">friends</span>
                   </div>
                 </div>
@@ -800,20 +801,20 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
               }
 
               return (
-                <div className="bg-slate-800/40 border border-slate-700/60 rounded-2xl p-5 space-y-6">
+                <div className="bg-white border border-zinc-200/80 shadow-sm rounded-2xl p-5 space-y-6">
                   <div className="flex justify-between items-center">
                     <div className="space-y-0.5">
                       <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Your Referral Tier</span>
                       <div className="flex items-center gap-2">
                         <span className={`text-sm font-bold px-2 py-0.5 rounded-full ${
-                          count >= 20 ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
-                          count >= 10 ? 'bg-slate-300/10 text-slate-300 border border-slate-300/20' :
-                          count >= 5 ? 'bg-orange-500/10 text-orange-400 border border-orange-500/20' :
-                          'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                          count >= 20 ? 'bg-amber-500/10 text-amber-600 border border-amber-500/20' :
+                          count >= 10 ? 'bg-zinc-100 text-zinc-650 border border-zinc-200' :
+                          count >= 5 ? 'bg-orange-500/10 text-orange-600 border border-orange-500/20' :
+                          'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'
                         }`}>
                           {count >= 20 ? 'Gold Tier' : count >= 10 ? 'Silver Tier' : count >= 5 ? 'Bronze Tier' : 'Starter Tier'}
                         </span>
-                        <span className="text-xs text-zinc-400 font-medium">
+                        <span className="text-xs text-zinc-500 font-medium">
                           {count >= 20 ? 'Max Tier reached!' : 
                            count >= 10 ? `${20 - count} more for Gold` : 
                            count >= 5 ? `${10 - count} more for Silver` : 
@@ -823,7 +824,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                     </div>
                     <div className="text-right">
                       <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Current Commission</span>
-                      <span className="text-sm font-bold text-emerald-400 font-mono">
+                      <span className="text-sm font-bold text-emerald-600 font-mono">
                         {count >= 20 ? '0.70 USDT' : count >= 10 ? '0.60 USDT' : count >= 5 ? '0.55 USDT' : '0.50 USDT'} / ref
                       </span>
                     </div>
@@ -832,10 +833,10 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                   {/* The Progress Bar Line */}
                   <div className="relative pt-2 pb-10">
                     {/* Track Background */}
-                    <div className="h-2 w-full bg-slate-900 rounded-full overflow-hidden">
+                    <div className="h-2 w-full bg-zinc-100 rounded-full overflow-hidden">
                       {/* Active Progress */}
                       <div 
-                        className="h-full bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-400 rounded-full transition-all duration-500"
+                        className="h-full bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-400 rounded-full transition-all duration-500"
                         style={{ width: `${progressPercent}%` }}
                       />
                     </div>
@@ -844,44 +845,44 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                     <div className="absolute top-0 left-0 w-full h-full">
                       {/* Node 1: Starter */}
                       <div className="absolute left-[0%] -translate-x-1/2 flex flex-col items-center">
-                        <div className="w-5 h-5 rounded-full border-2 flex items-center justify-center text-[9px] font-bold z-10 border-emerald-400 bg-slate-900 text-emerald-400">
+                        <div className="w-5 h-5 rounded-full border-2 flex items-center justify-center text-[9px] font-bold z-10 border-amber-500 bg-white text-amber-600">
                           ✓
                         </div>
-                        <span className="text-[9px] font-bold text-zinc-400 mt-1.5">Starter</span>
-                        <span className="text-[8px] text-zinc-500 font-mono">0.50 USDT</span>
+                        <span className="text-[9px] font-bold text-zinc-500 mt-1.5">Starter</span>
+                        <span className="text-[8px] text-zinc-400 font-mono">0.50 USDT</span>
                       </div>
 
                       {/* Node 2: Bronze */}
                       <div className="absolute left-[33.3%] -translate-x-1/2 flex flex-col items-center">
                         <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center text-[9px] font-bold z-10 ${
-                          count >= 5 ? 'border-emerald-400 bg-slate-900 text-emerald-400' : 'border-slate-700 bg-slate-800 text-zinc-500'
+                          count >= 5 ? 'border-amber-500 bg-white text-amber-600' : 'border-zinc-200 bg-zinc-50 text-zinc-400'
                         }`}>
                           {count >= 5 ? '✓' : '5'}
                         </div>
-                        <span className={`text-[9px] font-bold mt-1.5 ${count >= 5 ? 'text-zinc-300' : 'text-zinc-500'}`}>Bronze</span>
-                        <span className="text-[8px] text-zinc-500 font-mono">0.55 USDT</span>
+                        <span className={`text-[9px] font-bold mt-1.5 ${count >= 5 ? 'text-zinc-650' : 'text-zinc-400'}`}>Bronze</span>
+                        <span className="text-[8px] text-zinc-400 font-mono">0.55 USDT</span>
                       </div>
 
                       {/* Node 3: Silver */}
                       <div className="absolute left-[66.6%] -translate-x-1/2 flex flex-col items-center">
                         <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center text-[9px] font-bold z-10 ${
-                          count >= 10 ? 'border-emerald-400 bg-slate-900 text-emerald-400' : 'border-slate-700 bg-slate-800 text-zinc-500'
+                          count >= 10 ? 'border-amber-500 bg-white text-amber-600' : 'border-zinc-200 bg-zinc-50 text-zinc-400'
                         }`}>
                           {count >= 10 ? '✓' : '10'}
                         </div>
-                        <span className={`text-[9px] font-bold mt-1.5 ${count >= 10 ? 'text-zinc-300' : 'text-zinc-500'}`}>Silver</span>
-                        <span className="text-[8px] text-zinc-500 font-mono">0.60 USDT</span>
+                        <span className={`text-[9px] font-bold mt-1.5 ${count >= 10 ? 'text-zinc-650' : 'text-zinc-400'}`}>Silver</span>
+                        <span className="text-[8px] text-zinc-400 font-mono">0.60 USDT</span>
                       </div>
 
                       {/* Node 4: Gold */}
                       <div className="absolute left-[100%] -translate-x-1/2 flex flex-col items-center">
                         <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center text-[9px] font-bold z-10 ${
-                          count >= 20 ? 'border-amber-400 bg-slate-900 text-amber-400' : 'border-slate-700 bg-slate-800 text-zinc-500'
+                          count >= 20 ? 'border-amber-500 bg-white text-amber-600' : 'border-zinc-200 bg-zinc-50 text-zinc-400'
                         }`}>
                           {count >= 20 ? '★' : '20'}
                         </div>
-                        <span className={`text-[9px] font-bold mt-1.5 ${count >= 20 ? 'text-amber-400' : 'text-zinc-500'}`}>Gold</span>
-                        <span className="text-[8px] text-zinc-500 font-mono">0.70 USDT</span>
+                        <span className={`text-[9px] font-bold mt-1.5 ${count >= 20 ? 'text-amber-600' : 'text-zinc-400'}`}>Gold</span>
+                        <span className="text-[8px] text-zinc-400 font-mono">0.70 USDT</span>
                       </div>
                     </div>
                   </div>
@@ -889,47 +890,45 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
               );
             })()}
 
-           
-
-            <div className="bg-slate-800/40 border border-slate-700 rounded-2xl p-4 space-y-4">
+                 <div className="bg-white border border-zinc-200 shadow-sm rounded-2xl p-4 space-y-4">
               {/* Referral Code Box */}
               <div className="flex justify-between items-center text-xs">
                 <span className="text-zinc-500">Your Referral Code</span>
-                <span className="font-mono text-emerald-400 font-bold tracking-wider text-sm">
+                <span className="font-mono text-amber-600 font-bold tracking-wider text-sm">
                   {(profile as any)?.uniqueCode || '-----'}
                 </span>
               </div>
 
               {/* Referral Link Box */}
-              <div className="space-y-1.5 border-t border-slate-700/50 pt-3">
+              <div className="space-y-1.5 border-t border-zinc-100 pt-3">
                 <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">
                   Your Shareable Referral Link
                 </label>
-                <div className="flex gap-2 items-center bg-slate-900 border border-slate-700/60 p-2.5 rounded-xl font-mono text-xs">
-                  <span className="text-zinc-300 font-medium select-all truncate flex-1">
+                <div className="flex gap-2 items-center bg-zinc-50 border border-zinc-200 p-2.5 rounded-xl font-mono text-xs">
+                  <span className="text-zinc-600 font-medium select-all truncate flex-1">
                     https://lolo-navy.vercel.app/#/signup?ref={(profile as any)?.uniqueCode || ''}
                   </span>
                   <button
                     type="button"
                     onClick={handleCopyReferral}
-                    className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-750 text-zinc-400 hover:text-white transition-colors cursor-pointer shrink-0"
+                    className="p-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-500 hover:text-zinc-800 transition-colors cursor-pointer shrink-0"
                     title="Copy Referral Link"
                   >
-                    {copiedReferral ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
+                    {copiedReferral ? <Check size={14} className="text-emerald-600" /> : <Copy size={14} />}
                   </button>
                 </div>
                 {copiedReferral && (
-                  <span className="text-[10px] text-emerald-400 flex items-center gap-1.5 mt-1 font-semibold">
+                  <span className="text-[10px] text-emerald-650 flex items-center gap-1.5 mt-1 font-semibold">
                     <Check size={10} /> Copied to clipboard! Share it with your friends.
                   </span>
                 )}
               </div>
 
               {/* Referred Users List */}
-              <div className="space-y-2 border-t border-slate-700/50 pt-3">
+              <div className="space-y-2 border-t border-zinc-100 pt-3">
                 <div className="flex justify-between items-center text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
                   <span>Your Referred Friends ({referredUsers.length})</span>
-                  {loadingReferred && <span className="text-zinc-500 animate-pulse font-normal lowercase">fetching...</span>}
+                  {loadingReferred && <span className="text-zinc-400 animate-pulse font-normal lowercase">fetching...</span>}
                 </div>
 
                 {loadingReferred ? (
@@ -937,7 +936,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                     Loading referred users...
                   </div>
                 ) : referredUsers.length === 0 ? (
-                  <div className="text-center py-6 bg-slate-900/30 border border-dashed border-slate-800 rounded-xl text-xs text-zinc-500">
+                  <div className="text-center py-6 bg-zinc-50/50 border border-dashed border-zinc-200 rounded-xl text-xs text-zinc-400">
                     No friends have joined using your code yet.
                   </div>
                 ) : (
@@ -958,10 +957,10 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                       return (
                         <div 
                           key={refUser.uid} 
-                          className="flex items-center justify-between bg-slate-900/50 border border-slate-800/80 p-2.5 rounded-xl text-xs hover:border-slate-700/50 transition-colors"
+                          className="flex items-center justify-between bg-zinc-50/50 border border-zinc-150 p-2.5 rounded-xl text-xs hover:border-zinc-300 transition-colors"
                         >
                           <div className="space-y-0.5 text-left">
-                            <p className="font-bold text-zinc-200 truncate max-w-[150px]">
+                            <p className="font-bold text-zinc-800 truncate max-w-[150px]">
                               {refUser.displayName}
                             </p>
                             <p className="text-[10px] text-zinc-500 font-mono">
@@ -972,7 +971,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                             <p className="text-[10px] text-zinc-500 font-mono">
                               {refUser.createdAt.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
                             </p>
-                            <p className="text-[9px] text-emerald-400 font-semibold uppercase tracking-wider">
+                            <p className="text-[9px] text-emerald-600 font-semibold uppercase tracking-wider">
                               Active
                             </p>
                           </div>
@@ -995,12 +994,12 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
             <button 
               id="pin-back-btn"
               onClick={() => { setActiveSubPage('menu'); setPinMessage(null); }}
-              className="p-2 rounded-full bg-slate-800 border border-slate-700 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+              className="p-2.5 rounded-full bg-white border border-zinc-200 text-zinc-650 hover:text-zinc-900 transition-colors cursor-pointer shadow-sm active:scale-95"
             >
               <ArrowLeft size={18} />
             </button>
             <div className="text-left">
-              <h2 className="text-xl font-bold tracking-tight">Security PIN</h2>
+              <h2 className="text-xl font-bold tracking-tight text-zinc-800">Security PIN</h2>
               <p className="text-xs text-zinc-500">Protect your wallet transactions</p>
             </div>
           </div>
@@ -1008,43 +1007,43 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
           <div id="wallet-pin-security-card" className="space-y-4 text-left">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Lock className="text-emerald-400" size={18} />
-                <h3 className="text-sm font-bold text-zinc-100 font-sans">Wallet Security PIN</h3>
+                <Lock className="text-amber-500" size={18} />
+                <h3 className="text-sm font-bold text-zinc-800 font-sans">Wallet Security PIN</h3>
               </div>
               {profile?.walletPassword ? (
-                <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full font-bold flex items-center gap-1 uppercase tracking-wider">
+                <span className="text-[10px] bg-emerald-50 text-emerald-600 border border-emerald-100 px-2.5 py-0.5 rounded-full font-bold flex items-center gap-1 uppercase tracking-wider">
                   <CheckCircle2 size={10} /> Configured
                 </span>
               ) : (
-                <span className="text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider animate-pulse">
+                <span className="text-[10px] bg-amber-50 text-amber-600 border border-amber-100 px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider animate-pulse">
                   Not Set
                 </span>
               )}
             </div>
 
-            <p className="text-xs text-zinc-400 leading-relaxed">
+            <p className="text-xs text-zinc-550 leading-relaxed">
               The 4-digit security PIN is required to authorize all P2P trades, token deposits, and secure cashouts.
             </p>
 
             {pinMessage && (
               <div id="pin-feedback-message" className={`p-3 rounded-xl border flex items-center gap-2.5 text-xs ${
                 pinMessage.type === 'success' 
-                  ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
-                  : 'bg-red-500/10 border-red-500/20 text-red-400'
+                  ? 'bg-emerald-50 border-emerald-100 text-emerald-700' 
+                  : 'bg-red-50 border-red-100 text-red-600'
               }`}>
-                {pinMessage.type === 'success' ? <Check size={14} /> : <AlertCircle size={14} />}
+                {pinMessage.type === 'success' ? <Check size={14} className="text-emerald-600" /> : <AlertCircle size={14} className="text-red-500" />}
                 <span>{pinMessage.text}</span>
               </div>
             )}
 
             {profile?.walletPassword && !isChangingPin ? (
-              <div className="bg-slate-800/40 border border-slate-700 rounded-2xl p-4 flex flex-col gap-4 text-left">
+              <div className="bg-white border border-zinc-200 shadow-sm rounded-2xl p-4 flex flex-col gap-4 text-left">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-400">
+                  <div className="w-8 h-8 rounded-full bg-amber-50 flex items-center justify-center text-amber-600">
                     <Lock size={14} />
                   </div>
                   <div className="text-left">
-                    <p className="text-xs font-bold text-zinc-200">Security PIN Active</p>
+                    <p className="text-xs font-bold text-zinc-800">Security PIN Active</p>
                     <p className="text-[10px] text-zinc-500 mt-0.5">Your transaction PIN is enabled and protecting your wallet.</p>
                   </div>
                 </div>
@@ -1058,20 +1057,20 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                     setPin2faCode('');
                     setPinMessage(null);
                   }}
-                  className="w-full py-2.5 bg-slate-800 border border-slate-700 hover:border-slate-600 text-zinc-300 hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer text-center"
+                  className="w-full py-2.5 bg-zinc-100 border border-zinc-200 hover:bg-zinc-200 text-zinc-700 hover:text-zinc-900 rounded-xl text-xs font-bold transition-all cursor-pointer text-center active:scale-[0.99]"
                 >
                   Change Security PIN
                 </button>
               </div>
             ) : (
-              <form onSubmit={handleSavePin} className="bg-slate-800/50 border border-slate-700/60 rounded-2xl p-4 sm:p-5 space-y-4 text-left">
-                <h4 className="text-xs font-bold text-zinc-200">
+              <form onSubmit={handleSavePin} className="bg-white border border-zinc-200 shadow-sm rounded-2xl p-4 sm:p-5 space-y-4 text-left">
+                <h4 className="text-xs font-bold text-zinc-700">
                   {profile?.walletPassword ? 'Change Security PIN' : 'Configure New Wallet PIN'}
                 </h4>
                 
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">New 4-Digit PIN</label>
+                    <label className="text-[10px] font-bold text-zinc-450 uppercase tracking-wider block">New 4-Digit PIN</label>
                     <input
                       type="password"
                       required
@@ -1079,11 +1078,11 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                       placeholder="••••"
                       value={newPin}
                       onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ''))}
-                      className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-center font-mono text-sm tracking-widest text-white focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                      className="w-full px-3 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-center font-mono text-sm tracking-widest text-zinc-800 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
                     />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Confirm PIN</label>
+                    <label className="text-[10px] font-bold text-zinc-450 uppercase tracking-wider block">Confirm PIN</label>
                     <input
                       type="password"
                       required
@@ -1091,18 +1090,18 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                       placeholder="••••"
                       value={confirmPin}
                       onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, ''))}
-                      className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-center font-mono text-sm tracking-widest text-white focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                      className="w-full px-3 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-center font-mono text-sm tracking-widest text-zinc-800 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
                     />
                   </div>
                 </div>
 
                 {/* Google Authenticator Input: Required if they are changing an existing PIN and have 2FA active */}
                 {profile?.walletPassword && profile?.twoFactorEnabled && (
-                  <div className="space-y-1.5 pt-2 border-t border-slate-700/50">
-                    <label className="text-xs font-semibold text-zinc-400 flex items-center gap-1.5">
-                      <Smartphone size={13} className="text-emerald-400" />
+                  <div className="space-y-1.5 pt-2 border-t border-zinc-100">
+                    <label className="text-xs font-semibold text-zinc-600 flex items-center gap-1.5">
+                      <Smartphone size={13} className="text-amber-500" />
                       <span>Google Authenticator (2FA) Code</span>
-                      <span className="text-[9px] text-emerald-400 font-mono bg-emerald-950/40 px-1.5 py-0.5 rounded border border-emerald-500/10">Required</span>
+                      <span className="text-[9px] text-amber-600 font-mono bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">Required</span>
                     </label>
                     <input
                       type="text"
@@ -1111,7 +1110,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                       placeholder="000000"
                       value={pin2faCode}
                       onChange={(e) => setPin2faCode(e.target.value.replace(/\D/g, ''))}
-                      className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-center font-mono text-sm tracking-widest text-white focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                      className="w-full px-3 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-center font-mono text-sm tracking-widest text-zinc-800 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
                     />
                     <p className="text-[10px] text-zinc-500 leading-tight">Enter the 6-digit verification code from your Google Authenticator app to authorize updating your PIN.</p>
                   </div>
@@ -1122,7 +1121,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                     id="submit-pin-btn"
                     type="submit"
                     disabled={pinSaving}
-                    className="flex-1 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 disabled:bg-slate-800 disabled:text-zinc-500 text-white font-bold rounded-xl text-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                    className="flex-1 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 disabled:bg-zinc-100 disabled:text-zinc-400 text-white font-bold rounded-xl text-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5 shadow-md shadow-amber-500/10 active:scale-95"
                   >
                     {pinSaving ? (
                       <>
@@ -1144,7 +1143,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                         setPin2faCode('');
                         setPinMessage(null);
                       }}
-                      className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-zinc-200 font-bold rounded-xl text-xs transition-colors cursor-pointer"
+                      className="px-4 py-2.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-600 font-bold rounded-xl text-xs transition-colors cursor-pointer"
                     >
                       Cancel
                     </button>
@@ -1164,12 +1163,12 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
             <button 
               id="2fa-back-btn"
               onClick={() => { setActiveSubPage('menu'); }}
-              className="p-2 rounded-full bg-slate-800 border border-slate-700 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+              className="p-2.5 rounded-full bg-white border border-zinc-200 text-zinc-650 hover:text-zinc-900 transition-colors cursor-pointer shadow-sm active:scale-95"
             >
               <ArrowLeft size={18} />
             </button>
             <div className="text-left">
-              <h2 className="text-xl font-bold tracking-tight">Authenticator</h2>
+              <h2 className="text-xl font-bold tracking-tight text-zinc-800">Authenticator</h2>
               <p className="text-xs text-zinc-500">Configure Two-Factor security</p>
             </div>
           </div>
@@ -1177,51 +1176,51 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
           <div id="two-factor-auth-card" className="space-y-4 text-left">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Smartphone className="text-emerald-400" size={18} />
-                <h3 className="text-sm font-bold text-zinc-100 font-sans">Google Authenticator (2FA)</h3>
+                <Smartphone className="text-amber-500" size={18} />
+                <h3 className="text-sm font-bold text-zinc-800 font-sans">Google Authenticator (2FA)</h3>
               </div>
               {profile?.twoFactorEnabled ? (
-                <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full font-bold flex items-center gap-1 uppercase tracking-wider">
+                <span className="text-[10px] bg-emerald-50 text-emerald-600 border border-emerald-100 px-2.5 py-0.5 rounded-full font-bold flex items-center gap-1 uppercase tracking-wider">
                   <CheckCircle2 size={10} /> Active
                 </span>
               ) : (
-                <span className="text-[10px] bg-zinc-500/10 text-zinc-400 border border-zinc-750 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
+                <span className="text-[10px] bg-zinc-100 text-zinc-550 border border-zinc-200 px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider">
                   Disabled
                 </span>
               )}
             </div>
 
-            <p className="text-xs text-zinc-400 leading-relaxed">
+            <p className="text-xs text-zinc-550 leading-relaxed">
               Google Authenticator secures your funds by requiring a 6-digit dynamic passcode when making withdrawals or signing in to your wallet.
             </p>
 
             {profile?.twoFactorEnabled ? (
-              <div className="bg-slate-800/40 border border-emerald-500/10 rounded-2xl p-4 space-y-4">
+              <div className="bg-white border border-zinc-200 shadow-sm rounded-2xl p-4 space-y-4">
                 <div className="flex items-start gap-3 text-left">
-                  <CheckCircle2 size={18} className="text-emerald-400 shrink-0 mt-0.5" />
+                  <CheckCircle2 size={18} className="text-emerald-600 shrink-0 mt-0.5" />
                   <div>
-                    <p className="text-xs font-bold text-zinc-200">Your wallet is secured with Two-Factor Authentication.</p>
+                    <p className="text-xs font-bold text-zinc-800">Your wallet is secured with Two-Factor Authentication.</p>
                     <p className="text-[10px] text-zinc-500 mt-0.5">Any future withdrawals or sign-in requests will verify your temporary 6-digit passcode.</p>
                   </div>
                 </div>
 
                 {showDeactivateInput ? (
-                  <div className="space-y-3 pt-2 border-t border-slate-700/50">
+                  <div className="space-y-3 pt-2 border-t border-zinc-100">
                     {deactivateError && (
-                      <div className="p-2 bg-red-500/10 border border-red-500/20 text-red-400 rounded-lg text-[11px] flex items-start gap-2">
+                      <div className="p-2 bg-red-50 border border-red-100 text-red-600 rounded-lg text-[11px] flex items-start gap-2">
                         <AlertCircle size={14} className="mt-0.5 shrink-0" />
                         <span>{deactivateError}</span>
                       </div>
                     )}
                     <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Enter 6-digit Authenticator Code</label>
+                      <label className="text-[10px] font-bold text-zinc-450 uppercase tracking-wider block">Enter 6-digit Authenticator Code</label>
                       <input
                         type="text"
                         maxLength={6}
                         placeholder="000000"
                         value={deactivateCode}
                         onChange={(e) => setDeactivateCode(e.target.value.replace(/\D/g, ''))}
-                        className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-center font-mono text-sm tracking-widest text-white focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
+                        className="w-full px-3 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-center font-mono text-sm tracking-widest text-zinc-800 focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
                       />
                     </div>
                     <div className="flex gap-2">
@@ -1229,14 +1228,14 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                         type="button"
                         onClick={handleDisable2fa}
                         disabled={deactivating}
-                        className="flex-1 py-2 bg-red-600 hover:bg-red-500 disabled:bg-slate-800 disabled:text-zinc-500 text-white font-bold rounded-xl text-xs transition-colors cursor-pointer"
+                        className="flex-1 py-2.5 bg-red-600 hover:bg-red-500 disabled:bg-zinc-100 disabled:text-zinc-400 text-white font-bold rounded-xl text-xs transition-colors cursor-pointer active:scale-95"
                       >
                         {deactivating ? 'Deactivating...' : 'Confirm Deactivate'}
                       </button>
                       <button
                         type="button"
                         onClick={() => { setShowDeactivateInput(false); setDeactivateError(null); }}
-                        className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-zinc-200 font-bold rounded-xl text-xs transition-colors cursor-pointer"
+                        className="px-4 py-2.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-600 font-bold rounded-xl text-xs transition-colors cursor-pointer"
                       >
                         Cancel
                       </button>
@@ -1246,7 +1245,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                   <button
                     type="button"
                     onClick={() => setShowDeactivateInput(true)}
-                    className="w-full py-2.5 bg-slate-800 hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/20 text-zinc-400 border border-slate-700 font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                    className="w-full py-2.5 bg-zinc-100 hover:bg-red-50 hover:text-red-600 hover:border-red-200 text-zinc-650 border border-zinc-200 font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                   >
                     <Power size={13} />
                     Disable Google Authenticator (2FA)
@@ -1257,29 +1256,29 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
               <button
                 type="button"
                 onClick={generate2faSecret}
-                className="w-full py-3 bg-slate-800 border border-slate-700 hover:border-slate-650 hover:bg-slate-750/80 text-zinc-200 hover:text-white font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-2 cursor-pointer"
+                className="w-full py-3 bg-zinc-100 border border-zinc-200 hover:border-zinc-300 hover:bg-zinc-150/80 text-zinc-750 hover:text-zinc-900 font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm active:scale-[0.99]"
               >
-                <QrCode size={15} className="text-emerald-400" />
+                <QrCode size={15} className="text-amber-500" />
                 <span>Enable Google Authenticator (2FA)</span>
               </button>
             ) : (
-              <div className="bg-slate-800 border border-emerald-500/20 rounded-2xl p-4 sm:p-5 space-y-4">
+              <div className="bg-white border border-zinc-200 shadow-sm rounded-2xl p-4 sm:p-5 space-y-4">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-zinc-200 flex items-center gap-1.5">
-                    <QrCode size={14} className="text-emerald-400" />
+                  <span className="text-xs font-bold text-zinc-700 flex items-center gap-1.5">
+                    <QrCode size={14} className="text-amber-500" />
                     Setup Two-Factor Security
                   </span>
                   <button
                     type="button"
                     onClick={() => setIs2faSetupOpen(false)}
-                    className="text-[10px] text-zinc-500 hover:text-zinc-300 font-bold uppercase tracking-wider cursor-pointer"
+                    className="text-[10px] text-zinc-400 hover:text-zinc-600 font-bold uppercase tracking-wider cursor-pointer"
                   >
                     Cancel
                   </button>
                 </div>
 
                 {verificationError && (
-                  <div className="p-2.5 bg-red-500/10 border border-red-500/20 text-red-400 rounded-lg text-[11px] flex items-start gap-2">
+                  <div className="p-2.5 bg-red-50 border border-red-100 text-red-600 rounded-lg text-[11px] flex items-start gap-2">
                     <AlertCircle size={14} className="mt-0.5 shrink-0" />
                     <span>{verificationError}</span>
                   </div>
@@ -1288,7 +1287,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                 {/* Step 1: Scan QR */}
                 <div className="space-y-2">
                   <span className="text-[10px] font-black text-zinc-500 uppercase tracking-wider block">1. Scan Google Authenticator QR Code</span>
-                  <div className="flex justify-center p-3 bg-white rounded-xl max-w-[170px] mx-auto shadow-inner">
+                  <div className="flex justify-center p-3 bg-white border border-zinc-150 rounded-xl max-w-[170px] mx-auto shadow-inner">
                     <img 
                       src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(`otpauth://totp/ARBITRAGE:${profile?.email || user.email}?secret=${temp2faSecret}&issuer=ARBITRAGE%20Crypto%20Escrow`)}`}
                       alt="2FA QR Code"
@@ -1301,21 +1300,21 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                 {/* Step 2: Copy Key */}
                 <div className="space-y-1.5">
                   <span className="text-[10px] font-black text-zinc-500 uppercase tracking-wider block">2. Or copy the 16-character Secret Key</span>
-                  <div className="flex gap-1.5 items-center bg-slate-900 border border-slate-700/60 p-2.5 rounded-xl font-mono text-[11px]">
-                    <span className="text-emerald-400 font-bold tracking-wider select-all truncate flex-1">{temp2faSecret}</span>
+                  <div className="flex gap-1.5 items-center bg-zinc-50 border border-zinc-200 p-2.5 rounded-xl font-mono text-[11px]">
+                    <span className="text-amber-600 font-bold tracking-wider select-all truncate flex-1">{temp2faSecret}</span>
                     <button
                       type="button"
                       onClick={handleCopySecret}
-                      className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-750 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                      className="p-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-500 hover:text-zinc-800 transition-colors cursor-pointer"
                       title="Copy Key"
                     >
-                      {copied ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
+                      {copied ? <Check size={13} className="text-emerald-600" /> : <Copy size={13} />}
                     </button>
                   </div>
                 </div>
 
                 {/* Step 3: Enter Verification Code */}
-                <div className="space-y-2 pt-2 border-t border-slate-700/50">
+                <div className="space-y-2 pt-2 border-t border-zinc-100">
                   <span className="text-[10px] font-black text-zinc-500 uppercase tracking-wider block">3. Enter verification code to enable</span>
                   <div className="flex gap-2">
                     <input
@@ -1324,12 +1323,12 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                       placeholder="6-digit code"
                       value={verificationCode}
                       onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ''))}
-                      className="flex-1 px-3 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-center font-mono text-sm tracking-widest text-white focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                      className="flex-1 px-3 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-center font-mono text-sm tracking-widest text-zinc-800 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
                     />
                     <button
                       type="button"
                       onClick={handleVerifyAndEnable2fa}
-                      className="px-4 bg-gradient-to-r from-emerald-600 to-teal-500 text-white hover:from-emerald-500 hover:to-teal-400 font-bold rounded-xl text-xs transition-all shadow-md cursor-pointer"
+                      className="px-4 bg-gradient-to-r from-amber-500 to-amber-600 text-white hover:from-amber-600 hover:to-amber-700 font-bold rounded-xl text-xs transition-all shadow-md cursor-pointer active:scale-95"
                     >
                       Verify & Activate
                     </button>
@@ -1349,27 +1348,27 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
             <button 
               id="support-back-btn"
               onClick={() => { setActiveSubPage('menu'); }}
-              className="p-2 rounded-full bg-slate-800 border border-slate-700 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+              className="p-2.5 rounded-full bg-white border border-zinc-200 text-zinc-650 hover:text-zinc-900 transition-colors cursor-pointer shadow-sm active:scale-95"
             >
               <ArrowLeft size={18} />
             </button>
             <div className="text-left">
-              <h2 className="text-xl font-bold tracking-tight">Customer Support</h2>
+              <h2 className="text-xl font-bold tracking-tight text-zinc-800">Customer Support</h2>
               <p className="text-xs text-zinc-500">Connect with our support team 24/7</p>
             </div>
           </div>
 
           <div className="space-y-4 text-left">
             {/* Promo / Intro Banner */}
-            <div className="bg-gradient-to-br from-emerald-500/10 via-slate-800/60 to-slate-800 border border-slate-800 rounded-2xl p-4 space-y-2">
-              <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
+            <div className="bg-gradient-to-br from-amber-500/10 via-white to-white border border-amber-200/85 rounded-2xl p-4 space-y-2 shadow-sm">
+              <h3 className="text-sm font-bold text-zinc-800 flex items-center gap-1.5">
                 <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-450 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-550"></span>
                 </span>
                 We are online to help
               </h3>
-              <p className="text-xs text-zinc-400 leading-relaxed">
+              <p className="text-xs text-zinc-600 leading-relaxed">
                 If you have questions regarding deposits, withdrawals, referrals, or trade executions, please reach out to our team. Our typical response time is less than 5 minutes.
               </p>
             </div>
@@ -1381,20 +1380,20 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                 href="https://wa.me/#"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-4 bg-slate-800/40 hover:bg-slate-800/70 border border-slate-800 hover:border-slate-700 p-4 rounded-2xl transition-all group cursor-pointer no-underline block"
+                className="flex items-center gap-4 bg-white hover:bg-zinc-50 border border-zinc-200 hover:border-zinc-300 p-4 rounded-2xl transition-all group cursor-pointer no-underline block shadow-sm"
               >
-                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-400 shrink-0 group-hover:bg-emerald-500/20 transition-all">
+                <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 shrink-0 group-hover:bg-emerald-100 transition-all">
                   <MessageSquare size={18} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h4 className="text-sm font-bold text-zinc-200 group-hover:text-white transition-colors">WhatsApp Support</h4>
+                  <h4 className="text-sm font-bold text-zinc-800 group-hover:text-zinc-950 transition-colors">WhatsApp Support</h4>
                   <p className="text-[11px] text-zinc-500 mt-0.5">Instant chats, transfer guides, and rapid answers</p>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+                  <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-100 text-emerald-600">
                     Online
                   </span>
-                  <ChevronRight size={16} className="text-zinc-500 group-hover:text-zinc-300 transition-colors" />
+                  <ChevronRight size={16} className="text-zinc-400 group-hover:text-zinc-600 transition-colors" />
                 </div>
               </a>
 
@@ -1403,29 +1402,29 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                 href="https://t.me/#"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-4 bg-slate-800/40 hover:bg-slate-800/70 border border-slate-800 hover:border-slate-700 p-4 rounded-2xl transition-all group cursor-pointer no-underline block"
+                className="flex items-center gap-4 bg-white hover:bg-zinc-50 border border-zinc-200 hover:border-zinc-300 p-4 rounded-2xl transition-all group cursor-pointer no-underline block shadow-sm"
               >
-                <div className="w-10 h-10 rounded-xl bg-sky-500/10 flex items-center justify-center text-sky-400 shrink-0 group-hover:bg-sky-500/20 transition-all">
+                <div className="w-10 h-10 rounded-xl bg-sky-50 flex items-center justify-center text-sky-600 shrink-0 group-hover:bg-sky-100 transition-all">
                   <Send size={18} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h4 className="text-sm font-bold text-zinc-200 group-hover:text-white transition-colors">Telegram Support</h4>
+                  <h4 className="text-sm font-bold text-zinc-800 group-hover:text-zinc-950 transition-colors">Telegram Support</h4>
                   <p className="text-[11px] text-zinc-500 mt-0.5">Secure messaging, automated ticket opening, and news</p>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-500/10 border border-sky-500/20 text-sky-400">
+                  <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-sky-50 border border-sky-100 text-sky-600">
                     Online
                   </span>
-                  <ChevronRight size={16} className="text-zinc-500 group-hover:text-zinc-300 transition-colors" />
+                  <ChevronRight size={16} className="text-zinc-400 group-hover:text-zinc-600 transition-colors" />
                 </div>
               </a>
             </div>
 
             {/* Quick Note Card */}
-            <div className="bg-slate-800/30 border border-slate-800/80 rounded-2xl p-4 flex gap-3 text-xs text-zinc-500 leading-relaxed">
-              <ShieldAlert size={18} className="text-emerald-400 shrink-0 mt-0.5" />
+            <div className="bg-white border border-zinc-200 shadow-sm rounded-2xl p-4 flex gap-3 text-xs text-zinc-500 leading-relaxed">
+              <ShieldAlert size={18} className="text-amber-500 shrink-0 mt-0.5" />
               <div>
-                <strong className="text-zinc-300 block mb-1">Official Protection Notice</strong>
+                <strong className="text-zinc-700 block mb-1">Official Protection Notice</strong>
                 ARBITRAGE Support agents will never ask for your Google Authenticator 2FA secret, account passwords, or secure wallet PINs. Never share these credentials with anyone.
               </div>
             </div>
@@ -1891,22 +1890,22 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
       )}
 
       {showOpenInstruction && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-sm animate-fade-in font-sans">
-          <div className="bg-slate-900 border border-slate-800 text-white rounded-[2rem] w-full max-w-sm overflow-hidden shadow-2xl relative animate-scale-up p-1">
-            <div className="bg-slate-950/40 rounded-[1.8rem] p-5">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-fade-in font-sans">
+          <div className="bg-white border border-zinc-200 text-zinc-800 rounded-[2rem] w-full max-w-sm overflow-hidden shadow-2xl relative animate-scale-up p-1">
+            <div className="bg-zinc-50/50 rounded-[1.8rem] p-5">
               
               {/* Close Button */}
               <button 
                 onClick={() => setShowOpenInstruction(false)}
-                className="absolute top-6 right-6 p-1.5 rounded-full bg-slate-800 hover:bg-slate-700 text-zinc-400 hover:text-white transition-all cursor-pointer z-10"
+                className="absolute top-6 right-6 p-1.5 rounded-full bg-zinc-100 hover:bg-zinc-200 text-zinc-500 hover:text-zinc-800 transition-all cursor-pointer z-10 shadow-sm"
               >
                 <X size={15} />
               </button>
 
               {/* Icon & Glow */}
               <div className="text-center relative pt-2">
-                <div className="w-20 h-20 mx-auto rounded-3xl bg-zinc-950 border-2 border-emerald-500/30 shadow-lg shadow-emerald-500/10 flex items-center justify-center overflow-hidden relative group mb-3">
-                  <div className="absolute inset-0 bg-emerald-500/15 rounded-3xl animate-pulse"></div>
+                <div className="w-20 h-20 mx-auto rounded-3xl bg-zinc-950 border-2 border-amber-500/30 shadow-lg shadow-amber-500/5 flex items-center justify-center overflow-hidden relative group mb-3">
+                  <div className="absolute inset-0 bg-amber-500/10 rounded-3xl animate-pulse"></div>
                   <img 
                     src="/icon.svg" 
                     alt="ARBITRAGE" 
@@ -1914,47 +1913,47 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                     referrerPolicy="no-referrer"
                   />
                 </div>
-                <h3 className="text-base font-black tracking-tight bg-gradient-to-r from-emerald-400 via-teal-300 to-emerald-200 bg-clip-text text-transparent">
+                <h3 className="text-base font-bold tracking-tight text-zinc-800">
                   Launch Standalone App
                 </h3>
-                <p className="text-[11px] text-zinc-400 mt-1.5 font-medium leading-relaxed px-2">
+                <p className="text-[11px] text-zinc-500 mt-1.5 font-medium leading-relaxed px-2">
                   Due to browser security policies, websites cannot launch installed apps directly. Follow these simple steps to run ARBITRAGE:
                 </p>
               </div>
 
               {/* Instructions Steps */}
-              <div className="py-5 space-y-4 text-left border-y border-slate-800/60 my-4">
+              <div className="py-5 space-y-4 text-left border-y border-zinc-200 my-4">
                 <div className="flex gap-3.5 items-start">
-                  <div className="w-5.5 h-5.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-extrabold flex items-center justify-center text-[10px] shrink-0">
+                  <div className="w-5.5 h-5.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-600 font-extrabold flex items-center justify-center text-[10px] shrink-0 shadow-sm">
                     1
                   </div>
                   <div>
-                    <strong className="text-zinc-100 text-xs block font-bold">Go to your Home Screen</strong>
-                    <p className="text-[11px] text-zinc-400 leading-normal mt-0.5">
+                    <strong className="text-zinc-800 text-xs block font-bold">Go to your Home Screen</strong>
+                    <p className="text-[11px] text-zinc-500 leading-normal mt-0.5">
                       Press your phone's home button or swipe up to exit the browser.
                     </p>
                   </div>
                 </div>
 
                 <div className="flex gap-3.5 items-start">
-                  <div className="w-5.5 h-5.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-extrabold flex items-center justify-center text-[10px] shrink-0">
+                  <div className="w-5.5 h-5.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-600 font-extrabold flex items-center justify-center text-[10px] shrink-0 shadow-sm">
                     2
                   </div>
                   <div>
-                    <strong className="text-zinc-100 text-xs block font-bold">Find the "ARBITRAGE" Icon</strong>
-                    <p className="text-[11px] text-zinc-400 leading-normal mt-0.5 font-medium">
-                      Look for the beautiful round logo with the letter <span className="text-emerald-400 font-bold">"A"</span> on your home screen or app drawer.
+                    <strong className="text-zinc-800 text-xs block font-bold">Find the "ARBITRAGE" Icon</strong>
+                    <p className="text-[11px] text-zinc-500 leading-normal mt-0.5 font-medium">
+                      Look for the beautiful round logo with the letter <span className="text-amber-600 font-bold">"A"</span> on your home screen or app drawer.
                     </p>
                   </div>
                 </div>
 
                 <div className="flex gap-3.5 items-start">
-                  <div className="w-5.5 h-5.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-extrabold flex items-center justify-center text-[10px] shrink-0">
+                  <div className="w-5.5 h-5.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-600 font-extrabold flex items-center justify-center text-[10px] shrink-0 shadow-sm">
                     3
                   </div>
                   <div>
-                    <strong className="text-zinc-100 text-xs block font-bold">Tap to launch natively</strong>
-                    <p className="text-[11px] text-zinc-400 leading-normal mt-0.5">
+                    <strong className="text-zinc-800 text-xs block font-bold">Tap to launch natively</strong>
+                    <p className="text-[11px] text-zinc-500 leading-normal mt-0.5">
                       Tap the icon to start the immersive, full-screen standalone application!
                     </p>
                   </div>
@@ -1965,7 +1964,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
               <div className="flex flex-col gap-2 pt-1">
                 <button
                   onClick={() => setShowOpenInstruction(false)}
-                  className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black transition-all shadow-md shadow-emerald-950/20 cursor-pointer"
+                  className="w-full py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-bold rounded-xl text-xs transition-all shadow-md shadow-amber-500/10 cursor-pointer active:scale-95"
                 >
                   Got it, I'll open it!
                 </button>
@@ -1975,7 +1974,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                     localStorage.removeItem('profile_subpage');
                     onBack();
                   }}
-                  className="w-full py-2 bg-transparent hover:bg-slate-850 text-zinc-500 hover:text-zinc-300 rounded-xl text-[11px] font-bold transition-all border border-transparent hover:border-slate-800 cursor-pointer"
+                  className="w-full py-2 bg-transparent hover:bg-zinc-100 text-zinc-500 hover:text-zinc-800 rounded-xl text-[11px] font-bold transition-all border border-transparent hover:border-zinc-200 cursor-pointer"
                 >
                   Continue in browser tab
                 </button>
@@ -1985,6 +1984,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

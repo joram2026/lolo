@@ -154,12 +154,12 @@ export default function NewsCarousel({ cryptoPrices = FALLBACK_CRYPTO }: NewsCar
       />
       
       {/* Dynamic Heat/Visual Accents */}
-      <div className="absolute top-3 left-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-[10px] uppercase tracking-wider font-bold text-emerald-400">
+      <div className="absolute top-3 left-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-[10px] uppercase tracking-wider font-bold text-amber-400">
         <Zap size={10} className="animate-pulse" />
         Market News
       </div>
 
-      <div className="absolute top-3 right-3 flex items-center gap-1 px-2.5 py-1 rounded-full bg-teal-500/10 border border-teal-500/20 text-[9px] font-bold text-teal-400 tracking-wide">
+      <div className="absolute top-3 right-3 flex items-center gap-1 px-2.5 py-1 rounded-full bg-yellow-500/10 border border-yellow-500/20 text-[9px] font-bold text-yellow-400 tracking-wide">
         <Sparkles size={10} className="animate-pulse" />
         Daily Updated
       </div>
@@ -184,7 +184,7 @@ export default function NewsCarousel({ cryptoPrices = FALLBACK_CRYPTO }: NewsCar
                 id={`carousel-dot-${idx}`}
                 onClick={() => setActiveIndex(idx)}
                 className={`h-1.5 rounded-full transition-all duration-300 ${
-                  idx === activeIndex ? 'w-5 bg-emerald-500' : 'w-1.5 bg-slate-700'
+                  idx === activeIndex ? 'w-5 bg-amber-500' : 'w-1.5 bg-slate-700'
                 }`}
                 aria-label={`Go to slide ${idx + 1}`}
               />

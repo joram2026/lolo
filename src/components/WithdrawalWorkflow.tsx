@@ -223,7 +223,7 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess }: Withdraw
   };
 
   return (
-    <div id="withdraw-workflow-container" className="max-w-md mx-auto p-4 sm:p-5 bg-slate-900 text-zinc-100 min-h-[calc(100vh-140px)]">
+    <div id="withdraw-workflow-container" className="max-w-md mx-auto p-4 sm:p-5 bg-[#FFF3D6] text-zinc-800 min-h-[calc(100vh-140px)]">
       {/* Dynamic Header */}
       <div className="flex items-center gap-3 mb-6">
         <button 
@@ -238,12 +238,12 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess }: Withdraw
             else if (method === 'p2p_instructions') setMethod('p2p_calc');
             else if (method === 'p2p_pin_confirm') setMethod('p2p_instructions');
           }}
-          className="p-2 rounded-full bg-slate-800 border border-slate-700 text-zinc-400 hover:text-white transition-colors"
+          className="p-2 rounded-full bg-white border border-zinc-200 text-zinc-600 hover:text-zinc-900 hover:bg-zinc-50 transition-colors"
         >
           <ArrowLeft size={18} />
         </button>
         <div>
-          <h2 className="text-lg font-black tracking-tight">
+          <h2 className="text-lg font-black tracking-tight text-zinc-800">
             {method === 'selection' && 'Withdraw Funds'}
             {method === 'crypto_coin_select' && 'Select Coin'}
             {method === 'crypto' && 'Crypto Withdrawal Details'}
@@ -267,7 +267,7 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess }: Withdraw
       </div>
 
       {profile && !profile.withdrawalEnabled && (
-        <div id="withdrawal-disabled-alert" className="p-3.5 mb-5 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl text-xs flex items-start gap-2.5">
+        <div id="withdrawal-disabled-alert" className="p-3.5 mb-5 bg-red-50 border border-red-200 text-red-800 rounded-xl text-xs flex items-start gap-2.5">
           <ShieldAlert size={16} className="mt-0.5 shrink-0" strokeWidth={2.5} />
           <span>
             <strong>Withdrawal Restricted:</strong> The Administrator has currently suspended withdrawal permissions for your account. Please contact support.
@@ -276,7 +276,7 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess }: Withdraw
       )}
 
       {error && (
-        <div id="withdraw-error-banner" className="p-3 mb-5 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl text-xs flex items-start gap-2.5">
+        <div id="withdraw-error-banner" className="p-3 mb-5 bg-red-50 border border-red-200 text-red-800 rounded-xl text-xs flex items-start gap-2.5">
           <AlertCircle size={16} className="mt-0.5 shrink-0" />
           <span>{error}</span>
         </div>
@@ -284,8 +284,8 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess }: Withdraw
 
       {loading && (
         <div className="flex flex-col items-center justify-center min-h-[250px] gap-3">
-          <RefreshCw size={24} className="text-red-500 animate-spin" />
-          <span className="text-xs text-zinc-500">Loading settings...</span>
+          <RefreshCw size={24} className="text-amber-500 animate-spin" />
+          <span className="text-xs text-zinc-500 font-medium">Loading settings...</span>
         </div>
       )}
 
@@ -298,36 +298,36 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess }: Withdraw
                 id="withdraw-method-crypto"
                 onClick={() => setMethod('crypto_coin_select')}
                 disabled={profile && !profile.withdrawalEnabled}
-                className="w-full flex items-center justify-between p-4 bg-slate-800 hover:bg-slate-750 disabled:opacity-50 disabled:pointer-events-none border border-slate-700/80 rounded-2xl transition-all text-left"
+                className="w-full flex items-center justify-between p-4 bg-white hover:bg-zinc-50/80 disabled:opacity-50 disabled:pointer-events-none border border-zinc-200 rounded-2xl transition-all text-left"
               >
                 <div className="flex items-center gap-4">
-                  <div className="w-11 h-11 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-400 shrink-0">
+                  <div className="w-11 h-11 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-600 shrink-0">
                     <Send size={20} className="rotate-[-45deg]" />
                   </div>
                   <div>
-                    <h3 className="font-bold text-sm text-zinc-100">Withdraw to External Crypto Wallet</h3>
+                    <h3 className="font-bold text-sm text-zinc-800">Withdraw to External Crypto Wallet</h3>
                     <p className="text-xs text-zinc-500 mt-0.5">Submit to admin queue for direct stablecoin payouts</p>
                   </div>
                 </div>
-                <ChevronRight size={16} className="text-zinc-500" />
+                <ChevronRight size={16} className="text-zinc-400" />
               </button>
 
               <button
                 id="withdraw-method-p2p"
                 onClick={() => setMethod('p2p')}
                 disabled={profile && !profile.withdrawalEnabled}
-                className="w-full flex items-center justify-between p-4 bg-slate-800 hover:bg-slate-750 disabled:opacity-50 disabled:pointer-events-none border border-slate-700/80 rounded-2xl transition-all text-left"
+                className="w-full flex items-center justify-between p-4 bg-white hover:bg-zinc-50/80 disabled:opacity-50 disabled:pointer-events-none border border-zinc-200 rounded-2xl transition-all text-left"
               >
                 <div className="flex items-center gap-4">
-                  <div className="w-11 h-11 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-400 shrink-0">
+                  <div className="w-11 h-11 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-600 shrink-0">
                     <Users size={20} />
                   </div>
                   <div>
-                    <h3 className="font-bold text-sm text-zinc-100">Sell USD to Local P2P Merchants</h3>
+                    <h3 className="font-bold text-sm text-zinc-800">Sell USD to Local P2P Merchants</h3>
                     <p className="text-xs text-zinc-500 mt-0.5">Cash out USD directly for local shillings (Instant Release)</p>
                   </div>
                 </div>
-                <ChevronRight size={16} className="text-zinc-500" />
+                <ChevronRight size={16} className="text-zinc-400" />
               </button>
             </div>
           )}
@@ -350,12 +350,12 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess }: Withdraw
                       }
                       setMethod('crypto');
                     }}
-                    className="w-full flex items-center justify-between p-4 bg-slate-800 hover:bg-slate-750 border border-slate-700/80 rounded-2xl transition-all text-left group"
+                    className="w-full flex items-center justify-between p-4 bg-white hover:bg-zinc-50 border border-zinc-200 rounded-2xl transition-all text-left group"
                   >
                     <div className="flex items-center gap-3.5">
                       <CoinIcon symbol={net.id.toUpperCase()} className="w-10 h-10" />
                       <div>
-                        <h4 className="font-bold text-sm text-zinc-100 group-hover:text-red-400 transition-colors">
+                        <h4 className="font-bold text-sm text-zinc-800 group-hover:text-amber-600 transition-colors">
                           {formattedName}
                         </h4>
                         <p className="text-[10px] text-zinc-500 mt-0.5">
@@ -363,7 +363,7 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess }: Withdraw
                         </p>
                       </div>
                     </div>
-                    <ChevronRight size={16} className="text-zinc-500 group-hover:text-zinc-300 transition-colors" />
+                    <ChevronRight size={16} className="text-zinc-400 group-hover:text-zinc-600 transition-colors" />
                   </button>
                 );
               })}
@@ -374,17 +374,17 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess }: Withdraw
           {method === 'crypto' && selectedCoin && (
             <div className="space-y-4">
               {/* Selected Coin Banner */}
-              <div className="bg-slate-800/50 border border-slate-700/60 rounded-2xl p-4 flex items-center gap-3.5 mb-2">
+              <div className="bg-white border border-zinc-200 rounded-2xl p-4 flex items-center gap-3.5 mb-2">
                 <CoinIcon symbol={selectedCoin.id.toUpperCase()} className="w-11 h-11 rounded-xl" />
                 <div>
                   <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block">Selected Asset</span>
-                  <span className="text-sm font-black text-white">{formatCoinName(selectedCoin.tokenName)}</span>
+                  <span className="text-sm font-black text-zinc-800">{formatCoinName(selectedCoin.tokenName)}</span>
                 </div>
               </div>
 
               {/* Network Picker */}
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-zinc-400">Select Network</label>
+                <label className="text-xs font-semibold text-zinc-500">Select Network</label>
                 <div className="grid grid-cols-3 gap-2">
                   {selectedCoin.networks.map(net => (
                     <button
@@ -394,8 +394,8 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess }: Withdraw
                       onClick={() => setSelectedNetwork(net)}
                       className={`py-2 px-3 rounded-xl border text-xs font-semibold transition-all text-center ${
                         selectedNetwork === net
-                          ? 'bg-red-500/10 border-red-500 text-red-400'
-                          : 'bg-slate-800 border-slate-700 text-zinc-500 hover:text-zinc-300'
+                          ? 'bg-amber-500/10 border-amber-500 text-amber-600'
+                          : 'bg-white border-zinc-200 text-zinc-500 hover:text-zinc-850'
                       }`}
                     >
                       {net}
@@ -406,7 +406,7 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess }: Withdraw
 
               {/* Destination Address */}
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-zinc-400">External Destination Wallet Address ({selectedNetwork})</label>
+                <label className="text-xs font-semibold text-zinc-500">External Destination Wallet Address ({selectedNetwork})</label>
                 <input
                   id="withdraw-crypto-address"
                   type="text"
@@ -414,14 +414,14 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess }: Withdraw
                   placeholder={`Paste external ${selectedNetwork} wallet address`}
                   value={destAddress}
                   onChange={(e) => setDestAddress(e.target.value)}
-                  className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500 text-white font-mono"
+                  className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 text-zinc-800 font-mono"
                 />
               </div>
 
               {/* Amount USD */}
               <div className="space-y-1.5">
                 <div className="flex justify-between items-center">
-                  <label className="text-xs font-semibold text-zinc-400">Amount (USD)</label>
+                  <label className="text-xs font-semibold text-zinc-500">Amount (USD)</label>
                   <span className="text-[10px] text-zinc-500 font-semibold">
                     Available: ${Math.max(0, (profile?.balance || 0) - lockedUSDT).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </span>
@@ -435,14 +435,14 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess }: Withdraw
                     placeholder="100.00"
                     value={amountUSD}
                     onChange={(e) => setAmountUSD(e.target.value)}
-                    className="w-full pl-8 pr-16 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500 text-white font-mono"
+                    className="w-full pl-8 pr-16 py-3 bg-white border border-zinc-200 rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 text-zinc-800 font-mono"
                   />
                   <button
                     type="button"
                     onClick={() => setAmountUSD(Math.max(0, (profile?.balance || 0) - lockedUSDT).toString())}
                     className="absolute inset-y-0 right-0 pr-3 flex items-center"
                   >
-                    <span className="bg-red-500/15 hover:bg-red-500/25 text-red-400 font-black text-[10px] px-2.5 py-1 rounded-md border border-red-500/30 transition-all cursor-pointer">
+                    <span className="bg-amber-500/15 hover:bg-amber-500/25 text-amber-600 font-black text-[10px] px-2.5 py-1 rounded-md border border-amber-500/30 transition-all cursor-pointer">
                       MAX
                     </span>
                   </button>
@@ -474,7 +474,7 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess }: Withdraw
                   }
                   setMethod('crypto_pin_confirm');
                 }}
-                className="w-full flex items-center justify-center gap-2 py-3.5 bg-gradient-to-r from-red-600 to-rose-500 text-white hover:from-red-500 hover:to-rose-400 disabled:bg-slate-800 disabled:text-zinc-500 rounded-xl text-sm font-bold transition-all shadow-md mt-6 cursor-pointer uppercase tracking-wider"
+                className="w-full flex items-center justify-between py-3 px-5 bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600 disabled:bg-zinc-200 disabled:text-zinc-400 rounded-xl text-sm font-bold transition-all shadow-md mt-6 cursor-pointer"
               >
                 <span>Proceed to Secure Confirmation</span>
                 <ChevronRight size={16} />
@@ -485,45 +485,45 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess }: Withdraw
           {/* Crypto Enter PIN Final Confirm Screen */}
           {method === 'crypto_pin_confirm' && selectedCoin && (
             <div className="space-y-5 text-left">
-              <div className="bg-slate-800 border border-slate-700 rounded-2xl p-5 space-y-4">
-                <div className="flex flex-col items-center justify-center text-center gap-2.5 pb-2 border-b border-slate-700/60">
-                  <div className="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center text-red-400">
+              <div className="bg-white border border-zinc-200 rounded-2xl p-5 space-y-4">
+                <div className="flex flex-col items-center justify-center text-center gap-2.5 pb-2 border-b border-zinc-200/60">
+                  <div className="w-12 h-12 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-500">
                     <Lock size={22} />
                   </div>
                   <div>
-                    <h3 className="text-sm font-black text-zinc-100">Confirm Crypto Withdrawal</h3>
+                    <h3 className="text-sm font-black text-zinc-800">Confirm Crypto Withdrawal</h3>
                     <p className="text-[11px] text-zinc-500">Authorize transfer of assets to your destination address</p>
                   </div>
                 </div>
                 
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center text-xs pb-1 border-b border-slate-700/30">
+                <div className="space-y-3 text-xs">
+                  <div className="flex justify-between items-center pb-1 border-b border-zinc-100">
                     <span className="text-zinc-500">Asset</span>
-                    <span className="font-mono font-bold text-zinc-200">{formatCoinName(selectedCoin.tokenName)}</span>
+                    <span className="font-mono font-bold text-zinc-800">{formatCoinName(selectedCoin.tokenName)}</span>
                   </div>
-                  <div className="flex justify-between items-center text-xs pb-1 border-b border-slate-700/30">
+                  <div className="flex justify-between items-center pb-1 border-b border-zinc-100">
                     <span className="text-zinc-500">Network</span>
-                    <span className="font-mono font-bold text-red-400">{selectedNetwork}</span>
+                    <span className="font-mono font-bold text-amber-600">{selectedNetwork}</span>
                   </div>
-                  <div className="flex justify-between items-center text-xs pb-1 border-b border-slate-700/30">
+                  <div className="flex justify-between items-center pb-1 border-b border-zinc-100">
                     <span className="text-zinc-500">Destination Address</span>
-                    <span className="font-mono font-bold text-zinc-300 break-all max-w-[180px] text-right">{destAddress}</span>
+                    <span className="font-mono font-bold text-zinc-600 break-all max-w-[180px] text-right">{destAddress}</span>
                   </div>
-                  <div className="flex justify-between items-center text-xs">
+                  <div className="flex justify-between items-center">
                     <span className="text-zinc-500">Amount to Withdraw</span>
-                    <span className="font-mono font-bold text-red-400">${parseFloat(amountUSD).toLocaleString(undefined, { minimumFractionDigits: 2 })} USD</span>
+                    <span className="font-mono font-bold text-amber-600">${parseFloat(amountUSD).toLocaleString(undefined, { minimumFractionDigits: 2 })} USD</span>
                   </div>
                 </div>
 
-                <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-400 text-[10px] rounded-xl leading-relaxed text-center">
+                <div className="p-3 bg-red-50 border border-red-100 text-red-800 text-[10px] rounded-xl leading-relaxed text-center">
                   <strong>Caution:</strong> Ensure the wallet address is correct. Crypto transfers are irreversible.
                 </div>
               </div>
 
               {/* Wallet PIN Form */}
-              <div className="space-y-4 bg-slate-800/40 border border-slate-700/60 rounded-2xl p-4">
+              <div className="space-y-4 bg-white border border-zinc-200 rounded-2xl p-4">
                 <div className="space-y-1.5 text-center">
-                  <label className="text-xs font-semibold text-zinc-400 block">
+                  <label className="text-xs font-semibold text-zinc-500 block">
                     Enter 4-Digit Wallet Security PIN
                   </label>
                   <input
@@ -534,7 +534,7 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess }: Withdraw
                     placeholder="••••"
                     value={walletPIN}
                     onChange={(e) => setWalletPIN(e.target.value.replace(/\D/g, ''))}
-                    className="w-32 mx-auto px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-center text-lg font-mono tracking-widest focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-white block"
+                    className="w-32 mx-auto px-4 py-3 bg-zinc-50 border border-zinc-250 rounded-xl text-center text-lg font-mono tracking-widest focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 text-zinc-800 block"
                   />
                 </div>
 
@@ -542,7 +542,7 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess }: Withdraw
                   id="confirm-crypto-release-btn"
                   onClick={handleCryptoWithdrawSubmit}
                   disabled={submitting || !walletPIN || walletPIN.length !== 4}
-                  className="w-full flex items-center justify-center gap-2 py-3.5 bg-gradient-to-r from-red-600 to-rose-500 text-white hover:from-red-500 hover:to-rose-400 disabled:bg-slate-800 disabled:text-zinc-500 rounded-xl text-sm font-black transition-all shadow-md cursor-pointer uppercase tracking-wider"
+                  className="w-full flex items-center justify-center gap-2 py-3.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600 disabled:bg-zinc-200 disabled:text-zinc-400 rounded-xl text-sm font-black transition-all shadow-md cursor-pointer uppercase tracking-wider"
                 >
                   {submitting ? (
                     <>
@@ -560,7 +560,7 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess }: Withdraw
                     setError(null);
                     setMethod('crypto');
                   }}
-                  className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-zinc-400 hover:text-zinc-300 rounded-xl text-xs font-bold transition-all cursor-pointer text-center"
+                  className="w-full py-2.5 bg-white hover:bg-zinc-50 border border-zinc-200 text-zinc-500 hover:text-zinc-700 rounded-xl text-xs font-bold transition-all cursor-pointer text-center"
                 >
                   Cancel & Go Back
                 </button>
@@ -583,27 +583,27 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess }: Withdraw
                       <div
                          key={merch.id}
                          id={`p2p-sell-merchant-${merch.id}`}
-                         className="bg-slate-800 border border-slate-700/80 rounded-2xl p-4 hover:border-slate-600 transition-all flex flex-col justify-between gap-4"
+                         className="bg-white border border-zinc-200 rounded-2xl p-4 hover:border-amber-400 transition-all flex flex-col justify-between gap-4"
                       >
                         <div className="flex justify-between items-start">
                           {/* Rating top-left */}
-                          <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-bold text-[10px]">
-                            <Star size={10} className="fill-emerald-400 text-emerald-400" />
+                          <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-600 font-bold text-[10px]">
+                            <Star size={10} className="fill-amber-500 text-amber-500" />
                             <span>{merch.rating.toFixed(2)} Rating</span>
                           </div>
                           {/* Merchant Name top-right */}
-                          <span className="text-xs font-black text-zinc-300 tracking-tight">{merch.name}</span>
+                          <span className="text-xs font-black text-zinc-700 tracking-tight">{merch.name}</span>
                         </div>
 
                         <div className="flex justify-between items-end">
                           <div>
                             <div className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">Payout Rate</div>
-                            <div className="text-base font-black text-emerald-400 font-mono mt-0.5">
+                            <div className="text-base font-black text-amber-600 font-mono mt-0.5">
                               {(merch.rate - 1.5).toLocaleString()} Shs <span className="text-xs text-zinc-400 font-normal">/ 1 USD</span>
                             </div>
                             <div className="flex gap-1.5 mt-1.5">
                               {merch.providers.map(prov => (
-                                <span key={prov} className="text-[9px] px-2 py-0.5 bg-slate-950 border border-slate-800 text-zinc-400 rounded-md font-semibold">
+                                <span key={prov} className="text-[9px] px-2 py-0.5 bg-zinc-50 border border-zinc-200 text-zinc-500 rounded-md font-semibold">
                                   {prov}
                                 </span>
                               ))}
@@ -616,7 +616,7 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess }: Withdraw
                               setSelectedMerchant(merch);
                               setMethod('p2p_calc');
                             }}
-                            className="px-5 py-2 bg-gradient-to-r from-red-600 to-rose-500 text-white hover:from-red-500 hover:to-rose-400 rounded-xl text-xs font-bold shadow-md shadow-red-500/5 cursor-pointer"
+                            className="px-5 py-2 bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600 rounded-xl text-xs font-bold shadow-md shadow-amber-500/5 cursor-pointer"
                           >
                             SELL
                           </button>
@@ -632,17 +632,17 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess }: Withdraw
           {/* P2P SELL Calculator */}
           {method === 'p2p_calc' && selectedMerchant && (
             <div className="space-y-5">
-              <div className="bg-slate-800 border border-slate-700 rounded-2xl p-4">
+              <div className="bg-white border border-zinc-200 rounded-2xl p-4">
                 <div className="flex justify-between">
-                  <span className="text-xs text-zinc-400 font-bold">{selectedMerchant.name}</span>
-                  <div className="flex items-center gap-1 text-[11px] text-emerald-400 font-bold">
-                    <Star size={12} className="fill-emerald-400" />
+                  <span className="text-xs text-zinc-500 font-bold">{selectedMerchant.name}</span>
+                  <div className="flex items-center gap-1 text-[11px] text-amber-600 font-bold">
+                    <Star size={12} className="fill-amber-500 text-amber-500" />
                     <span>{selectedMerchant.rating}</span>
                   </div>
                 </div>
                 <div className="mt-2 text-xs text-zinc-500">
                   <span>Merchant Payout Rate: </span>
-                  <span className="font-mono font-bold text-zinc-200">{(selectedMerchant.rate - 1.5).toFixed(2)} Shs = 1.00 USD</span>
+                  <span className="font-mono font-bold text-zinc-750">{(selectedMerchant.rate - 1.5).toFixed(2)} Shs = 1.00 USD</span>
                 </div>
               </div>
 
@@ -650,7 +650,7 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess }: Withdraw
               <div className="space-y-4">
                 <div className="space-y-1.5">
                   <div className="flex justify-between items-center">
-                    <label className="text-xs font-semibold text-zinc-400">Amount (USD to Sell)</label>
+                    <label className="text-xs font-semibold text-zinc-500">Amount (USD to Sell)</label>
                     <span className="text-[10px] text-zinc-500 font-semibold">
                       Available: ${Math.max(0, (profile?.balance || 0) - lockedUSDT).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </span>
@@ -664,23 +664,23 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess }: Withdraw
                       placeholder="100.00"
                       value={p2pUSDAmount}
                       onChange={(e) => setP2pUSDAmount(e.target.value)}
-                      className="w-full pl-8 pr-16 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500 text-white font-mono"
+                      className="w-full pl-8 pr-16 py-3 bg-white border border-zinc-200 rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 text-zinc-800 font-mono"
                     />
                     <button
                       type="button"
                       onClick={() => setP2pUSDAmount(Math.max(0, (profile?.balance || 0) - lockedUSDT).toString())}
                       className="absolute inset-y-0 right-0 pr-3 flex items-center"
                     >
-                      <span className="bg-red-500/15 hover:bg-red-500/25 text-red-400 font-black text-[10px] px-2.5 py-1 rounded-md border border-red-500/30 transition-all cursor-pointer">
+                      <span className="bg-amber-500/15 hover:bg-amber-500/25 text-amber-600 font-black text-[10px] px-2.5 py-1 rounded-md border border-amber-500/30 transition-all cursor-pointer">
                         MAX
                       </span>
                     </button>
                   </div>
                 </div>
 
-                <div className="bg-slate-950 border border-slate-850 rounded-2xl p-4 flex justify-between items-center">
+                <div className="bg-white border border-zinc-200 rounded-2xl p-4 flex justify-between items-center">
                   <span className="text-xs text-zinc-500 font-semibold">Exact Shillings you will receive</span>
-                  <span className="text-lg font-black text-red-400 font-mono">
+                  <span className="text-lg font-black text-amber-600 font-mono">
                     {p2pUSDAmount && parseFloat(p2pUSDAmount) > 0 
                       ? (parseFloat(p2pUSDAmount) * (selectedMerchant.rate - 1.5)).toLocaleString(undefined, { maximumFractionDigits: 2 }) 
                       : '0.00'
@@ -694,7 +694,7 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess }: Withdraw
                 id="p2p-sell-proceed"
                 disabled={!p2pUSDAmount || parseFloat(p2pUSDAmount) <= 0 || parseFloat(p2pUSDAmount) > Math.max(0, (profile?.balance || 0) - lockedUSDT)}
                 onClick={() => setMethod('p2p_instructions')}
-                className="w-full flex items-center justify-between py-3 px-5 bg-gradient-to-r from-red-600 to-rose-500 text-white hover:from-red-500 hover:to-rose-400 disabled:bg-slate-800 disabled:text-zinc-500 rounded-xl text-sm font-bold transition-all shadow-md mt-6 cursor-pointer"
+                className="w-full flex items-center justify-between py-3 px-5 bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600 disabled:bg-zinc-200 disabled:text-zinc-400 rounded-xl text-sm font-bold transition-all shadow-md mt-6 cursor-pointer"
               >
                 <span>Proceed to Sell</span>
                 <ChevronRight size={16} />
@@ -705,39 +705,39 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess }: Withdraw
           {/* P2P Awaiting Release Confirmation */}
           {method === 'p2p_instructions' && selectedMerchant && (
             <div className="space-y-5">
-              <div className="bg-slate-800 border border-slate-700 rounded-2xl p-5 space-y-4">
-                <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider text-center">Payout Details</h3>
+              <div className="bg-white border border-zinc-200 rounded-2xl p-5 space-y-4">
+                <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider text-center">Payout Details</h3>
                 
                 <div className="space-y-3">
-                  <div className="flex justify-between items-center text-xs border-b border-slate-700/60 pb-2">
+                  <div className="flex justify-between items-center text-xs border-b border-zinc-100 pb-2">
                     <span className="text-zinc-500">Merchant Name</span>
-                    <span className="font-bold text-zinc-100">{selectedMerchant.name}</span>
+                    <span className="font-bold text-zinc-850">{selectedMerchant.name}</span>
                   </div>
-                  <div className="flex justify-between items-center text-xs border-b border-slate-700/60 pb-2">
+                  <div className="flex justify-between items-center text-xs border-b border-zinc-100 pb-2">
                     <span className="text-zinc-500">Expected Local Shillings</span>
-                    <span className="font-mono font-bold text-red-400">
+                    <span className="font-mono font-bold text-amber-600">
                       {(parseFloat(p2pUSDAmount) * (selectedMerchant.rate - 1.5)).toLocaleString()} Shs
                     </span>
                   </div>
-                  <div className="flex justify-between items-center text-xs border-b border-slate-700/60 pb-2">
+                  <div className="flex justify-between items-center text-xs border-b border-zinc-100 pb-2">
                     <span className="text-zinc-500">Merchant Payment Number</span>
-                    <span className="font-mono font-bold text-zinc-100">{selectedMerchant.paymentNumber}</span>
+                    <span className="font-mono font-bold text-zinc-800">{selectedMerchant.paymentNumber}</span>
                   </div>
-                  <div className="flex justify-between items-center text-xs border-b border-slate-700/60 pb-2">
+                  <div className="flex justify-between items-center text-xs border-b border-zinc-100 pb-2">
                     <span className="text-zinc-500">Reference Sell ID</span>
-                    <span className="font-mono font-bold text-zinc-400 text-[10px]">{p2pTxId}</span>
+                    <span className="font-mono font-bold text-zinc-500 text-[10px]">{p2pTxId}</span>
                   </div>
                 </div>
  
-                <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-400 text-[10px] rounded-xl leading-relaxed">
+                <div className="p-3 bg-amber-50 border border-amber-100 text-amber-800 text-[10px] rounded-xl leading-relaxed">
                   <strong>P2P Escrow Protection Notice:</strong> The merchant has been pinged. Once you verify that you have successfully received mobile money of <strong>{(parseFloat(p2pUSDAmount) * (selectedMerchant.rate - 1.5)).toLocaleString()} Shs</strong>, click the confirmation button below to proceed to the secure release screen.
                 </div>
               </div>
  
               {/* Proceed Button */}
               <div className="space-y-3 pt-2">
-                <p className="text-xs text-zinc-400 text-center font-bold flex items-center justify-center gap-1">
-                  <HelpCircle size={14} className="text-red-400" />
+                <p className="text-xs text-zinc-500 text-center font-bold flex items-center justify-center gap-1">
+                  <HelpCircle size={14} className="text-amber-500" />
                   Have you successfully received the payout?
                 </p>
                 <button
@@ -750,7 +750,7 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess }: Withdraw
                     setError(null);
                     setMethod('p2p_pin_confirm');
                   }}
-                  className="w-full flex items-center justify-center gap-2 py-3.5 bg-red-600 hover:bg-red-500 text-white rounded-xl text-sm font-black transition-all shadow-md cursor-pointer uppercase tracking-wider"
+                  className="w-full flex items-center justify-center gap-2 py-3.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600 rounded-xl text-sm font-black transition-all shadow-md cursor-pointer uppercase tracking-wider"
                 >
                   <span>YES, I HAVE RECEIVED THE FUNDS</span>
                   <ChevronRight size={16} />
@@ -762,13 +762,13 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess }: Withdraw
           {/* P2P Enter PIN Final Release Screen */}
           {method === 'p2p_pin_confirm' && selectedMerchant && (
             <div className="space-y-5">
-              <div className="bg-slate-800 border border-slate-700 rounded-2xl p-5 space-y-4">
-                <div className="flex flex-col items-center justify-center text-center gap-2.5 pb-2 border-b border-slate-700/60">
-                  <div className="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center text-red-400">
+              <div className="bg-white border border-zinc-200 rounded-2xl p-5 space-y-4">
+                <div className="flex flex-col items-center justify-center text-center gap-2.5 pb-2 border-b border-zinc-200/60">
+                  <div className="w-12 h-12 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-500">
                     <Lock size={22} />
                   </div>
                   <div>
-                    <h3 className="text-sm font-black text-zinc-100">Release Escrow USD</h3>
+                    <h3 className="text-sm font-black text-zinc-800">Release Escrow USD</h3>
                     <p className="text-[11px] text-zinc-500">Authorize final transfer to {selectedMerchant.name}</p>
                   </div>
                 </div>
@@ -776,25 +776,25 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess }: Withdraw
                 <div className="space-y-3">
                   <div className="flex justify-between items-center text-xs pb-1">
                     <span className="text-zinc-500">Releasing Escrow</span>
-                    <span className="font-mono font-bold text-zinc-200">${parseFloat(p2pUSDAmount).toLocaleString()} USD</span>
+                    <span className="font-mono font-bold text-zinc-800">${parseFloat(p2pUSDAmount).toLocaleString()} USD</span>
                   </div>
                   <div className="flex justify-between items-center text-xs pb-1">
                     <span className="text-zinc-500">Amount Received</span>
-                    <span className="font-mono font-bold text-red-400">
+                    <span className="font-mono font-bold text-amber-600">
                       {(parseFloat(p2pUSDAmount) * (selectedMerchant.rate - 1.5)).toLocaleString()} Shs
                     </span>
                   </div>
                 </div>
 
-                <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-400 text-[10px] rounded-xl leading-relaxed text-center">
+                <div className="p-3 bg-red-50 border border-red-100 text-red-800 text-[10px] rounded-xl leading-relaxed text-center">
                   <strong>Caution:</strong> Releasing escrow is final and cannot be reversed. Only input your PIN if you have verified the funds are in your mobile wallet.
                 </div>
               </div>
 
               {/* Wallet PIN Form */}
-              <div className="space-y-4 bg-slate-800/40 border border-slate-700/60 rounded-2xl p-4">
+              <div className="space-y-4 bg-white border border-zinc-200 rounded-2xl p-4">
                 <div className="space-y-1.5 text-center">
-                  <label className="text-xs font-semibold text-zinc-400 block">
+                  <label className="text-xs font-semibold text-zinc-500 block">
                     Enter 4-Digit Wallet Security PIN
                   </label>
                   <input
@@ -805,7 +805,7 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess }: Withdraw
                     placeholder="••••"
                     value={walletPIN}
                     onChange={(e) => setWalletPIN(e.target.value.replace(/\D/g, ''))}
-                    className="w-32 mx-auto px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-center text-lg font-mono tracking-widest focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-white block"
+                    className="w-32 mx-auto px-4 py-3 bg-zinc-50 border border-zinc-250 rounded-xl text-center text-lg font-mono tracking-widest focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 text-zinc-800 block"
                   />
                 </div>
 
@@ -813,7 +813,7 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess }: Withdraw
                   id="confirm-release-pin-btn"
                   onClick={handleP2PSellRelease}
                   disabled={submitting || !walletPIN || walletPIN.length !== 4}
-                  className="w-full flex items-center justify-center gap-2 py-3.5 bg-gradient-to-r from-red-600 to-rose-500 text-white hover:from-red-500 hover:to-rose-400 disabled:bg-slate-800 disabled:text-zinc-500 rounded-xl text-sm font-black transition-all shadow-md cursor-pointer animate-pulse"
+                  className="w-full flex items-center justify-center gap-2 py-3.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600 disabled:bg-zinc-200 disabled:text-zinc-400 rounded-xl text-sm font-black transition-all shadow-md cursor-pointer"
                 >
                   {submitting ? (
                     <>
@@ -831,7 +831,7 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess }: Withdraw
                     setError(null);
                     setMethod('p2p_instructions');
                   }}
-                  className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-zinc-400 hover:text-zinc-300 rounded-xl text-xs font-bold transition-all cursor-pointer text-center"
+                  className="w-full py-2.5 bg-white hover:bg-zinc-50 border border-zinc-200 text-zinc-500 hover:text-zinc-700 rounded-xl text-xs font-bold transition-all cursor-pointer text-center"
                 >
                   Cancel & Go Back
                 </button>

@@ -440,16 +440,16 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
   };
 
   return (
-    <div id="auth-page-container" className="min-h-screen flex items-center justify-center p-4 sm:p-6 bg-slate-900 text-zinc-100 font-sans">
+    <div id="auth-page-container" className="min-h-screen flex items-center justify-center p-4 sm:p-6 bg-[#FFF3D6] text-zinc-800 font-sans">
       <div className="w-full max-w-sm">
         
         {/* Brand Banner */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center mb-4 relative group">
             {/* Pulsing ambient glow behind icon */}
-            <div className="absolute inset-0 bg-emerald-500/20 rounded-full blur-xl group-hover:bg-emerald-500/30 transition-all duration-700 animate-pulse"></div>
+            <div className="absolute inset-0 bg-amber-500/10 rounded-full blur-xl group-hover:bg-amber-500/20 transition-all duration-700 animate-pulse"></div>
             {/* Premium Icon Ring */}
-            <div className="relative w-20 h-20 rounded-3xl bg-slate-950 border border-emerald-500/30 p-2 shadow-2xl shadow-emerald-500/10 flex items-center justify-center overflow-hidden">
+            <div className="relative w-20 h-20 rounded-3xl bg-white border border-zinc-200/80 p-2 shadow-xl flex items-center justify-center overflow-hidden">
               <img 
                 src="/icon.svg" 
                 alt="ARBITRAGE" 
@@ -457,31 +457,31 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
                 referrerPolicy="no-referrer"
               />
               {/* Overlay sheen */}
-              <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/5 to-transparent pointer-events-none"></div>
+              <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-zinc-950/5 to-transparent pointer-events-none"></div>
             </div>
           </div>
-          <h1 className="text-2xl font-black text-zinc-100 tracking-tight">ARBITRAGE Crypto</h1>
-          <p className="text-xs text-zinc-400 mt-1 max-w-[260px] mx-auto">
+          <h1 className="text-2xl font-black text-zinc-800 tracking-tight">ARBITRAGE Crypto</h1>
+          <p className="text-xs text-zinc-500 mt-1 max-w-[260px] mx-auto">
             Start earning from crypto with the most favourable rates.
           </p>
         </div>
 
         {/* Auth Box Card */}
-        <div className="bg-slate-800 border border-slate-700/80 rounded-3xl p-6 shadow-2xl space-y-6">
+        <div className="bg-white border border-zinc-200/60 rounded-3xl p-6 shadow-xl space-y-6">
           {show2faPrompt ? (
             <div className="space-y-6">
               <div className="space-y-1">
-                <h2 className="text-lg font-bold text-zinc-100 flex items-center gap-2">
-                  <Shield size={18} className="text-emerald-400" />
+                <h2 className="text-lg font-bold text-zinc-800 flex items-center gap-2">
+                  <Shield size={18} className="text-amber-500" />
                   Two-Factor Verification
                 </h2>
-                <p className="text-xs text-zinc-400 leading-relaxed">
+                <p className="text-xs text-zinc-500 leading-relaxed">
                   This wallet is secured with Two-Factor Authentication. Please enter the 6-digit passcode from your Google Authenticator app.
                 </p>
               </div>
 
               {twoFactorError && (
-                <div id="auth-2fa-error-banner" className="p-3 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl text-xs flex items-start gap-2">
+                <div id="auth-2fa-error-banner" className="p-3 bg-red-50 border border-red-100 text-red-600 rounded-xl text-xs flex items-start gap-2">
                   <AlertCircle size={16} className="mt-0.5 shrink-0" />
                   <span>{twoFactorError}</span>
                 </div>
@@ -489,7 +489,7 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
 
               <form onSubmit={handleVerify2faLogin} className="space-y-4">
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-zinc-500 uppercase tracking-wider block text-center">Google Authenticator Code</label>
+                  <label className="text-[10px] font-black text-zinc-400 uppercase tracking-wider block text-center">Google Authenticator Code</label>
                   <input
                     id="auth-2fa-input"
                     type="text"
@@ -499,14 +499,14 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
                     placeholder="000000"
                     value={twoFactorCode}
                     onChange={(e) => setTwoFactorCode(e.target.value.replace(/\D/g, ''))}
-                    className="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-xl text-center font-mono text-lg tracking-widest text-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                    className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-xl text-center font-mono text-lg tracking-widest text-amber-600 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
                   />
                 </div>
 
                 <button
                   id="auth-2fa-verify-btn"
                   type="submit"
-                  className="w-full py-3 bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-bold rounded-xl text-xs tracking-wider uppercase shadow-md transition-all cursor-pointer"
+                  className="w-full py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-bold rounded-xl text-xs tracking-wider uppercase shadow-md transition-all cursor-pointer"
                 >
                   Verify & Log In
                 </button>
@@ -515,7 +515,7 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
                   id="auth-2fa-cancel-btn"
                   type="button"
                   onClick={() => { setShow2faPrompt(false); setTwoFactorCode(''); setTwoFactorError(null); }}
-                  className="w-full py-2 bg-slate-700 hover:bg-slate-650 text-zinc-400 rounded-xl text-[10px] uppercase font-bold tracking-wider transition-all cursor-pointer text-center"
+                  className="w-full py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-600 rounded-xl text-[10px] uppercase font-bold tracking-wider transition-all cursor-pointer text-center"
                 >
                   Back to Sign In
                 </button>
@@ -524,10 +524,10 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
           ) : (
             <>
               <div className="space-y-1">
-                <h2 className="text-lg font-bold text-zinc-100">
+                <h2 className="text-lg font-bold text-zinc-800">
                   {isReset ? 'Reset Wallet Password' : isSignUp ? 'Create your Wallet' : 'Sign in to Wallet'}
                 </h2>
-                <p className="text-xs text-zinc-500">
+                <p className="text-xs text-zinc-400">
                   {isReset 
                     ? 'Enter your email and a new password to reset your account password.' 
                     : isSignUp 
@@ -538,15 +538,15 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
               </div>
 
               {error && (
-                <div id="auth-error-banner" className="p-3 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl text-xs flex items-start gap-2">
+                <div id="auth-error-banner" className="p-3 bg-red-50 border border-red-100 text-red-600 rounded-xl text-xs flex items-start gap-2">
                   <AlertCircle size={16} className="mt-0.5 shrink-0" />
                   <span>{error}</span>
                 </div>
               )}
 
               {successMsg && (
-                <div id="auth-success-banner" className="p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-xl text-xs flex items-start gap-2">
-                  <Sparkles size={16} className="mt-0.5 shrink-0 text-emerald-400" />
+                <div id="auth-success-banner" className="p-3 bg-emerald-50 border border-emerald-100 text-emerald-700 rounded-xl text-xs flex items-start gap-2">
+                  <Sparkles size={16} className="mt-0.5 shrink-0 text-emerald-600" />
                   <span>{successMsg}</span>
                 </div>
               )}
@@ -556,9 +556,9 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
                 {/* Display Name - Sign Up Only */}
                 {isSignUp && !isReset && (
                   <div className="space-y-1">
-                    <label className="text-xs font-semibold text-zinc-400">Display Name</label>
+                    <label className="text-xs font-semibold text-zinc-600">Display Name</label>
                     <div className="relative">
-                      <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-zinc-500">
+                      <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-zinc-400">
                         <User size={15} />
                       </span>
                       <input
@@ -568,7 +568,7 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
                         placeholder="John Doe"
                         value={displayName}
                         onChange={(e) => setDisplayName(e.target.value)}
-                        className="w-full pl-9 pr-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 placeholder-zinc-600 text-white"
+                        className="w-full pl-9 pr-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 placeholder-zinc-400 text-zinc-800"
                       />
                     </div>
                   </div>
@@ -576,9 +576,9 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
 
                 {/* Email Field */}
                 <div className="space-y-1">
-                  <label className="text-xs font-semibold text-zinc-400">Email Address</label>
+                  <label className="text-xs font-semibold text-zinc-600">Email Address</label>
                   <div className="relative">
-                    <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-zinc-500">
+                    <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-zinc-400">
                       <Mail size={15} />
                     </span>
                     <input
@@ -588,7 +588,7 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
                       placeholder="love@gmail.com or personal"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="w-full pl-9 pr-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 placeholder-zinc-600 text-white"
+                      className="w-full pl-9 pr-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 placeholder-zinc-400 text-zinc-800"
                     />
                   </div>
                 </div>
@@ -598,9 +598,9 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
                   <>
                     {/* New Password */}
                     <div className="space-y-1">
-                      <label className="text-xs font-semibold text-zinc-400">New Password</label>
+                      <label className="text-xs font-semibold text-zinc-600">New Password</label>
                       <div className="relative">
-                        <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-zinc-500">
+                        <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-zinc-400">
                           <Lock size={15} />
                         </span>
                         <input
@@ -611,12 +611,12 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
                           placeholder="••••••••"
                           value={resetNewPassword}
                           onChange={(e) => setResetNewPassword(e.target.value)}
-                          className="w-full pl-9 pr-10 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 placeholder-zinc-600 text-white"
+                          className="w-full pl-9 pr-10 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 placeholder-zinc-400 text-zinc-800"
                         />
                         <button
                           type="button"
                           onClick={() => setShowResetPassword(!showResetPassword)}
-                          className="absolute inset-y-0 right-0 flex items-center pr-3 text-zinc-500 hover:text-zinc-300 focus:outline-none cursor-pointer"
+                          className="absolute inset-y-0 right-0 flex items-center pr-3 text-zinc-400 hover:text-zinc-600 focus:outline-none cursor-pointer"
                           title={showResetPassword ? "Hide password" : "Show password"}
                         >
                           {showResetPassword ? <EyeOff size={15} /> : <Eye size={15} />}
@@ -626,9 +626,9 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
 
                     {/* Confirm New Password */}
                     <div className="space-y-1">
-                      <label className="text-xs font-semibold text-zinc-400">Confirm New Password</label>
+                      <label className="text-xs font-semibold text-zinc-600">Confirm New Password</label>
                       <div className="relative">
-                        <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-zinc-500">
+                        <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-zinc-400">
                           <Lock size={15} />
                         </span>
                         <input
@@ -639,7 +639,7 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
                           placeholder="••••••••"
                           value={resetConfirmPassword}
                           onChange={(e) => setResetConfirmPassword(e.target.value)}
-                          className="w-full pl-9 pr-10 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 placeholder-zinc-600 text-white"
+                          className="w-full pl-9 pr-10 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 placeholder-zinc-400 text-zinc-800"
                         />
                       </div>
                     </div>
@@ -650,20 +650,20 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
                 {!isReset && (
                   <div className="space-y-1">
                     <div className="flex justify-between items-center">
-                      <label className="text-xs font-semibold text-zinc-400">Password</label>
+                      <label className="text-xs font-semibold text-zinc-600">Password</label>
                       {!isSignUp && (
                         <button
                           id="auth-forgot-password"
                           type="button"
                           onClick={() => { navigate('/reset'); setError(null); }}
-                          className="text-[11px] font-medium text-emerald-400 hover:underline"
+                          className="text-[11px] font-medium text-amber-600 hover:text-amber-700 hover:underline"
                         >
                           Forgot?
                         </button>
                       )}
                     </div>
                     <div className="relative">
-                      <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-zinc-500">
+                      <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-zinc-400">
                         <Lock size={15} />
                       </span>
                       <input
@@ -674,12 +674,12 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
                         placeholder="••••••••"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
-                        className="w-full pl-9 pr-10 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 placeholder-zinc-600 text-white"
+                        className="w-full pl-9 pr-10 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 placeholder-zinc-400 text-zinc-800"
                       />
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
-                        className="absolute inset-y-0 right-0 flex items-center pr-3 text-zinc-500 hover:text-zinc-300 focus:outline-none cursor-pointer"
+                        className="absolute inset-y-0 right-0 flex items-center pr-3 text-zinc-400 hover:text-zinc-600 focus:outline-none cursor-pointer"
                         title={showPassword ? "Hide password" : "Show password"}
                       >
                         {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
@@ -691,14 +691,14 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
                 {/* Referral Code - Sign Up Only */}
                 {isSignUp && !isReset && (
                   <div className="space-y-1">
-                    <label className="text-xs font-semibold text-zinc-400">Referral Code (Optional)</label>
+                    <label className="text-xs font-semibold text-zinc-600">Referral Code (Optional)</label>
                     <input
                       id="auth-referral"
                       type="text"
                       placeholder="e.g. FRIEND50"
                       value={referral}
                       onChange={(e) => setReferral(e.target.value)}
-                      className="w-full px-3 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 placeholder-zinc-600 text-white"
+                      className="w-full px-3 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 placeholder-zinc-400 text-zinc-800"
                     />
                   </div>
                 )}
@@ -708,7 +708,7 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
                   id="auth-submit-btn"
                   type="submit"
                   disabled={loading}
-                  className="w-full flex items-center justify-center gap-2 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:from-emerald-500 hover:to-teal-500 rounded-xl text-xs font-bold transition-all mt-4 disabled:bg-zinc-800 disabled:text-zinc-500 shadow-md shadow-emerald-500/10 cursor-pointer"
+                  className="w-full flex items-center justify-center gap-2 py-3 bg-gradient-to-r from-amber-500 to-amber-600 text-white hover:from-amber-600 hover:to-amber-700 rounded-xl text-xs font-bold transition-all mt-4 disabled:bg-zinc-100 disabled:text-zinc-400 shadow-md shadow-amber-500/10 cursor-pointer"
                 >
                   {loading ? (
                     <>
@@ -735,17 +735,17 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
                   <button
                     id="auth-back-to-login"
                     onClick={() => { navigate('/login'); setError(null); }}
-                    className="text-xs font-semibold text-zinc-400 hover:text-white hover:underline"
+                    className="text-xs font-semibold text-zinc-500 hover:text-zinc-800 hover:underline"
                   >
                     Back to Sign In
                   </button>
                 ) : (
-                  <p className="text-xs text-zinc-500">
+                  <p className="text-xs text-zinc-550">
                     {isSignUp ? 'Already have an account?' : "Don't have an account?"}{' '}
                     <button
                       id="auth-toggle-btn"
                       onClick={() => { navigate(isSignUp ? '/login' : '/signup'); setError(null); }}
-                      className="text-xs font-bold text-emerald-400 hover:underline"
+                      className="text-xs font-bold text-amber-600 hover:text-amber-700 hover:underline"
                     >
                       {isSignUp ? 'Sign In' : 'Sign Up'}
                     </button>
@@ -753,7 +753,6 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
                 )}
               </div>
 
-            
             </>
           )}
         </div>

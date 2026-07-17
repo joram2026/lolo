@@ -171,18 +171,18 @@ export default function App() {
 
   if (initializing) {
     return (
-      <div id="app-loading-screen" className="min-h-screen bg-slate-900 flex flex-col items-center justify-center gap-4 text-zinc-100 font-sans">
-        <div className="relative w-20 h-20 rounded-3xl bg-slate-950 border border-emerald-500/30 p-2 shadow-2xl shadow-emerald-500/10 flex items-center justify-center overflow-hidden animate-pulse mb-1">
+      <div id="app-loading-screen" className="min-h-screen bg-[#FFF3D6] flex flex-col items-center justify-center gap-4 text-zinc-800 font-sans">
+        <div className="relative w-20 h-20 rounded-3xl bg-white border border-amber-200 p-2 shadow-2xl shadow-amber-500/10 flex items-center justify-center overflow-hidden animate-pulse mb-1">
           <img 
             src="/icon.svg" 
             alt="ARBITRAGE" 
             className="w-full h-full object-contain"
             referrerPolicy="no-referrer"
           />
-          <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/5 to-transparent pointer-events-none"></div>
+          <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-amber-500/10 to-transparent pointer-events-none"></div>
         </div>
         <div className="flex flex-col items-center gap-1.5">
-          <div className="w-6 h-6 border-3 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
+          <div className="w-6 h-6 border-3 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
           <p className="text-xs text-zinc-500 font-semibold tracking-wide">Syncing Wallet Nodes...</p>
         </div>
       </div>
@@ -203,7 +203,7 @@ export default function App() {
   const showDashboard = ['/dashboard', '/wallet', '/trade', '/earn', '/history'].includes(path);
 
   return (
-    <div id="standard-user-app" className="bg-slate-900 min-h-screen">
+    <div id="standard-user-app" className="bg-[#FFF3D6] min-h-screen">
       
       {showDashboard && (
         <StandardUserDashboard
@@ -241,19 +241,19 @@ export default function App() {
       )}
 
       {path === '/tx_success' && (
-        <div id="success-screen-container" className="min-h-screen max-w-sm mx-auto flex flex-col items-center justify-center p-6 bg-slate-900 text-center font-sans">
-          <div className="w-16 h-16 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center mb-5 shadow-lg shadow-emerald-500/5">
+        <div id="success-screen-container" className="min-h-screen max-w-sm mx-auto flex flex-col items-center justify-center p-6 bg-[#FFF3D6] text-center font-sans">
+          <div className="w-16 h-16 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-500 flex items-center justify-center mb-5 shadow-lg shadow-amber-500/5">
             <CheckCircle2 size={36} />
           </div>
 
-          <h2 className="text-xl font-black text-zinc-100 tracking-tight">Request Submitted</h2>
-          <p className="text-xs text-zinc-500 mt-2.5 leading-relaxed">
+          <h2 className="text-xl font-black text-zinc-800 tracking-tight">Request Submitted</h2>
+          <p className="text-xs text-zinc-600 mt-2.5 leading-relaxed">
             {successMessage}
           </p>
 
-          <div className="w-full bg-slate-800 border border-slate-700/80 p-4 rounded-2xl text-left space-y-3 mt-6">
-            <div className="flex items-start gap-2.5 text-[11px] text-zinc-400 leading-normal">
-              <ShieldCheck size={16} className="text-emerald-400 shrink-0 mt-0.5" />
+          <div className="w-full bg-white border border-zinc-200/80 p-4 rounded-2xl text-left space-y-3 mt-6">
+            <div className="flex items-start gap-2.5 text-[11px] text-zinc-600 leading-normal">
+              <ShieldCheck size={16} className="text-amber-500 shrink-0 mt-0.5" />
               <span>
                 <strong>Under Escrow:</strong> Status can be monitored in your <strong>Wallet</strong> tab history. Standard approvals take between 1 to 5 minutes during trading windows.
               </span>
@@ -263,7 +263,7 @@ export default function App() {
           <button
             id="back-to-wallet-dashboard"
             onClick={() => navigate('/dashboard')}
-            className="w-full flex items-center justify-center gap-1.5 py-3 bg-gradient-to-r from-emerald-600 to-teal-500 text-white hover:from-emerald-500 hover:to-teal-400 rounded-xl text-xs font-bold transition-all shadow-md mt-8 cursor-pointer font-sans"
+            className="w-full flex items-center justify-center gap-1.5 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600 rounded-xl text-xs font-bold transition-all shadow-md mt-8 cursor-pointer font-sans"
           >
             <ArrowLeft size={14} />
             <span>Back to Wallet Dashboard</span>
