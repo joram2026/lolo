@@ -117,7 +117,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
 
   const handleCopyReferral = () => {
     const code = (profile as any)?.uniqueCode || '';
-    const referralLink = `https://lolo-navy.vercel.app/#/signup?ref=${code}`;
+    const referralLink = `${window.location.origin}/#/signup?ref=${code}`;
     navigator.clipboard.writeText(referralLink);
     setCopiedReferral(true);
     setTimeout(() => setCopiedReferral(false), 2500);

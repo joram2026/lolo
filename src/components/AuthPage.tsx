@@ -57,17 +57,22 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
     }
     
     if (refCode) {
-      localStorage.setItem('pending_referral_code', refCode);
-    } else {
-      refCode = localStorage.getItem('pending_referral_code') || '';
-    }
-
-    if (refCode) {
-      setReferral(refCode);
+      const upperRefCode = refCode.trim().toUpperCase();
+      localStorage.setItem('pending_referral_code', upperRefCode);
+      setReferral(upperRefCode);
       if (path !== '/signup') {
-        navigate('/signup');
+        navigate('/signup', true); // Navigate and clear search params!
       }
-      setSuccessMsg(`Welcome! Referral code "${refCode}" has been successfully pre-filled.`);
+      setSuccessMsg(`Welcome! Referral code "${upperRefCode}" has been successfully pre-filled.`);
+    } else {
+      const savedRef = localStorage.getItem('pending_referral_code') || '';
+      if (savedRef) {
+        setReferral(savedRef);
+        // Only show prefilled message if they are explicitly on /signup
+        if (path === '/signup') {
+          setSuccessMsg(`Welcome! Referral code "${savedRef}" has been successfully pre-filled.`);
+        }
+      }
     }
   }, [path, navigate]);
 
@@ -79,6 +84,7 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
       return;
     }
     // Validation successful! Proceed to the main dashboard
+    localStorage.removeItem('pending_referral_code');
     onSuccess();
   };
 
@@ -196,7 +202,7 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
           generatedCode += chars.charAt(Math.floor(Math.random() * chars.length));
         }
 
-        const trimmedReferral = referral.trim();
+        const trimmedReferral = referral.trim().toUpperCase();
 
         // Initialize user document in firestore with starting values, the unique referral code, and the accountPassword field
         const docRef = doc(db, 'users', user.uid);
@@ -411,6 +417,7 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
         if (has2fa) {
           setShow2faPrompt(true);
         } else {
+          localStorage.removeItem('pending_referral_code');
           onSuccess();
         }
       }

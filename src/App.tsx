@@ -103,25 +103,31 @@ export default function App() {
     }
     const hasReferral = !!refValue;
 
-    if (hasReferral && user) {
-      // If a referral link is opened but a session is active, sign out first
-      // so the user is correctly shown the signup page.
-      localStorage.removeItem('custom_user_email');
-      localStorage.removeItem('custom_user_uid');
-      signOut(auth).then(() => {
-        navigate('/signup');
-      });
-      return;
+    if (hasReferral) {
+      // Store uppercase referral code in localStorage and clean the URL immediately to avoid loops
+      const upperRef = refValue!.trim().toUpperCase();
+      localStorage.setItem('pending_referral_code', upperRef);
+
+      if (user) {
+        // If a referral link is opened but a session is active, sign out first
+        // so the user is correctly shown the signup page.
+        localStorage.removeItem('custom_user_email');
+        localStorage.removeItem('custom_user_uid');
+        signOut(auth).then(() => {
+          navigate('/signup', true); // clearSearch = true strips URL query params!
+        });
+        return;
+      } else {
+        // Unauthenticated user opened a referral link: send to signup with clean URL
+        navigate('/signup', true);
+        return;
+      }
     }
 
     if (!user) {
       // Unauthenticated state: only allow /login, /signup, /reset
       if (path !== '/login' && path !== '/signup' && path !== '/reset') {
-        if (hasReferral) {
-          navigate('/signup');
-        } else {
-          navigate('/login');
-        }
+        navigate('/login');
       }
     } else if (user.email === 'love@gmail.com') {
       // Admin: only allow /admin
