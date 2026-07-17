@@ -1775,7 +1775,7 @@ export default function StandardUserDashboard({
                       }}
                       className={`border rounded-2xl p-3.5 hover:scale-[1.01] active:scale-[0.99] transition-all duration-300 cursor-pointer group flex flex-col justify-between gap-3 min-h-[105px] ${
                         activeTab === 'home'
-                          ? 'bg-white border-zinc-200/80 hover:bg-zinc-50/80 shadow-xs'
+                          ? 'bg-[#FFF8E1] border-amber-300/90 hover:border-amber-400 hover:bg-[#FFF8E1]/80 shadow-[0_0_10px_rgba(245,158,11,0.08)]'
                           : 'bg-slate-800/60 border-slate-750 hover:bg-slate-800/90'
                       }`}
                     >
@@ -1940,7 +1940,7 @@ export default function StandardUserDashboard({
                         }}
                         className={`flex flex-col p-4 border rounded-2xl hover:scale-[1.01] active:scale-[0.99] transition-all cursor-pointer group ${
                           isLightTheme 
-                            ? 'bg-white border-zinc-200/80 hover:border-amber-500/30 hover:bg-zinc-50/50 shadow-xs' 
+                            ? 'bg-[#FFF8E1] border-amber-300/90 hover:border-amber-400 hover:bg-[#FFF8E1]/80 shadow-[0_0_10px_rgba(245,158,11,0.08)]' 
                             : 'bg-slate-800/80 border-slate-700/65 hover:border-slate-500 hover:bg-slate-800/95'
                         }`}
                       >
@@ -2220,7 +2220,7 @@ export default function StandardUserDashboard({
                             key={coin.symbol}
                             className={`border p-3.5 rounded-2xl flex flex-col justify-between transition-all duration-300 group hover:shadow-lg relative overflow-hidden ${
                               isLightTheme 
-                                ? 'bg-zinc-50/50 border-zinc-200 hover:bg-white hover:border-amber-500/30 hover:shadow-amber-500/5' 
+                                ? 'bg-[#FFF8E1] border-amber-300/90 hover:border-amber-400 hover:bg-[#FFF8E1]/80 hover:shadow-amber-500/10' 
                                 : 'bg-slate-900/40 border-slate-850/70 hover:bg-slate-900/70 hover:border-emerald-500/20 hover:shadow-emerald-950/5'
                             }`}
                           >

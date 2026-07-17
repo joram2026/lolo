@@ -456,7 +456,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
             </div>
 
             {/* User profile banner */}
-            <div className="bg-white border border-zinc-200/80 rounded-2xl p-4 flex items-center gap-3.5 text-left shadow-sm">
+            <div className="bg-[#FFF8E1] border border-zinc-200/80 rounded-2xl p-4 flex items-center gap-3.5 text-left shadow-sm">
               <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-amber-500 to-yellow-500 flex items-center justify-center text-white font-extrabold text-base shadow-md uppercase">
                 {displayName ? displayName.charAt(0) : (user.email ? user.email.charAt(0) : 'U')}
               </div>
@@ -476,7 +476,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
               <button
                 id="nav-personal-info"
                 onClick={() => { setActiveSubPage('personal'); setMessage(null); }}
-                className="w-full bg-white border border-zinc-200/60 hover:border-amber-400/50 hover:bg-zinc-50 p-4 rounded-2xl flex items-center gap-4 transition-all cursor-pointer group shadow-sm"
+                className="w-full bg-[#FFF8E1] border border-zinc-200/60 hover:border-amber-400/50 hover:bg-[#FFF8E1]/80 p-4 rounded-2xl flex items-center gap-4 transition-all cursor-pointer group shadow-sm"
               >
                 <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-600 shrink-0 group-hover:bg-amber-500/20 group-hover:text-amber-700 transition-all">
                   <User size={18} />
@@ -492,7 +492,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
               <button
                 id="nav-referral-program"
                 onClick={() => { setActiveSubPage('referral'); setMessage(null); }}
-                className="w-full bg-white border border-zinc-200/60 hover:border-amber-400/50 hover:bg-zinc-50 p-4 rounded-2xl flex items-center gap-4 transition-all cursor-pointer group shadow-sm"
+                className="w-full bg-[#FFF8E1] border border-zinc-200/60 hover:border-amber-400/50 hover:bg-[#FFF8E1]/80 p-4 rounded-2xl flex items-center gap-4 transition-all cursor-pointer group shadow-sm"
               >
                 <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-600 shrink-0 group-hover:bg-amber-500/20 group-hover:text-amber-700 transition-all">
                   <Gift size={18} />
@@ -513,7 +513,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
               <button
                 id="nav-wallet-pin"
                 onClick={() => { setActiveSubPage('pin'); setPinMessage(null); }}
-                className="w-full bg-white border border-zinc-200/60 hover:border-amber-400/50 hover:bg-zinc-50 p-4 rounded-2xl flex items-center gap-4 transition-all cursor-pointer group shadow-sm"
+                className="w-full bg-[#FFF8E1] border border-zinc-200/60 hover:border-amber-400/50 hover:bg-[#FFF8E1]/80 p-4 rounded-2xl flex items-center gap-4 transition-all cursor-pointer group shadow-sm"
               >
                 <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-600 shrink-0 group-hover:bg-amber-500/20 group-hover:text-amber-700 transition-all">
                   <Lock size={18} />
@@ -540,7 +540,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
               <button
                 id="nav-google-authenticator"
                 onClick={() => { setActiveSubPage('2fa'); }}
-                className="w-full bg-white border border-zinc-200/60 hover:border-amber-400/50 hover:bg-zinc-50 p-4 rounded-2xl flex items-center gap-4 transition-all cursor-pointer group shadow-sm"
+                className="w-full bg-[#FFF8E1] border border-zinc-200/60 hover:border-amber-400/50 hover:bg-[#FFF8E1]/80 p-4 rounded-2xl flex items-center gap-4 transition-all cursor-pointer group shadow-sm"
               >
                 <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-600 shrink-0 group-hover:bg-amber-500/20 group-hover:text-amber-700 transition-all">
                   <Smartphone size={18} />
@@ -567,7 +567,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
               <button
                 id="nav-customer-support"
                 onClick={() => { setActiveSubPage('support'); setMessage(null); }}
-                className="w-full bg-white border border-zinc-200/60 hover:border-amber-400/50 hover:bg-zinc-50 p-4 rounded-2xl flex items-center gap-4 transition-all cursor-pointer group shadow-sm"
+                className="w-full bg-[#FFF8E1] border border-zinc-200/60 hover:border-amber-400/50 hover:bg-[#FFF8E1]/80 p-4 rounded-2xl flex items-center gap-4 transition-all cursor-pointer group shadow-sm"
               >
                 <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-600 shrink-0 group-hover:bg-amber-500/20 group-hover:text-amber-700 transition-all">
                   <HelpCircle size={18} />
@@ -588,7 +588,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
               <button
                 id="nav-mobile-app"
                 onClick={() => { setActiveSubPage('mobile_app'); setMessage(null); }}
-                className="w-full bg-gradient-to-r from-amber-50 to-amber-100/30 border border-amber-300 hover:border-amber-400 hover:bg-amber-100/50 p-4 rounded-2xl flex items-center gap-4 transition-all cursor-pointer group shadow-sm"
+                className="w-full bg-gradient-to-r from-[#FFF8E1] to-amber-100/30 border border-amber-300 hover:border-amber-400 hover:bg-amber-100/50 p-4 rounded-2xl flex items-center gap-4 transition-all cursor-pointer group shadow-sm"
               >
                 <div className="w-10 h-10 rounded-xl bg-amber-500/15 flex items-center justify-center text-amber-600 shrink-0 group-hover:scale-105 transition-all">
                   <Smartphone size={18} />
@@ -644,7 +644,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
           <form onSubmit={handleSave} className="space-y-5">
             
             {/* Read-Only Account Details */}
-            <div className="bg-white border border-zinc-200 shadow-sm rounded-xl p-4 space-y-2.5 text-left">
+            <div className="bg-[#FFF8E1] border border-zinc-200 shadow-sm rounded-xl p-4 space-y-2.5 text-left">
               <div className="flex justify-between items-center text-xs">
                 <span className="text-zinc-500">Account Email</span>
                 <span className="font-mono text-zinc-600 font-medium">{user.email}</span>
@@ -722,7 +722,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
 
           <div id="referral-program-section" className="space-y-4 text-left">
             {/* Promo / Motivation Banner */}
-            <div className="bg-gradient-to-br from-amber-500/10 via-white to-white border border-amber-200/85 rounded-2xl p-4 relative overflow-hidden shadow-sm">
+            <div className="bg-gradient-to-br from-amber-500/10 via-[#FFF8E1] to-[#FFF8E1] border border-amber-200/85 rounded-2xl p-4 relative overflow-hidden shadow-sm">
               <div className="absolute top-0 right-0 p-3 opacity-15">
                 <Gift className="text-amber-500" size={80} />
               </div>
@@ -749,7 +749,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
 
             {/* Referral Earnings & Stats Card */}
             <div className="grid grid-cols-2 gap-3">
-              <div className="bg-white border border-zinc-200/80 shadow-sm rounded-2xl p-4 flex flex-col justify-between">
+              <div className="bg-[#FFF8E1] border border-zinc-200/80 shadow-sm rounded-2xl p-4 flex flex-col justify-between">
                 <div>
                   <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Total Earned</span>
                   <div className="mt-1 flex items-baseline gap-1">
@@ -771,7 +771,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                 <p className="text-[10px] text-zinc-500 mt-2">Paid directly to your balance</p>
               </div>
 
-              <div className="bg-white border border-zinc-200/80 shadow-sm rounded-2xl p-4 flex flex-col justify-between">
+              <div className="bg-[#FFF8E1] border border-zinc-200/80 shadow-sm rounded-2xl p-4 flex flex-col justify-between">
                 <div>
                   <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Successful Invites</span>
                   <div className="mt-1 flex items-baseline gap-1">
@@ -801,7 +801,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
               }
 
               return (
-                <div className="bg-white border border-zinc-200/80 shadow-sm rounded-2xl p-5 space-y-6">
+                <div className="bg-[#FFF8E1] border border-zinc-200/80 shadow-sm rounded-2xl p-5 space-y-6">
                   <div className="flex justify-between items-center">
                     <div className="space-y-0.5">
                       <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Your Referral Tier</span>
@@ -890,7 +890,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
               );
             })()}
 
-                 <div className="bg-white border border-zinc-200 shadow-sm rounded-2xl p-4 space-y-4">
+                 <div className="bg-[#FFF8E1] border border-zinc-200 shadow-sm rounded-2xl p-4 space-y-4">
               {/* Referral Code Box */}
               <div className="flex justify-between items-center text-xs">
                 <span className="text-zinc-500">Your Referral Code</span>
@@ -1037,7 +1037,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
             )}
 
             {profile?.walletPassword && !isChangingPin ? (
-              <div className="bg-white border border-zinc-200 shadow-sm rounded-2xl p-4 flex flex-col gap-4 text-left">
+              <div className="bg-[#FFF8E1] border border-zinc-200 shadow-sm rounded-2xl p-4 flex flex-col gap-4 text-left">
                 <div className="flex items-center gap-2.5">
                   <div className="w-8 h-8 rounded-full bg-amber-50 flex items-center justify-center text-amber-600">
                     <Lock size={14} />
@@ -1063,7 +1063,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                 </button>
               </div>
             ) : (
-              <form onSubmit={handleSavePin} className="bg-white border border-zinc-200 shadow-sm rounded-2xl p-4 sm:p-5 space-y-4 text-left">
+              <form onSubmit={handleSavePin} className="bg-[#FFF8E1] border border-zinc-200 shadow-sm rounded-2xl p-4 sm:p-5 space-y-4 text-left">
                 <h4 className="text-xs font-bold text-zinc-700">
                   {profile?.walletPassword ? 'Change Security PIN' : 'Configure New Wallet PIN'}
                 </h4>
@@ -1195,7 +1195,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
             </p>
 
             {profile?.twoFactorEnabled ? (
-              <div className="bg-white border border-zinc-200 shadow-sm rounded-2xl p-4 space-y-4">
+              <div className="bg-[#FFF8E1] border border-zinc-200 shadow-sm rounded-2xl p-4 space-y-4">
                 <div className="flex items-start gap-3 text-left">
                   <CheckCircle2 size={18} className="text-emerald-600 shrink-0 mt-0.5" />
                   <div>
@@ -1262,7 +1262,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                 <span>Enable Google Authenticator (2FA)</span>
               </button>
             ) : (
-              <div className="bg-white border border-zinc-200 shadow-sm rounded-2xl p-4 sm:p-5 space-y-4">
+              <div className="bg-[#FFF8E1] border border-zinc-200 shadow-sm rounded-2xl p-4 sm:p-5 space-y-4">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-zinc-700 flex items-center gap-1.5">
                     <QrCode size={14} className="text-amber-500" />
@@ -1360,7 +1360,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
 
           <div className="space-y-4 text-left">
             {/* Promo / Intro Banner */}
-            <div className="bg-gradient-to-br from-amber-500/10 via-white to-white border border-amber-200/85 rounded-2xl p-4 space-y-2 shadow-sm">
+            <div className="bg-gradient-to-br from-amber-500/10 via-[#FFF8E1] to-[#FFF8E1] border border-amber-200/85 rounded-2xl p-4 space-y-2 shadow-sm">
               <h3 className="text-sm font-bold text-zinc-800 flex items-center gap-1.5">
                 <span className="relative flex h-2 w-2">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-450 opacity-75"></span>
@@ -1380,7 +1380,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                 href="https://wa.me/#"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-4 bg-white hover:bg-zinc-50 border border-zinc-200 hover:border-zinc-300 p-4 rounded-2xl transition-all group cursor-pointer no-underline block shadow-sm"
+                className="flex items-center gap-4 bg-[#FFF8E1] hover:bg-[#FFF8E1]/80 border border-zinc-200 hover:border-zinc-300 p-4 rounded-2xl transition-all group cursor-pointer no-underline block shadow-sm"
               >
                 <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 shrink-0 group-hover:bg-emerald-100 transition-all">
                   <MessageSquare size={18} />
@@ -1402,7 +1402,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                 href="https://t.me/#"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-4 bg-white hover:bg-zinc-50 border border-zinc-200 hover:border-zinc-300 p-4 rounded-2xl transition-all group cursor-pointer no-underline block shadow-sm"
+                className="flex items-center gap-4 bg-[#FFF8E1] hover:bg-[#FFF8E1]/80 border border-zinc-200 hover:border-zinc-300 p-4 rounded-2xl transition-all group cursor-pointer no-underline block shadow-sm"
               >
                 <div className="w-10 h-10 rounded-xl bg-sky-50 flex items-center justify-center text-sky-600 shrink-0 group-hover:bg-sky-100 transition-all">
                   <Send size={18} />
@@ -1421,7 +1421,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
             </div>
 
             {/* Quick Note Card */}
-            <div className="bg-white border border-zinc-200 shadow-sm rounded-2xl p-4 flex gap-3 text-xs text-zinc-500 leading-relaxed">
+            <div className="bg-[#FFF8E1] border border-zinc-200 shadow-sm rounded-2xl p-4 flex gap-3 text-xs text-zinc-500 leading-relaxed">
               <ShieldAlert size={18} className="text-amber-500 shrink-0 mt-0.5" />
               <div>
                 <strong className="text-zinc-700 block mb-1">Official Protection Notice</strong>
@@ -1891,7 +1891,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
 
       {showOpenInstruction && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-fade-in font-sans">
-          <div className="bg-white border border-zinc-200 text-zinc-800 rounded-[2rem] w-full max-w-sm overflow-hidden shadow-2xl relative animate-scale-up p-1">
+          <div className="bg-[#FFF8E1] border border-zinc-200 text-zinc-800 rounded-[2rem] w-full max-w-sm overflow-hidden shadow-2xl relative animate-scale-up p-1">
             <div className="bg-zinc-50/50 rounded-[1.8rem] p-5">
               
               {/* Close Button */}
