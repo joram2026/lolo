@@ -1036,27 +1036,44 @@ export default function StandardUserDashboard({
     const { volume: vol24h, mcap: mcap24h } = getSimulatedStats(liveCoin.symbol, liveCoin.price);
 
     return (
-      <div id="coin-detail-page-root" className="min-h-screen bg-slate-900 text-zinc-100 font-sans pb-16 animate-fade-in">
+      <div 
+        id="coin-detail-page-root" 
+        className={`min-h-screen font-sans pb-16 animate-fade-in ${
+          isLightTheme ? 'bg-[#FFF3D6] text-zinc-800' : 'bg-slate-900 text-zinc-100'
+        }`}
+      >
         {/* Top Header */}
-        <header className="px-4 py-4 border-b border-slate-800 sticky top-0 bg-slate-900/85 backdrop-blur-md z-20 flex items-center gap-3">
+        <header className={`px-4 py-4 border-b sticky top-0 backdrop-blur-md z-20 flex items-center gap-3 ${
+          isLightTheme ? 'bg-[#FFF3D6]/85 border-zinc-200/80' : 'bg-slate-900/85 border-slate-800'
+        }`}>
           <button 
             id="coin-detail-back-btn"
             onClick={() => {
               setSelectedCoin(null);
               setHoveredCandle(null);
             }}
-            className="p-2.5 rounded-full bg-slate-800 border border-slate-700 text-zinc-400 hover:text-white transition-all cursor-pointer flex items-center justify-center hover:scale-105 active:scale-95"
+            className={`p-2.5 rounded-full transition-all cursor-pointer flex items-center justify-center hover:scale-105 active:scale-95 ${
+              isLightTheme 
+                ? 'bg-[#FFF8E1] border border-amber-300/80 text-amber-600 hover:text-amber-700 hover:border-amber-400' 
+                : 'bg-slate-800 border border-slate-700 text-zinc-400 hover:text-white'
+            }`}
           >
             <ArrowLeft size={16} />
           </button>
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-full overflow-hidden bg-slate-800 border border-slate-700 flex items-center justify-center">
+            <div className={`w-8 h-8 rounded-full overflow-hidden flex items-center justify-center border ${
+              isLightTheme ? 'bg-[#FFF8E1] border-amber-300/80' : 'bg-slate-800 border border-slate-700'
+            }`}>
               <CoinIcon symbol={liveCoin.symbol} className="w-6 h-6" />
             </div>
             <div>
               <h2 className="text-base font-black tracking-tight flex items-center gap-1.5">
-                <span>{liveCoin.name}</span>
-                <span className="text-[9px] text-emerald-400 font-extrabold uppercase tracking-wider px-1.5 py-0.5 bg-emerald-950/80 border border-emerald-900/50 rounded-md">
+                <span className={isLightTheme ? 'text-zinc-800' : 'text-zinc-100'}>{liveCoin.name}</span>
+                <span className={`text-[9px] font-extrabold uppercase tracking-wider px-1.5 py-0.5 rounded-md ${
+                  isLightTheme 
+                    ? 'bg-amber-100 text-amber-800 border border-amber-200' 
+                    : 'bg-emerald-950/80 text-emerald-400 border border-emerald-900/50'
+                }`}>
                   {liveCoin.symbol}
                 </span>
               </h2>
@@ -1067,10 +1084,16 @@ export default function StandardUserDashboard({
 
         <main className="max-w-md mx-auto px-4 mt-5 space-y-5">
           {/* Price Display */}
-          <div className="flex justify-between items-center select-none bg-slate-950/40 border border-slate-850 p-4 rounded-2xl">
+          <div className={`flex justify-between items-center select-none p-4 rounded-2xl border ${
+            isLightTheme 
+              ? 'bg-[#FFF8E1] border-amber-300/90 shadow-[0_0_10px_rgba(245,158,11,0.08)]' 
+              : 'bg-slate-950/40 border-slate-850'
+          }`}>
             <div>
               <span className="text-[9px] text-zinc-500 font-extrabold uppercase tracking-widest block">LAST TRADED PRICE</span>
-              <h3 className="text-3xl font-black text-zinc-100 font-mono tracking-tight mt-1 flex items-baseline gap-1">
+              <h3 className={`text-3xl font-black font-mono tracking-tight mt-1 flex items-baseline gap-1 ${
+                isLightTheme ? 'text-zinc-800' : 'text-zinc-100'
+              }`}>
                 <span>${liveCoin.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}</span>
                 <span className="text-xs text-zinc-500 font-bold uppercase font-mono">USDT</span>
               </h3>
@@ -1084,26 +1107,42 @@ export default function StandardUserDashboard({
           </div>
 
           {/* Candlestick OHLC Stat Header */}
-          <div className="grid grid-cols-4 gap-1.5 bg-slate-950 p-2.5 border border-slate-850 rounded-xl select-none text-center">
-            <div className="bg-slate-900/40 p-1.5 rounded-lg border border-slate-850/50">
+          <div className={`grid grid-cols-4 gap-1.5 p-2.5 border rounded-xl select-none text-center ${
+            isLightTheme 
+              ? 'bg-[#FFF8E1] border-amber-300/90 shadow-[0_0_10px_rgba(245,158,11,0.08)]' 
+              : 'bg-slate-950 border-slate-850'
+          }`}>
+            <div className={`p-1.5 rounded-lg border ${
+              isLightTheme ? 'bg-[#FFF8E1]/80 border-amber-200/60' : 'bg-slate-900/40 border-slate-850/50'
+            }`}>
               <span className="text-[8px] text-zinc-500 font-extrabold uppercase tracking-wider block">Open</span>
               <span className={`text-[10px] font-mono font-bold block mt-0.5 leading-none ${displayedCandle.close >= displayedCandle.open ? "text-emerald-400" : "text-red-400"}`}>
                 ${displayedCandle.open.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
               </span>
             </div>
-            <div className="bg-slate-900/40 p-1.5 rounded-lg border border-slate-850/50">
+            <div className={`p-1.5 rounded-lg border ${
+              isLightTheme ? 'bg-[#FFF8E1]/80 border-amber-200/60' : 'bg-slate-900/40 border-slate-850/50'
+            }`}>
               <span className="text-[8px] text-zinc-500 font-extrabold uppercase tracking-wider block">High</span>
-              <span className="text-[10px] font-mono font-bold text-zinc-200 block mt-0.5 leading-none">
+              <span className={`text-[10px] font-mono font-bold block mt-0.5 leading-none ${
+                isLightTheme ? 'text-zinc-800' : 'text-zinc-200'
+              }`}>
                 ${displayedCandle.high.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
               </span>
             </div>
-            <div className="bg-slate-900/40 p-1.5 rounded-lg border border-slate-850/50">
+            <div className={`p-1.5 rounded-lg border ${
+              isLightTheme ? 'bg-[#FFF8E1]/80 border-amber-200/60' : 'bg-slate-900/40 border-slate-850/50'
+            }`}>
               <span className="text-[8px] text-zinc-500 font-extrabold uppercase tracking-wider block">Low</span>
-              <span className="text-[10px] font-mono font-bold text-zinc-200 block mt-0.5 leading-none">
+              <span className={`text-[10px] font-mono font-bold block mt-0.5 leading-none ${
+                isLightTheme ? 'text-zinc-800' : 'text-zinc-200'
+              }`}>
                 ${displayedCandle.low.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
               </span>
             </div>
-            <div className="bg-slate-900/40 p-1.5 rounded-lg border border-slate-850/50">
+            <div className={`p-1.5 rounded-lg border ${
+              isLightTheme ? 'bg-[#FFF8E1]/80 border-amber-200/60' : 'bg-slate-900/40 border-slate-850/50'
+            }`}>
               <span className="text-[8px] text-zinc-500 font-extrabold uppercase tracking-wider block">Close</span>
               <span className={`text-[10px] font-mono font-bold block mt-0.5 leading-none ${displayedCandle.close >= displayedCandle.open ? "text-emerald-400" : "text-red-400"}`}>
                 ${displayedCandle.close.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
@@ -1112,7 +1151,11 @@ export default function StandardUserDashboard({
           </div>
 
           {/* Vector Candlestick Chart */}
-          <div className="bg-slate-950 p-4 border border-slate-850 rounded-2xl space-y-4 relative overflow-hidden">
+          <div className={`p-4 border rounded-2xl space-y-4 relative overflow-hidden ${
+            isLightTheme 
+              ? 'bg-[#FFF8E1] border-amber-300/90 shadow-[0_0_10px_rgba(245,158,11,0.08)]' 
+              : 'bg-slate-950 border-slate-850'
+          }`}>
             <div className="flex justify-between items-center select-none">
               <div className="flex items-center gap-1.5">
                 <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
@@ -1120,15 +1163,17 @@ export default function StandardUserDashboard({
               </div>
               
               {/* Timeframe selector tabs */}
-              <div className="flex gap-1 bg-slate-900 p-0.5 rounded-lg border border-slate-800">
+              <div className={`flex gap-1 p-0.5 rounded-lg border ${
+                isLightTheme ? 'bg-[#FFF8E1]/80 border-amber-200' : 'bg-slate-900 border-slate-800'
+              }`}>
                 {(['1H', '24H', '1W', '1M'] as const).map(tf => (
                   <button
                     key={tf}
                     onClick={() => setChartTimeframe(tf)}
                     className={`px-2 py-0.5 text-[9px] font-extrabold rounded-md transition-all cursor-pointer ${
                       chartTimeframe === tf 
-                        ? 'bg-slate-850 text-emerald-400 shadow-sm border border-slate-700/50' 
-                        : 'text-zinc-500 hover:text-zinc-300'
+                        ? (isLightTheme ? 'bg-amber-100 text-amber-800 shadow-xs border border-amber-200' : 'bg-slate-850 text-emerald-400 shadow-sm border border-slate-700/50') 
+                        : (isLightTheme ? 'text-zinc-500 hover:text-zinc-700' : 'text-zinc-500 hover:text-zinc-300')
                     }`}
                   >
                     {tf}
@@ -1141,9 +1186,9 @@ export default function StandardUserDashboard({
             <div className="w-full h-[200px] relative">
               <svg viewBox="0 0 350 200" className="w-full h-full overflow-visible">
                 {/* Horizontal Grid lines */}
-                <line x1="0" y1="25" x2="350" y2="25" stroke="#1e293b" strokeOpacity="0.5" strokeDasharray="3 3" />
-                <line x1="0" y1="100" x2="350" y2="100" stroke="#1e293b" strokeOpacity="0.5" strokeDasharray="3 3" />
-                <line x1="0" y1="175" x2="350" y2="175" stroke="#1e293b" strokeOpacity="0.5" strokeDasharray="3 3" />
+                <line x1="0" y1="25" x2="350" y2="25" stroke={isLightTheme ? "#fcd34d" : "#1e293b"} strokeOpacity={isLightTheme ? "0.35" : "0.5"} strokeDasharray="3 3" />
+                <line x1="0" y1="100" x2="350" y2="100" stroke={isLightTheme ? "#fcd34d" : "#1e293b"} strokeOpacity={isLightTheme ? "0.35" : "0.5"} strokeDasharray="3 3" />
+                <line x1="0" y1="175" x2="350" y2="175" stroke={isLightTheme ? "#fcd34d" : "#1e293b"} strokeOpacity={isLightTheme ? "0.35" : "0.5"} strokeDasharray="3 3" />
 
                 {/* Vertical tracking crosshair line when hovering */}
                 {hoveredCandle && (
@@ -1365,10 +1410,18 @@ export default function StandardUserDashboard({
               </div>
 
               {/* Chart Labels */}
-              <div className="absolute top-1 left-2 text-[9px] text-zinc-500 font-bold font-mono bg-slate-950/80 px-1.5 py-0.5 rounded border border-slate-900">
+              <div className={`absolute top-1 left-2 text-[9px] font-bold font-mono px-1.5 py-0.5 rounded border ${
+                isLightTheme 
+                  ? 'text-zinc-600 bg-[#FFF8E1] border-amber-300/80' 
+                  : 'text-zinc-500 bg-slate-950/80 border-slate-900'
+              }`}>
                 High: ${max.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
-              <div className="absolute bottom-1 left-2 text-[9px] text-zinc-500 font-bold font-mono bg-slate-950/80 px-1.5 py-0.5 rounded border border-slate-900">
+              <div className={`absolute bottom-1 left-2 text-[9px] font-bold font-mono px-1.5 py-0.5 rounded border ${
+                isLightTheme 
+                  ? 'text-zinc-600 bg-[#FFF8E1] border-amber-300/80' 
+                  : 'text-zinc-500 bg-slate-950/80 border-slate-900'
+              }`}>
                 Low: ${min.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
             </div>
@@ -1376,31 +1429,49 @@ export default function StandardUserDashboard({
 
           {/* High Fidelity Financial Statistics Grid Card */}
           <div className="grid grid-cols-2 gap-2.5 select-none">
-            <div className="bg-slate-950/50 border border-slate-850 p-3.5 rounded-2xl flex flex-col justify-between">
+            <div className={`p-3.5 rounded-2xl flex flex-col justify-between border ${
+              isLightTheme 
+                ? 'bg-[#FFF8E1] border-amber-300/90 shadow-[0_0_10px_rgba(245,158,11,0.08)]' 
+                : 'bg-slate-950/50 border-slate-850'
+            }`}>
               <span className="text-[8px] text-zinc-500 font-extrabold uppercase tracking-wider block">24h Volume</span>
-              <span className="text-sm font-mono font-bold text-zinc-200 mt-1 block">
+              <span className={`text-sm font-mono font-bold mt-1 block ${
+                isLightTheme ? 'text-zinc-800' : 'text-zinc-200'
+              }`}>
                 {vol24h}
               </span>
             </div>
-            <div className="bg-slate-950/50 border border-slate-850 p-3.5 rounded-2xl flex flex-col justify-between">
+            <div className={`p-3.5 rounded-2xl flex flex-col justify-between border ${
+              isLightTheme 
+                ? 'bg-[#FFF8E1] border-amber-300/90 shadow-[0_0_10px_rgba(245,158,11,0.08)]' 
+                : 'bg-slate-950/50 border-slate-850'
+            }`}>
               <span className="text-[8px] text-zinc-500 font-extrabold uppercase tracking-wider block">Market Capitalization</span>
-              <span className="text-sm font-mono font-bold text-zinc-200 mt-1 block">
+              <span className={`text-sm font-mono font-bold mt-1 block ${
+                isLightTheme ? 'text-zinc-800' : 'text-zinc-200'
+              }`}>
                 {mcap24h}
               </span>
             </div>
           </div>
 
           {/* Holding Information banner */}
-          <div className="bg-slate-850/60 border border-slate-750 p-3.5 rounded-2xl flex justify-between items-center select-none">
+          <div className={`p-3.5 rounded-2xl flex justify-between items-center select-none border ${
+            isLightTheme 
+              ? 'bg-[#FFF8E1] border-amber-300/90 shadow-[0_0_10px_rgba(245,158,11,0.08)]' 
+              : 'bg-slate-850/60 border-slate-750'
+          }`}>
             <div>
               <span className="text-[10px] text-zinc-500 font-extrabold uppercase tracking-wider block">Your Holdings</span>
-              <span className="text-xs text-zinc-300 font-bold font-mono mt-0.5 block">
+              <span className={`text-xs font-bold font-mono mt-0.5 block ${
+                isLightTheme ? 'text-zinc-700' : 'text-zinc-300'
+              }`}>
                 {holding.toLocaleString(undefined, {
                   minimumFractionDigits: liveCoin.symbol === 'BTC' || liveCoin.symbol === 'ETH' ? 6 : 2,
                   maximumFractionDigits: liveCoin.symbol === 'BTC' || liveCoin.symbol === 'ETH' ? 8 : 4
                 })} {liveCoin.symbol}
                 {getLockedAmount(liveCoin.symbol) > 0 && (
-                  <span className="text-[9px] text-amber-500 block font-bold mt-1">
+                  <span className="text-[9px] text-amber-600 block font-bold mt-1">
                     Available: {(holding - getLockedAmount(liveCoin.symbol)).toLocaleString(undefined, {
                       minimumFractionDigits: liveCoin.symbol === 'BTC' || liveCoin.symbol === 'ETH' ? 6 : 2,
                       maximumFractionDigits: liveCoin.symbol === 'BTC' || liveCoin.symbol === 'ETH' ? 8 : 4
@@ -1419,9 +1490,13 @@ export default function StandardUserDashboard({
           </div>
 
           {/* BUY/SELL Interactive Form */}
-          <div className="space-y-4 border-t border-slate-800 pt-5">
+          <div className={`space-y-4 pt-5 border-t ${
+            isLightTheme ? 'border-amber-200/80' : 'border-slate-800'
+          }`}>
             <div className="flex justify-between items-center select-none">
-              <span className="text-xs font-black text-zinc-300 uppercase tracking-wider">Trading Desk</span>
+              <span className={`text-xs font-black uppercase tracking-wider ${
+                isLightTheme ? 'text-zinc-700' : 'text-zinc-300'
+              }`}>Trading Desk</span>
               <span className="text-[10px] text-zinc-500 font-bold">
                 Available: ${Math.max(0, (profile?.balance || 0) - getLockedAmount('USDT')).toLocaleString(undefined, { minimumFractionDigits: 2 })} USDT
                 {getLockedAmount('USDT') > 0 && ` ($${profile?.balance?.toLocaleString(undefined, { minimumFractionDigits: 2 })} total)`}
@@ -1429,7 +1504,9 @@ export default function StandardUserDashboard({
             </div>
 
             {/* BUY / SELL Switch tabs */}
-            <div className="grid grid-cols-2 bg-slate-950 p-1 border border-slate-850 rounded-xl gap-1">
+            <div className={`grid grid-cols-2 p-1 border rounded-xl gap-1 ${
+              isLightTheme ? 'bg-[#FFF8E1] border-amber-300/90 shadow-[0_0_10px_rgba(245,158,11,0.08)]' : 'bg-slate-950 border-slate-850'
+            }`}>
               <button
                 type="button"
                 onClick={() => {
@@ -1439,7 +1516,9 @@ export default function StandardUserDashboard({
                 className={`py-2 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer ${
                   quickTradeType === 'BUY'
                     ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/10'
-                    : 'bg-emerald-950/20 text-emerald-400 border border-emerald-900/10 hover:bg-emerald-900/20 hover:text-emerald-300'
+                    : isLightTheme
+                      ? 'bg-emerald-50 text-emerald-600 border border-emerald-200/50 hover:bg-emerald-100 hover:text-emerald-700'
+                      : 'bg-emerald-950/20 text-emerald-400 border border-emerald-900/10 hover:bg-emerald-900/20 hover:text-emerald-300'
                 }`}
               >
                 BUY {liveCoin.symbol}
@@ -1453,7 +1532,9 @@ export default function StandardUserDashboard({
                 className={`py-2 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer ${
                   quickTradeType === 'SELL'
                     ? 'bg-red-500 text-white shadow-md shadow-red-500/10'
-                    : 'bg-red-950/20 text-red-400 border border-red-900/10 hover:bg-red-900/20 hover:text-red-300'
+                    : isLightTheme
+                      ? 'bg-red-50 text-red-600 border border-red-200/50 hover:bg-red-100 hover:text-red-700'
+                      : 'bg-red-950/20 text-red-400 border border-red-900/10 hover:bg-red-900/20 hover:text-red-300'
                 }`}
               >
                 SELL {liveCoin.symbol}
@@ -1484,7 +1565,11 @@ export default function StandardUserDashboard({
                         }
                         setTradeMessage(null);
                       }}
-                      className="px-1.5 py-0.5 text-[8px] font-bold text-zinc-400 bg-slate-950 border border-slate-850 rounded hover:text-white active:scale-95 cursor-pointer"
+                      className={`px-1.5 py-0.5 text-[8px] font-bold rounded active:scale-95 cursor-pointer border ${
+                        isLightTheme 
+                          ? 'text-zinc-600 bg-[#FFF8E1] border-amber-300/80 hover:text-amber-700 hover:bg-amber-100' 
+                          : 'text-zinc-400 bg-slate-950 border border-slate-850 hover:text-white'
+                      }`}
                     >
                       {pct}%
                     </button>
@@ -1501,10 +1586,16 @@ export default function StandardUserDashboard({
                     setQuickTradeAmount(e.target.value);
                     setTradeMessage(null);
                   }}
-                  className={`w-full p-3.5 pr-20 bg-slate-950 border rounded-2xl text-xs focus:outline-none text-white font-mono transition-all ${
+                  className={`w-full p-3.5 pr-20 border rounded-2xl text-xs focus:outline-none font-mono transition-all ${
+                    isLightTheme ? 'bg-[#FFF8E1] text-zinc-800' : 'bg-slate-950 text-white'
+                  } ${
                     quickTradeType === 'BUY'
-                      ? 'border-slate-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20'
-                      : 'border-slate-800 focus:border-red-500 focus:ring-1 focus:ring-red-500/20'
+                      ? isLightTheme
+                        ? 'border-amber-300/90 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/10'
+                        : 'border-slate-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20'
+                      : isLightTheme
+                        ? 'border-amber-300/90 focus:border-red-500 focus:ring-1 focus:ring-red-500/10'
+                        : 'border-slate-800 focus:border-red-500 focus:ring-1 focus:ring-red-500/20'
                   }`}
                 />
                 <span className="absolute right-4 top-3.5 text-xs text-zinc-500 font-bold font-mono uppercase">{liveCoin.symbol}</span>
@@ -1514,7 +1605,7 @@ export default function StandardUserDashboard({
               {quickTradeAmount && parseFloat(quickTradeAmount) > 0 && (
                 <div className="flex justify-between items-center text-[10px] text-zinc-500 font-mono px-1">
                   <span>Estimated Value:</span>
-                  <span className="font-bold text-zinc-300">
+                  <span className={`font-bold ${isLightTheme ? 'text-zinc-700' : 'text-zinc-300'}`}>
                     $ {((parseFloat(quickTradeAmount) || 0) * liveCoin.price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD
                   </span>
                 </div>
@@ -2317,8 +2408,12 @@ export default function StandardUserDashboard({
                                 key={inv.id} 
                                 className={`group p-4 rounded-2xl border transition-all duration-300 relative overflow-hidden select-none ${
                                   isCompleted 
-                                    ? 'bg-slate-900/30 border-slate-850/60 hover:border-slate-800' 
-                                    : 'bg-gradient-to-br from-slate-900 via-slate-900/90 to-zinc-950 border-emerald-500/10 hover:border-emerald-500/25 hover:shadow-lg hover:shadow-emerald-950/10'
+                                    ? isLightTheme
+                                      ? 'bg-[#FFF8E1]/40 border-zinc-200/80 hover:border-zinc-300'
+                                      : 'bg-slate-900/30 border-slate-850/60 hover:border-slate-800' 
+                                    : isLightTheme
+                                      ? 'bg-[#FFF8E1] border-amber-300/90 shadow-[0_0_10px_rgba(245,158,11,0.08)] hover:border-amber-400'
+                                      : 'bg-gradient-to-br from-slate-900 via-slate-900/90 to-zinc-950 border-emerald-500/10 hover:border-emerald-500/25 hover:shadow-lg hover:shadow-emerald-950/10'
                                 }`}
                               >
                                 {/* Active subtle glowing indicator */}
@@ -2331,14 +2426,22 @@ export default function StandardUserDashboard({
                                   <div className="space-y-2">
                                     <div className="flex items-center gap-2 flex-wrap">
                                       <div className="flex items-center gap-1.5">
-                                        <div className={`p-1.5 rounded-lg ${isCompleted ? 'bg-zinc-850/50 text-zinc-500' : 'bg-emerald-500/10 text-emerald-400'}`}>
+                                        <div className={`p-1.5 rounded-lg ${
+                                          isCompleted 
+                                            ? (isLightTheme ? 'bg-zinc-100 text-zinc-400' : 'bg-zinc-850/50 text-zinc-500') 
+                                            : (isLightTheme ? 'bg-emerald-50 text-emerald-600' : 'bg-emerald-500/10 text-emerald-400')
+                                        }`}>
                                           <Coins size={14} />
                                         </div>
-                                        <span className="font-extrabold text-xs text-zinc-100 tracking-tight font-mono">
+                                        <span className={`font-extrabold text-xs tracking-tight font-mono ${isLightTheme ? 'text-zinc-800' : 'text-zinc-100'}`}>
                                           {inv.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 8 })} {inv.coinSymbol}
                                         </span>
                                       </div>
-                                      <span className="text-[10px] px-2 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-extrabold font-mono tracking-wider">
+                                      <span className={`text-[10px] px-2 py-0.5 rounded-md font-extrabold font-mono tracking-wider border ${
+                                        isLightTheme 
+                                          ? 'bg-emerald-50 border-emerald-200 text-emerald-700' 
+                                          : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                                      }`}>
                                         {inv.dailyRate}% Daily Profit
                                       </span>
                                     </div>
@@ -2347,26 +2450,36 @@ export default function StandardUserDashboard({
                                     <div className="flex items-center gap-3 text-[10px] text-zinc-500 font-semibold">
                                       <div className="flex items-center gap-1">
                                         <span>Start:</span>
-                                        <span className="text-zinc-400 font-mono">{createdDate}</span>
+                                        <span className={`font-mono ${isLightTheme ? 'text-zinc-600' : 'text-zinc-400'}`}>{createdDate}</span>
                                       </div>
-                                      <span className="text-zinc-800 font-bold">•</span>
+                                      <span className={isLightTheme ? 'text-zinc-300 font-bold' : 'text-zinc-800 font-bold'}>•</span>
                                       <div className="flex items-center gap-1">
                                         <span>End:</span>
-                                        <span className="text-zinc-400 font-mono">{unlockDate}</span>
+                                        <span className={`font-mono ${isLightTheme ? 'text-zinc-600' : 'text-zinc-400'}`}>{unlockDate}</span>
                                       </div>
                                     </div>
                                   </div>
 
                                   {/* Right side: Status and accrued earnings */}
-                                  <div className="flex sm:flex-col justify-between sm:text-right items-center sm:items-end gap-2.5 pt-3 sm:pt-0 border-t sm:border-t-0 border-slate-850/50">
+                                  <div className={`flex sm:flex-col justify-between sm:text-right items-center sm:items-end gap-2.5 pt-3 sm:pt-0 border-t sm:border-t-0 ${
+                                    isLightTheme ? 'border-zinc-200/80' : 'border-slate-850/50'
+                                  }`}>
                                     <div className="flex items-center gap-2">
                                       {isCompleted ? (
-                                        <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-zinc-800/40 text-zinc-400 border border-zinc-800/50">
+                                        <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md border ${
+                                          isLightTheme 
+                                            ? 'bg-zinc-100 text-zinc-500 border-zinc-200' 
+                                            : 'bg-zinc-800/40 text-zinc-400 border-zinc-800/50'
+                                        }`}>
                                           Completed
                                         </span>
                                       ) : (
-                                        <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1 animate-pulse">
-                                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                                        <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md flex items-center gap-1 animate-pulse border ${
+                                          isLightTheme 
+                                            ? 'bg-emerald-50 text-emerald-600 border-emerald-200' 
+                                            : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                        }`}>
+                                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                                           Active
                                         </span>
                                       )}
@@ -2375,11 +2488,17 @@ export default function StandardUserDashboard({
                                     <div className="space-y-0.5">
                                       <div className="text-[10px] text-zinc-500 font-bold flex items-center justify-end gap-1 font-mono">
                                         <span>Daily:</span>
-                                        <span className="text-zinc-300">+{dailyEarning.toFixed(4)} {inv.coinSymbol}</span>
+                                        <span className={isLightTheme ? 'text-zinc-700 font-semibold' : 'text-zinc-300'}>+{dailyEarning.toFixed(4)} {inv.coinSymbol}</span>
                                       </div>
-                                      <div className="text-[10px] text-emerald-400 font-extrabold flex items-center justify-end gap-1 font-mono">
+                                      <div className={`text-[10px] font-extrabold flex items-center justify-end gap-1 font-mono ${
+                                        isLightTheme ? 'text-emerald-700' : 'text-emerald-400'
+                                      }`}>
                                         <span>Earned:</span>
-                                        <span className="bg-emerald-500/5 border border-emerald-500/10 px-1.5 py-0.25 rounded">
+                                        <span className={`px-1.5 py-0.25 rounded border ${
+                                          isLightTheme 
+                                            ? 'bg-emerald-50 border-emerald-200 text-emerald-700' 
+                                            : 'bg-emerald-500/5 border-emerald-500/10'
+                                        }`}>
                                           +{totalEarned.toFixed(4)} {inv.coinSymbol}
                                         </span>
                                       </div>
@@ -2388,12 +2507,16 @@ export default function StandardUserDashboard({
                                 </div>
 
                                 {/* Progress Bar Track & Bar */}
-                                <div className="mt-3.5 pt-3 border-t border-slate-850/30">
+                                <div className={`mt-3.5 pt-3 border-t ${
+                                  isLightTheme ? 'border-zinc-200/50' : 'border-slate-850/30'
+                                }`}>
                                   <div className="flex justify-between items-center text-[10px] font-bold text-zinc-500 mb-1.5 select-none font-mono">
                                     <span>Duration Progress</span>
-                                    <span className="text-zinc-400">{inv.daysPaid ?? 0} / {inv.totalDays ?? 5} Days</span>
+                                    <span className={isLightTheme ? 'text-zinc-700' : 'text-zinc-400'}>{inv.daysPaid ?? 0} / {inv.totalDays ?? 5} Days</span>
                                   </div>
-                                  <div className="w-full h-2 bg-slate-950 border border-slate-900 rounded-full overflow-hidden p-[2px]">
+                                  <div className={`w-full h-2 rounded-full overflow-hidden p-[2px] border ${
+                                    isLightTheme ? 'bg-[#FFF3D6] border-amber-200/60' : 'bg-slate-950 border-slate-900'
+                                  }`}>
                                     <div 
                                       className={`h-full rounded-full transition-all duration-500 ${
                                         isCompleted 
@@ -2419,20 +2542,34 @@ export default function StandardUserDashboard({
                       <button
                         type="button"
                         onClick={() => setMmfSubView('main')}
-                        className="p-1.5 rounded-lg hover:bg-slate-900 border border-transparent hover:border-slate-800 text-zinc-400 hover:text-white transition-all cursor-pointer"
+                        className={`p-1.5 rounded-lg transition-all cursor-pointer border ${
+                          isLightTheme 
+                            ? 'bg-amber-100/80 hover:bg-amber-200 border-amber-200/50 text-amber-800 hover:text-amber-900' 
+                            : 'hover:bg-slate-900 border border-transparent hover:border-slate-800 text-zinc-400 hover:text-white'
+                        }`}
                       >
                         <ArrowLeft size={16} />
                       </button>
                       <div>
-                        <h4 className="text-xs font-black text-zinc-300 uppercase tracking-wider">Configure MMF Investment</h4>
-                        <p className="text-[10px] text-zinc-500 mt-0.5">Define your high-yield asset allocation</p>
+                        <h4 className={`text-xs font-black uppercase tracking-wider ${
+                          isLightTheme ? 'text-zinc-800' : 'text-zinc-300'
+                        }`}>Configure MMF Investment</h4>
+                        <p className={`text-[10px] mt-0.5 ${
+                          isLightTheme ? 'text-zinc-500' : 'text-zinc-500'
+                        }`}>Define your high-yield asset allocation</p>
                       </div>
                     </div>
 
                     {/* Chosen Coin Summary Card */}
-                    <div className="p-4 bg-slate-950/60 border border-slate-850 rounded-2xl flex justify-between items-center">
+                    <div className={`p-4 rounded-2xl flex justify-between items-center border ${
+                      isLightTheme 
+                        ? 'bg-[#FFF8E1] border-amber-300/90 shadow-[0_0_10px_rgba(245,158,11,0.06)]' 
+                        : 'bg-slate-950/60 border-slate-850'
+                    }`}>
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-slate-900 border border-slate-850 flex items-center justify-center p-1.5">
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center p-1.5 border ${
+                          isLightTheme ? 'bg-[#FFF3D6] border-amber-200/80' : 'bg-slate-900 border-slate-850'
+                        }`}>
                           <img 
                             src={getCoinLogoUrl(selectedCoinForInvestment.symbol)} 
                             alt={selectedCoinForInvestment.name} 
@@ -2441,18 +2578,26 @@ export default function StandardUserDashboard({
                           />
                         </div>
                         <div>
-                          <span className="font-bold text-xs text-zinc-200 block">{selectedCoinForInvestment.name} MMF</span>
-                          <span className="text-[10px] text-emerald-400 font-extrabold block mt-0.5">
+                          <span className={`font-bold text-xs block ${
+                            isLightTheme ? 'text-zinc-800' : 'text-zinc-200'
+                          }`}>{selectedCoinForInvestment.name} MMF</span>
+                          <span className={`text-[10px] font-extrabold block mt-0.5 ${
+                            isLightTheme ? 'text-emerald-700' : 'text-emerald-400'
+                          }`}>
                             Rate: {selectedCoinForInvestment.investmentRate ?? 5.0}% daily profit
                           </span>
-                          <span className="text-[9px] text-teal-400 font-bold block mt-1">
+                          <span className={`text-[9px] font-bold block mt-1 ${
+                            isLightTheme ? 'text-amber-700/95' : 'text-teal-400'
+                          }`}>
                             Minimum Investment: {selectedCoinForInvestment.minInvestment ?? 10.0} {selectedCoinForInvestment.symbol}
                           </span>
                         </div>
                       </div>
                       <div className="text-right">
                         <span className="text-[9px] text-zinc-500 font-bold uppercase block">Available Balance</span>
-                        <span className="text-xs font-bold font-mono text-zinc-200 mt-0.5 block">
+                        <span className={`text-xs font-bold font-mono mt-0.5 block ${
+                          isLightTheme ? 'text-zinc-800' : 'text-zinc-200'
+                        }`}>
                           {(getCoinHolding(selectedCoinForInvestment.symbol) - getLockedAmount(selectedCoinForInvestment.symbol)).toFixed(4)} {selectedCoinForInvestment.symbol}
                         </span>
                       </div>
@@ -2475,7 +2620,7 @@ export default function StandardUserDashboard({
                             }}
                             className={`w-full p-3 border rounded-xl text-xs focus:outline-none font-mono ${
                               isLightTheme 
-                                ? 'bg-zinc-50/50 border-zinc-200 focus:border-amber-500 text-zinc-800 placeholder-zinc-400' 
+                                ? 'bg-[#FFF8E1]/80 border-amber-200 focus:border-amber-500 text-zinc-800 placeholder-amber-600/50' 
                                 : 'bg-slate-950 border-slate-800 focus:border-emerald-500 text-white'
                             }`}
                           />
@@ -2487,7 +2632,7 @@ export default function StandardUserDashboard({
                             }}
                             className={`absolute right-2.5 top-2 px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider rounded-lg cursor-pointer ${
                               isLightTheme 
-                                ? 'text-amber-600 bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/20' 
+                                ? 'text-amber-700 bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/20' 
                                 : 'text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20'
                             }`}
                           >
@@ -2511,27 +2656,31 @@ export default function StandardUserDashboard({
                           }}
                           className={`w-full p-3 border rounded-xl text-xs focus:outline-none font-mono ${
                             isLightTheme 
-                              ? 'bg-zinc-50/50 border-zinc-200 focus:border-amber-500 text-zinc-800 placeholder-zinc-400' 
+                              ? 'bg-[#FFF8E1]/80 border-amber-200 focus:border-amber-500 text-zinc-800 placeholder-amber-600/50' 
                               : 'bg-slate-950 border-slate-800 focus:border-emerald-500 text-white'
                           }`}
                         />
-                        <p className="text-[9px] text-zinc-500">Minimum duration is 5 days. Daily earnings accrue instantly to your main account.</p>
+                        <p className={`text-[9px] ${isLightTheme ? 'text-zinc-600' : 'text-zinc-500'}`}>Minimum duration is 5 days. Daily earnings accrue instantly to your main account.</p>
                       </div>
 
                       {/* Profit preview calculator */}
                       {parseFloat(investmentAmount) > 0 && (
                         <div className={`border p-3 rounded-xl flex flex-col gap-2 select-none ${
-                          isLightTheme ? 'bg-zinc-50/50 border-zinc-200' : 'bg-slate-950/40 border-slate-850'
+                          isLightTheme 
+                            ? 'bg-[#FFF8E1] border-amber-300/80 shadow-[0_0_10px_rgba(245,158,11,0.06)]' 
+                            : 'bg-slate-950/40 border-slate-850'
                         }`}>
                           <div className="flex justify-between items-center text-[10px]">
                             <span className="text-zinc-500 font-bold uppercase tracking-wider">Daily Yield</span>
-                            <span className={`font-bold font-mono ${isLightTheme ? 'text-emerald-700' : 'text-emerald-400'}`}>
+                            <span className={`font-bold font-mono ${isLightTheme ? 'text-emerald-700 font-extrabold' : 'text-emerald-400'}`}>
                               +{(parseFloat(investmentAmount) * ((selectedCoinForInvestment.investmentRate ?? 5.0) / 100)).toFixed(4)} {selectedCoinForInvestment.symbol}
                             </span>
                           </div>
-                          <div className={`flex justify-between items-center text-[10px] border-t pt-2 ${isLightTheme ? 'border-zinc-200' : 'border-slate-850/60'}`}>
+                          <div className={`flex justify-between items-center text-[10px] border-t pt-2 ${
+                            isLightTheme ? 'border-amber-200/60' : 'border-slate-850/60'
+                          }`}>
                             <span className="text-zinc-500 font-bold uppercase tracking-wider">Total {parseInt(investmentDays) || 5} Days Yield</span>
-                            <span className={`font-bold font-mono ${isLightTheme ? 'text-emerald-700' : 'text-emerald-400'}`}>
+                            <span className={`font-bold font-mono ${isLightTheme ? 'text-emerald-700 font-extrabold' : 'text-emerald-400'}`}>
                               +{(parseFloat(investmentAmount) * ((selectedCoinForInvestment.investmentRate ?? 5.0) / 100) * (parseInt(investmentDays) || 5)).toFixed(4)} {selectedCoinForInvestment.symbol}
                             </span>
                           </div>
@@ -2606,7 +2755,7 @@ export default function StandardUserDashboard({
       {/* STICKY BOTTOM NAVIGATION */}
       <footer className={`fixed bottom-0 left-0 right-0 z-30 px-4 py-2 flex justify-around max-w-md mx-auto border-t ${
         isLightTheme 
-          ? 'bg-white border-zinc-200/80 shadow-[0_-4px_12px_rgba(0,0,0,0.03)]' 
+          ? 'bg-[#FFF3D6] border-zinc-200/80 shadow-[0_-4px_12px_rgba(0,0,0,0.03)]' 
           : 'bg-slate-900 border-slate-800/80'
       }`}>
         {([
