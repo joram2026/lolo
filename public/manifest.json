@@ -24,8 +24,8 @@
   ],
   "id": "/?source=pwa",
   "start_url": "/?source=pwa",
-  "background_color": "#0f172a",
-  "theme_color": "#10b981",
+  "background_color": "#FFF3D6",
+  "theme_color": "#FFF3D6",
   "display": "standalone",
   "orientation": "portrait-primary",
   "categories": ["finance", "utilities"]

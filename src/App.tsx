@@ -172,7 +172,7 @@ export default function App() {
   if (initializing) {
     return (
       <div id="app-loading-screen" className="min-h-screen bg-[#FFF3D6] flex flex-col items-center justify-center gap-4 text-zinc-800 font-sans">
-        <div className="relative w-20 h-20 rounded-3xl bg-white border border-amber-200 p-2 shadow-2xl shadow-amber-500/10 flex items-center justify-center overflow-hidden animate-pulse mb-1">
+        <div className="relative w-20 h-20 rounded-3xl bg-white border border-amber-200 p-2.5 flex items-center justify-center overflow-hidden animate-logo-pulse mb-1">
           <img 
             src="/icon.svg" 
             alt="ARBITRAGE" 
@@ -183,7 +183,7 @@ export default function App() {
         </div>
         <div className="flex flex-col items-center gap-1.5">
           <div className="w-6 h-6 border-3 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-xs text-zinc-500 font-semibold tracking-wide">Syncing Wallet Nodes...</p>
+          <p className="text-xs text-zinc-550 font-bold tracking-wide animate-text-blink">Syncing Wallet Nodes...</p>
         </div>
       </div>
     );

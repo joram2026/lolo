@@ -3,11 +3,11 @@ import { NewsItem, CryptoPrice } from '../types';
 import { Zap, ChevronLeft, ChevronRight, Sparkles, TrendingUp, ShieldCheck } from 'lucide-react';
 
 const FALLBACK_CRYPTO = [
-  { name: 'Bitcoin', symbol: 'BTC', price: 94250.30, change24h: 3.45 },
-  { name: 'Ethereum', symbol: 'ETH', price: 3480.12, change24h: 1.82 },
-  { name: 'Solana', symbol: 'SOL', price: 184.45, change24h: -2.15 },
-  { name: 'Binance Coin', symbol: 'BNB', price: 592.20, change24h: 0.95 },
-  { name: 'XRP', symbol: 'XRP', price: 2.54, change24h: 4.12 }
+  { name: 'Bitcoin', symbol: 'BTC', price: 0.00, change24h: 0.00 },
+  { name: 'Ethereum', symbol: 'ETH', price: 0.00, change24h: 0.00 },
+  { name: 'Solana', symbol: 'SOL', price: 0.00, change24h: 0.00 },
+  { name: 'Binance Coin', symbol: 'BNB', price: 0.00, change24h: 0.00 },
+  { name: 'XRP', symbol: 'XRP', price: 0.00, change24h: 0.00 }
 ];
 
 interface NewsCarouselProps {
