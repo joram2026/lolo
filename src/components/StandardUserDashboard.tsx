@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { db } from '../firebase';
-import { doc, getDoc, onSnapshot, collection, query, where, getDocs, updateDoc, addDoc, setDoc, writeBatch } from 'firebase/firestore';
+import { doc, getDoc, onSnapshot, collection, query, where, getDocs, updateDoc, addDoc } from 'firebase/firestore';
 import { UserAccount, Transaction, CryptoPrice } from '../types';
-import { fetchAllLivePrices } from '../utils/cryptoApi';
 import NewsCarousel from './NewsCarousel';
 import ActivityLog from './ActivityLog';
 import { 
@@ -23,16 +22,16 @@ interface StandardUserDashboardProps {
 }
 
 const STATIC_CRYPTO: CryptoPrice[] = [
-  { name: 'Tether', symbol: 'USDT', price: 0.00, change24h: 0.00 },
-  { name: 'USD Coin', symbol: 'USDC', price: 0.00, change24h: 0.00 },
-  { name: 'Bitcoin', symbol: 'BTC', price: 0.00, change24h: 0.00 },
-  { name: 'Ethereum', symbol: 'ETH', price: 0.00, change24h: 0.00 },
-  { name: 'Solana', symbol: 'SOL', price: 0.00, change24h: 0.00 },
-  { name: 'Binance Coin', symbol: 'BNB', price: 0.00, change24h: 0.00 },
-  { name: 'XRP', symbol: 'XRP', price: 0.00, change24h: 0.00 },
-  { name: 'World Coin', symbol: 'WLD', price: 0.00, change24h: 0.00 },
-  { name: 'Tron', symbol: 'TRX', price: 0.00, change24h: 0.00 },
-  { name: 'DOGE Coin', symbol: 'DOGE', price: 0.00, change24h: 0.00 }
+  { name: 'Tether', symbol: 'USDT', price: 1.00, change24h: 0.01 },
+  { name: 'USD Coin', symbol: 'USDC', price: 1.00, change24h: -0.02 },
+  { name: 'Bitcoin', symbol: 'BTC', price: 94250.30, change24h: 3.45 },
+  { name: 'Ethereum', symbol: 'ETH', price: 3480.12, change24h: 1.82 },
+  { name: 'Solana', symbol: 'SOL', price: 184.45, change24h: -2.15 },
+  { name: 'Binance Coin', symbol: 'BNB', price: 592.20, change24h: 0.95 },
+  { name: 'XRP', symbol: 'XRP', price: 2.54, change24h: 4.12 },
+  { name: 'World Coin', symbol: 'WLD', price: 2.80, change24h: -1.25 },
+  { name: 'Tron', symbol: 'TRX', price: 0.22, change24h: 0.45 },
+  { name: 'DOGE Coin', symbol: 'DOGE', price: 0.38, change24h: 2.15 }
 ];
 
 export const getCoinLogoUrl = (symbol: string): string => {
@@ -416,120 +415,41 @@ export default function StandardUserDashboard({
     };
   }, [user.uid]);
 
-  // Cooperatively sync prices centrally in Firestore every 10 seconds
+  // Fluctuate prices live every 4 seconds to make the app feel real
   useEffect(() => {
-    const syncPrices = async () => {
-      try {
-        const syncMetaRef = doc(db, 'metadata', 'prices_sync');
-        const syncMetaSnap = await getDoc(syncMetaRef);
-        const now = Date.now();
-        let lastSyncedAt = 0;
-
-        if (syncMetaSnap.exists()) {
-          const data = syncMetaSnap.data();
-          if (data.lastSyncedAt) {
-            lastSyncedAt = new Date(data.lastSyncedAt).getTime();
-          }
-        }
-
-        // Only sync if last sync was more than 10 seconds ago
-        if (now - lastSyncedAt < 10000) {
-          return;
-        }
-
-        // Add random jitter (0 to 3 seconds) to prevent multiple parallel writes at the exact same millisecond
-        await new Promise(resolve => setTimeout(resolve, Math.random() * 3000));
-
-        // Recheck to see if another client updated it during our jitter delay
-        const syncMetaSnap2 = await getDoc(syncMetaRef);
-        if (syncMetaSnap2.exists()) {
-          const data2 = syncMetaSnap2.data();
-          if (data2.lastSyncedAt) {
-            const lastSyncedAt2 = new Date(data2.lastSyncedAt).getTime();
-            if (Date.now() - lastSyncedAt2 < 10000) {
-              return;
-            }
-          }
-        }
-
-        // Secure a soft lock in the metadata doc
-        await setDoc(syncMetaRef, {
-          lastSyncedAt: new Date().toISOString(),
-          syncingBy: user.uid
-        }, { merge: true });
-
-        // Fetch live market rates
-        const apiPrices = await fetchAllLivePrices();
-
-        // Load current coin collection to respect custom/live modes & existing settings
-        const pricesCol = collection(db, 'crypto_prices');
-        const pricesSnap = await getDocs(pricesCol);
-        if (pricesSnap.empty) {
-          return;
-        }
-
-        const batch = writeBatch(db);
-        pricesSnap.docs.forEach((d) => {
-          const cp = d.data() as CryptoPrice;
-          const isStablecoin = cp.symbol === 'USDT' || cp.symbol === 'USDC';
-          const currentMode = cp.mode || (isStablecoin ? 'custom' : 'live');
-
-          let nextPrice = cp.price;
-          let nextChange24h = cp.change24h;
-
-          // If price is zero (uninitialized), default to some sensible base price if API fetch fails, but use API price if possible
-          if (nextPrice <= 0) {
-            if (cp.symbol === 'BTC') nextPrice = 94250.30;
-            else if (cp.symbol === 'ETH') nextPrice = 3480.12;
-            else if (cp.symbol === 'SOL') nextPrice = 184.45;
-            else if (cp.symbol === 'BNB') nextPrice = 592.20;
-            else if (cp.symbol === 'XRP') nextPrice = 2.54;
-            else if (cp.symbol === 'WLD') nextPrice = 2.80;
-            else if (cp.symbol === 'TRX') nextPrice = 0.22;
-            else if (cp.symbol === 'DOGE') nextPrice = 0.38;
-            else if (isStablecoin) nextPrice = 1.00;
-          }
-
-          if (currentMode === 'live' && apiPrices[cp.symbol]) {
-            const apiVal = apiPrices[cp.symbol];
-            nextPrice = apiVal.price;
-            nextChange24h = apiVal.change24h;
-          }
-
-          // Apply micro-fluctuation centrally in Firestore database. Since it is written centrally,
-          // ALL users' browsers see the exact same price and changes instantly!
-          if (isStablecoin) {
-            const change = (Math.random() - 0.5) * 0.0003;
-            nextPrice = Math.max(0.999, Math.min(1.001, nextPrice + change));
-            nextChange24h = parseFloat((change * 100).toFixed(2));
-          } else {
-            const percentageChange = (Math.random() - 0.485) * 0.002; 
-            nextPrice = nextPrice * (1 + percentageChange);
-            nextChange24h = Math.max(-15, Math.min(15, nextChange24h + percentageChange * 100));
-          }
-
-          const priceStr = nextPrice.toString();
+    const interval = setInterval(() => {
+      setCryptoPrices(prev => prev.map(coin => {
+        if (coin.symbol === 'USDT' || coin.symbol === 'USDC') {
+          // Keep stablecoins close to 1.00
+          const change = (Math.random() - 0.5) * 0.0004;
+          const newPrice = Math.max(0.999, Math.min(1.001, coin.price + change));
+          return {
+            ...coin,
+            price: parseFloat(newPrice.toFixed(4)),
+            change24h: parseFloat((change * 100).toFixed(2))
+          };
+        } else {
+          // More active, high-fidelity fluctuations for main coins (BTC, ETH, SOL, BNB, etc.)
+          const percentageChange = (Math.random() - 0.485) * 0.0035; 
+          const newPrice = coin.price * (1 + percentageChange);
+          const newChange24h = coin.change24h + percentageChange * 100;
+          
+          // Dynamically check if the previous price was defined with more than 2 decimal places, 
+          // or if the coin is a low-priced asset (under $5) where 4-decimal precision is necessary.
+          const priceStr = coin.price.toString();
           const hasMoreThan2Decimals = priceStr.includes('.') && priceStr.split('.')[1].length > 2;
-          const decimals = (hasMoreThan2Decimals || nextPrice < 5) ? 4 : 2;
+          const decimals = (hasMoreThan2Decimals || coin.price < 5) ? 4 : 2;
 
-          batch.set(doc(db, 'crypto_prices', cp.symbol), {
-            price: parseFloat(nextPrice.toFixed(decimals)),
-            change24h: parseFloat(nextChange24h.toFixed(2)),
-            lastSyncedAt: new Date().toISOString()
-          }, { merge: true });
-        });
-
-        await batch.commit();
-      } catch (err) {
-        console.warn("Background cooperative price sync failed:", err);
-      }
-    };
-
-    // Run immediately on dashboard load, then set a 10-second interval
-    syncPrices();
-    const interval = setInterval(syncPrices, 10000);
+          return {
+            ...coin,
+            price: parseFloat(newPrice.toFixed(decimals)),
+            change24h: parseFloat(Math.max(-15, Math.min(15, newChange24h)).toFixed(2))
+          };
+        }
+      }));
+    }, 4000);
     return () => clearInterval(interval);
-  }, [user.uid]);
+  }, []);
 
   // Handle live conversion calculation inside the Trade simulation tab using dynamic cryptoPrices
   useEffect(() => {
