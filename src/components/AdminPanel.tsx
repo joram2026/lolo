@@ -3,9 +3,9 @@ import { db, auth } from '../firebase';
 import { sendPasswordResetEmail } from 'firebase/auth';
 import { 
   collection, doc, getDocs, updateDoc, deleteDoc, runTransaction, 
-  setDoc, query, orderBy, serverTimestamp, writeBatch 
+  setDoc, query, orderBy, serverTimestamp, writeBatch, getDoc 
 } from 'firebase/firestore';
-import { UserAccount, Transaction, CryptoNetwork, P2PMerchant, CryptoPrice } from '../types';
+import { UserAccount, Transaction, CryptoNetwork, P2PMerchant, CryptoPrice, ArbitrageConfig } from '../types';
 import { fetchLivePriceFromBinance, fetchAllLivePrices } from '../utils/cryptoApi';
 import { 
   Users, CheckCircle2, XCircle, Settings, ShieldAlert, Key, 
@@ -73,6 +73,22 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
   const [cryptoPricesList, setCryptoPricesList] = useState<CryptoPrice[]>([]);
   const [investmentsList, setInvestmentsList] = useState<any[]>([]);
   const pricesListRef = useRef<CryptoPrice[]>([]);
+
+  // Arbitrage Config States
+  const [arbitrageConfig, setArbitrageConfig] = useState<ArbitrageConfig>({
+    coin1Symbol: 'BTC',
+    coin1ExternalMin: 91500,
+    coin1ExternalMax: 92500,
+    coin1UseLiveOffset: true,
+    coin1OffsetPercentage: 2.5,
+    coin2Symbol: 'ETH',
+    coin2ExternalMin: 3350,
+    coin2ExternalMax: 3410,
+    coin2UseLiveOffset: true,
+    coin2OffsetPercentage: 2.8,
+    platformsList: ['Binance', 'Bybit', 'OKX', 'Coinbase']
+  });
+  const [isSavingArbitrage, setIsSavingArbitrage] = useState(false);
 
   // Keep ref in sync to avoid stale closures in the auto-sync interval
   useEffect(() => {
@@ -338,6 +354,29 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
         ...d.data()
       }));
       setInvestmentsList(invList);
+
+      // Fetch Arbitrage Config Settings
+      const arbDocRef = doc(db, 'settings', 'arbitrage_config');
+      const arbDocSnap = await getDoc(arbDocRef);
+      if (arbDocSnap.exists()) {
+        setArbitrageConfig(arbDocSnap.data() as ArbitrageConfig);
+      } else {
+        const defaultArb: ArbitrageConfig = {
+          coin1Symbol: 'BTC',
+          coin1ExternalMin: 91500,
+          coin1ExternalMax: 92500,
+          coin1UseLiveOffset: true,
+          coin1OffsetPercentage: 2.5,
+          coin2Symbol: 'ETH',
+          coin2ExternalMin: 3350,
+          coin2ExternalMax: 3410,
+          coin2UseLiveOffset: true,
+          coin2OffsetPercentage: 2.8,
+          platformsList: ['Binance', 'Bybit', 'OKX', 'Coinbase']
+        };
+        await setDoc(arbDocRef, defaultArb);
+        setArbitrageConfig(defaultArb);
+      }
 
     } catch (err: any) {
       console.error("Error loading admin data: ", err);
@@ -897,6 +936,21 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
     } catch (err: any) {
       console.error(err);
       showFeedback('error', 'Failed to update minimum investment amount: ' + err.message);
+    }
+  };
+
+  const handleSaveArbitrageConfig = async () => {
+    setIsSavingArbitrage(true);
+    try {
+      const arbDocRef = doc(db, 'settings', 'arbitrage_config');
+      await setDoc(arbDocRef, arbitrageConfig);
+      showFeedback('success', 'Arbitrage configuration saved successfully!');
+      await loadAllData(true);
+    } catch (err: any) {
+      console.error(err);
+      showFeedback('error', 'Failed to save arbitrage configuration: ' + err.message);
+    } finally {
+      setIsSavingArbitrage(false);
     }
   };
 
@@ -1840,6 +1894,249 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                       </div>
                     );
                   })}
+                </div>
+              </div>
+
+              {/* Arbitrage Value Gap Controller */}
+              <div id="arbitrage-config-controller" className="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-800/80 pb-3">
+                  <div className="flex items-center gap-2">
+                    <TrendingUp className="text-amber-500" size={16} />
+                    <div>
+                      <h3 className="text-xs font-black text-zinc-300 uppercase tracking-wider">Arbitrage & Value Gap Helper Config</h3>
+                      <p className="text-[10px] text-zinc-500 font-semibold mt-0.5">Configure the two cryptocurrency coins shown on the User Trade tab and specify price differences on external platforms to guide arbitrage trades.</p>
+                    </div>
+                  </div>
+                  <div>
+                    <button
+                      id="save-arbitrage-config-btn"
+                      onClick={handleSaveArbitrageConfig}
+                      disabled={isSavingArbitrage}
+                      className="flex items-center gap-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-black text-xs rounded-xl transition-colors cursor-pointer disabled:opacity-50"
+                    >
+                      {isSavingArbitrage ? <Loader size={12} className="animate-spin" /> : <Check size={12} />}
+                      <span>Save Arbitrage Settings</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  {/* Coin 1 Configuration */}
+                  <div className="bg-zinc-950 p-4 rounded-2xl border border-zinc-800/50 space-y-3">
+                    <div className="flex items-center justify-between border-b border-zinc-900 pb-2">
+                      <span className="text-xs font-black text-amber-400 tracking-wider uppercase">Arbitrage Coin #1</span>
+                      <span className="text-[10px] bg-zinc-900 text-zinc-400 px-2 py-0.5 rounded-full font-bold">Selected: {arbitrageConfig.coin1Symbol}</span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[10px] text-zinc-500 font-bold block mb-1">Select System Coin</label>
+                        <select
+                          value={arbitrageConfig.coin1Symbol}
+                          onChange={(e) => setArbitrageConfig({ ...arbitrageConfig, coin1Symbol: e.target.value })}
+                          className="w-full px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-white focus:outline-none focus:ring-1 focus:ring-amber-500 cursor-pointer"
+                        >
+                          {cryptoPricesList.map(c => (
+                            <option key={`c1-${c.symbol}`} value={c.symbol}>{c.symbol} ({c.name})</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] text-zinc-500 font-bold block mb-1">Price Mode</label>
+                        <select
+                          value={arbitrageConfig.coin1UseLiveOffset ? "live" : "manual"}
+                          onChange={(e) => setArbitrageConfig({ 
+                            ...arbitrageConfig, 
+                            coin1UseLiveOffset: e.target.value === 'live' 
+                          })}
+                          className="w-full px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-white focus:outline-none focus:ring-1 focus:ring-amber-500 cursor-pointer"
+                        >
+                          <option value="live">Dynamic % Discount</option>
+                          <option value="manual">Manual Price Range</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {arbitrageConfig.coin1UseLiveOffset ? (
+                      <div className="space-y-1 bg-zinc-900/40 p-2.5 rounded-lg border border-zinc-900">
+                        <label className="text-[10px] text-zinc-400 font-bold block">Discount on External Platforms (%)</label>
+                        <p className="text-[9px] text-zinc-500 font-semibold mb-1.5">e.g., 2.5% means other platforms are 2.5% cheaper than this app's price.</p>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={arbitrageConfig.coin1OffsetPercentage}
+                          onChange={(e) => setArbitrageConfig({ ...arbitrageConfig, coin1OffsetPercentage: parseFloat(e.target.value) || 0 })}
+                          className="w-full px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-white font-mono focus:outline-none focus:ring-1 focus:ring-amber-500"
+                        />
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-3 bg-zinc-900/40 p-2.5 rounded-lg border border-zinc-900">
+                        <div>
+                          <label className="text-[10px] text-zinc-400 font-bold block mb-1">External Min Price (USD)</label>
+                          <input
+                            type="number"
+                            step="any"
+                            value={arbitrageConfig.coin1ExternalMin}
+                            onChange={(e) => setArbitrageConfig({ ...arbitrageConfig, coin1ExternalMin: parseFloat(e.target.value) || 0 })}
+                            className="w-full px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-white font-mono focus:outline-none focus:ring-1 focus:ring-amber-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-zinc-400 font-bold block mb-1">External Max Price (USD)</label>
+                          <input
+                            type="number"
+                            step="any"
+                            value={arbitrageConfig.coin1ExternalMax}
+                            onChange={(e) => setArbitrageConfig({ ...arbitrageConfig, coin1ExternalMax: parseFloat(e.target.value) || 0 })}
+                            className="w-full px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-white font-mono focus:outline-none focus:ring-1 focus:ring-amber-500"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Quick calculations preview for Admin */}
+                    <div className="bg-amber-500/5 p-2.5 rounded-lg border border-amber-500/10 text-[10px] space-y-1 font-mono text-zinc-400">
+                      <div className="font-bold text-zinc-300">Live Simulation Check:</div>
+                      {(() => {
+                        const matched = cryptoPricesList.find(c => c.symbol === arbitrageConfig.coin1Symbol);
+                        const appPrice = matched ? matched.price : 0;
+                        let extMin = arbitrageConfig.coin1ExternalMin;
+                        let extMax = arbitrageConfig.coin1ExternalMax;
+                        if (arbitrageConfig.coin1UseLiveOffset) {
+                          extMin = appPrice * (1 - (arbitrageConfig.coin1OffsetPercentage + 0.3) / 100);
+                          extMax = appPrice * (1 - (arbitrageConfig.coin1OffsetPercentage - 0.2) / 100);
+                        }
+                        const avgExt = (extMin + extMax) / 2;
+                        const potentialProfit = appPrice - avgExt;
+                        return (
+                          <div className="space-y-0.5">
+                            <div>App Rate: <span className="text-zinc-200">${appPrice.toLocaleString()}</span></div>
+                            <div>External Range: <span className="text-zinc-200">${extMin.toLocaleString(undefined, {maximumFractionDigits: 2})} - ${extMax.toLocaleString(undefined, {maximumFractionDigits: 2})}</span></div>
+                            <div>Arbitrage Difference: <span className="text-emerald-400 font-bold">+${potentialProfit.toLocaleString(undefined, {maximumFractionDigits: 2})} per coin ({((potentialProfit / avgExt) * 100).toFixed(2)}% ROI)</span></div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  </div>
+
+                  {/* Coin 2 Configuration */}
+                  <div className="bg-zinc-950 p-4 rounded-2xl border border-zinc-800/50 space-y-3">
+                    <div className="flex items-center justify-between border-b border-zinc-900 pb-2">
+                      <span className="text-xs font-black text-amber-400 tracking-wider uppercase">Arbitrage Coin #2</span>
+                      <span className="text-[10px] bg-zinc-900 text-zinc-400 px-2 py-0.5 rounded-full font-bold">Selected: {arbitrageConfig.coin2Symbol}</span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[10px] text-zinc-500 font-bold block mb-1">Select System Coin</label>
+                        <select
+                          value={arbitrageConfig.coin2Symbol}
+                          onChange={(e) => setArbitrageConfig({ ...arbitrageConfig, coin2Symbol: e.target.value })}
+                          className="w-full px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-white focus:outline-none focus:ring-1 focus:ring-amber-500 cursor-pointer"
+                        >
+                          {cryptoPricesList.map(c => (
+                            <option key={`c2-${c.symbol}`} value={c.symbol}>{c.symbol} ({c.name})</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] text-zinc-500 font-bold block mb-1">Price Mode</label>
+                        <select
+                          value={arbitrageConfig.coin2UseLiveOffset ? "live" : "manual"}
+                          onChange={(e) => setArbitrageConfig({ 
+                            ...arbitrageConfig, 
+                            coin2UseLiveOffset: e.target.value === 'live' 
+                          })}
+                          className="w-full px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-white focus:outline-none focus:ring-1 focus:ring-amber-500 cursor-pointer"
+                        >
+                          <option value="live">Dynamic % Discount</option>
+                          <option value="manual">Manual Price Range</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {arbitrageConfig.coin2UseLiveOffset ? (
+                      <div className="space-y-1 bg-zinc-900/40 p-2.5 rounded-lg border border-zinc-900">
+                        <label className="text-[10px] text-zinc-400 font-bold block">Discount on External Platforms (%)</label>
+                        <p className="text-[9px] text-zinc-500 font-semibold mb-1.5">e.g., 2.8% means other platforms are 2.8% cheaper than this app's price.</p>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={arbitrageConfig.coin2OffsetPercentage}
+                          onChange={(e) => setArbitrageConfig({ ...arbitrageConfig, coin2OffsetPercentage: parseFloat(e.target.value) || 0 })}
+                          className="w-full px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-white font-mono focus:outline-none focus:ring-1 focus:ring-amber-500"
+                        />
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-3 bg-zinc-900/40 p-2.5 rounded-lg border border-zinc-900">
+                        <div>
+                          <label className="text-[10px] text-zinc-400 font-bold block mb-1">External Min Price (USD)</label>
+                          <input
+                            type="number"
+                            step="any"
+                            value={arbitrageConfig.coin2ExternalMin}
+                            onChange={(e) => setArbitrageConfig({ ...arbitrageConfig, coin2ExternalMin: parseFloat(e.target.value) || 0 })}
+                            className="w-full px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-white font-mono focus:outline-none focus:ring-1 focus:ring-amber-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-zinc-400 font-bold block mb-1">External Max Price (USD)</label>
+                          <input
+                            type="number"
+                            step="any"
+                            value={arbitrageConfig.coin2ExternalMax}
+                            onChange={(e) => setArbitrageConfig({ ...arbitrageConfig, coin2ExternalMax: parseFloat(e.target.value) || 0 })}
+                            className="w-full px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-white font-mono focus:outline-none focus:ring-1 focus:ring-amber-500"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Quick calculations preview for Admin */}
+                    <div className="bg-amber-500/5 p-2.5 rounded-lg border border-amber-500/10 text-[10px] space-y-1 font-mono text-zinc-400">
+                      <div className="font-bold text-zinc-300">Live Simulation Check:</div>
+                      {(() => {
+                        const matched = cryptoPricesList.find(c => c.symbol === arbitrageConfig.coin2Symbol);
+                        const appPrice = matched ? matched.price : 0;
+                        let extMin = arbitrageConfig.coin2ExternalMin;
+                        let extMax = arbitrageConfig.coin2ExternalMax;
+                        if (arbitrageConfig.coin2UseLiveOffset) {
+                          extMin = appPrice * (1 - (arbitrageConfig.coin2OffsetPercentage + 0.3) / 100);
+                          extMax = appPrice * (1 - (arbitrageConfig.coin2OffsetPercentage - 0.2) / 100);
+                        }
+                        const avgExt = (extMin + extMax) / 2;
+                        const potentialProfit = appPrice - avgExt;
+                        return (
+                          <div className="space-y-0.5">
+                            <div>App Rate: <span className="text-zinc-200">${appPrice.toLocaleString()}</span></div>
+                            <div>External Range: <span className="text-zinc-200">${extMin.toLocaleString(undefined, {maximumFractionDigits: 2})} - ${extMax.toLocaleString(undefined, {maximumFractionDigits: 2})}</span></div>
+                            <div>Arbitrage Difference: <span className="text-emerald-400 font-bold">+${potentialProfit.toLocaleString(undefined, {maximumFractionDigits: 2})} per coin ({((potentialProfit / avgExt) * 100).toFixed(2)}% ROI)</span></div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Platform Name Tags management */}
+                <div className="bg-zinc-950 p-4 rounded-2xl border border-zinc-800/50 space-y-3">
+                  <span className="text-xs font-black text-amber-400 tracking-wider uppercase block border-b border-zinc-900 pb-2">Arbitrage Platform Recommendations</span>
+                  <div>
+                    <label className="text-[10px] text-zinc-500 font-bold block mb-1">Recommended Platforms (Comma-Separated)</label>
+                    <input
+                      type="text"
+                      value={arbitrageConfig.platformsList.join(', ')}
+                      onChange={(e) => setArbitrageConfig({ 
+                        ...arbitrageConfig, 
+                        platformsList: e.target.value.split(',').map(s => s.trim()).filter(Boolean)
+                      })}
+                      placeholder="Binance, Bybit, OKX, Coinbase, Kraken"
+                      className="w-full px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-white focus:outline-none focus:ring-1 focus:ring-amber-500"
+                    />
+                    <p className="text-[9px] text-zinc-500 font-semibold mt-1">Users will see how to buy coins on these specific platforms and transfer/sell them to your platform to pocket the value difference.</p>
+                  </div>
                 </div>
               </div>
 

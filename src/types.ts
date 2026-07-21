@@ -69,3 +69,17 @@ export interface NewsItem {
   time: string;
   image: string;
 }
+
+export interface ArbitrageConfig {
+  coin1Symbol: string;
+  coin1ExternalMin: number;
+  coin1ExternalMax: number;
+  coin1UseLiveOffset: boolean;
+  coin1OffsetPercentage: number;
+  coin2Symbol: string;
+  coin2ExternalMin: number;
+  coin2ExternalMax: number;
+  coin2UseLiveOffset: boolean;
+  coin2OffsetPercentage: number;
+  platformsList: string[]; // platforms like ["Binance", "Bybit", "OKX", "Coinbase"]
+}

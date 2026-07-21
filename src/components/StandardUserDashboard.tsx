@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { db } from '../firebase';
 import { doc, getDoc, onSnapshot, collection, query, where, getDocs, updateDoc, addDoc } from 'firebase/firestore';
-import { UserAccount, Transaction, CryptoPrice } from '../types';
+import { UserAccount, Transaction, CryptoPrice, ArbitrageConfig } from '../types';
 import NewsCarousel from './NewsCarousel';
 import ActivityLog from './ActivityLog';
 import { 
   TrendingUp, TrendingDown, ArrowUpRight, ArrowDownLeft, Search, 
   User, LogOut, ArrowRightLeft, ShieldCheck, Activity, Wallet, 
   HelpCircle, RefreshCw, Coins, ArrowRight, MessageSquare, AlertCircle,
-  History, ArrowLeft, X, ChevronDown, Check, Lock, Unlock
+  History, ArrowLeft, X, ChevronDown, Check, Lock, Unlock, Eye, EyeOff, Sparkles
 } from 'lucide-react';
 
 interface StandardUserDashboardProps {
@@ -196,20 +196,32 @@ interface Candle {
   high: number;
   low: number;
   close: number;
+  timestamp: number;
+  volume?: number;
 }
+
+const TIMEFRAME_DURATIONS: Record<string, number> = {
+  '1m': 60000,
+  '5m': 300000,
+  '1h': 3600000,
+  '4h': 14400000
+};
 
 const generateCandleData = (coinPrice: number, change: number, timeframe: string): Candle[] => {
   const count = 24;
   const candles: Candle[] = [];
+  const duration = TIMEFRAME_DURATIONS[timeframe] || 300000;
+  const currentPeriodStart = Math.floor(Date.now() / duration) * duration;
   
   const isUp = change >= 0;
   const startFactor = isUp ? (1 - change / 100) : (1 + Math.abs(change) / 100);
   const startPrice = coinPrice * startFactor;
   
   let variance = 0.015;
-  if (timeframe === '1H') variance = 0.003;
-  if (timeframe === '1W') variance = 0.045;
-  if (timeframe === '1M') variance = 0.12;
+  if (timeframe === '1m') variance = 0.002;
+  if (timeframe === '5m') variance = 0.006;
+  if (timeframe === '1h') variance = 0.02;
+  if (timeframe === '4h') variance = 0.045;
 
   let currentPrice = startPrice;
   
@@ -237,13 +249,25 @@ const generateCandleData = (coinPrice: number, change: number, timeframe: string
       open: parseFloat(safeOpen.toFixed(4)),
       high: parseFloat(high.toFixed(4)),
       low: parseFloat(low.toFixed(4)),
-      close: parseFloat(safeClose.toFixed(4))
+      close: parseFloat(safeClose.toFixed(4)),
+      timestamp: currentPeriodStart - (count - 1 - i) * duration,
+      volume: Math.floor(50 + Math.random() * 150)
     });
     
     currentPrice = safeClose;
   }
   
   return candles;
+};
+
+const formatCandleTime = (timestamp: number, tf: string): string => {
+  const date = new Date(timestamp);
+  const pad = (num: number) => num.toString().padStart(2, '0');
+  if (tf === '1m' || tf === '5m') {
+    return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  } else {
+    return `${pad(date.getMonth() + 1)}/${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  }
 };
 
 export default function StandardUserDashboard({ 
@@ -277,8 +301,95 @@ export default function StandardUserDashboard({
   
   // Selected coin for high-fidelity interactive modal/chart details
   const [selectedCoin, setSelectedCoin] = useState<CryptoPrice | null>(null);
-  const [chartTimeframe, setChartTimeframe] = useState<'1H' | '24H' | '1W' | '1M'>('24H');
+  const [chartTimeframe, setChartTimeframe] = useState<'1m' | '5m' | '1h' | '4h'>('5m');
   const [hoveredCandle, setHoveredCandle] = useState<Candle | null>(null);
+  const [isBalanceBlurred, setIsBalanceBlurred] = useState<boolean>(false);
+  const [isEarnBalanceBlurred, setIsEarnBalanceBlurred] = useState<boolean>(false);
+  const [earnDisplayMode, setEarnDisplayMode] = useState<'USD' | 'CRYPTO'>('USD');
+
+  // Live Persistent Candlestick Engine
+  const [candlesCache, setCandlesCache] = useState<Record<string, Candle[]>>({});
+
+  // Initialize cache if missing
+  useEffect(() => {
+    if (!selectedCoin) return;
+    const liveCoin = cryptoPrices.find(c => c.symbol === selectedCoin.symbol) || selectedCoin;
+    const tf = chartTimeframe;
+    const cacheKey = `${liveCoin.symbol}-${tf}`;
+
+    setCandlesCache(prev => {
+      if (prev[cacheKey]) return prev;
+      const baseCandles = generateCandleData(liveCoin.price, liveCoin.change24h, tf);
+      return {
+        ...prev,
+        [cacheKey]: baseCandles
+      };
+    });
+  }, [selectedCoin?.symbol, chartTimeframe]);
+
+  // Real-time wall-clock precision candlestick tracker and ticker
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (!selectedCoin) return;
+      const liveCoin = cryptoPrices.find(c => c.symbol === selectedCoin.symbol) || selectedCoin;
+      const tf = chartTimeframe;
+      const cacheKey = `${liveCoin.symbol}-${tf}`;
+      const duration = TIMEFRAME_DURATIONS[tf] || 300000;
+      const now = Date.now();
+      const currentPeriodStart = Math.floor(now / duration) * duration;
+
+      setCandlesCache(prev => {
+        const existing = prev[cacheKey];
+        if (!existing) {
+          const baseCandles = generateCandleData(liveCoin.price, liveCoin.change24h, tf);
+          return {
+            ...prev,
+            [cacheKey]: baseCandles
+          };
+        }
+
+        const updated = [...existing];
+        const lastIdx = updated.length - 1;
+        if (lastIdx >= 0) {
+          const last = updated[lastIdx];
+          
+          if (last.timestamp < currentPeriodStart) {
+            // Timeframes rule: Once time expires, the active candle closes, and we open a new one
+            const prevClose = last.close;
+            const newCandle: Candle = {
+              open: prevClose,
+              high: Math.max(prevClose, liveCoin.price),
+              low: Math.min(prevClose, liveCoin.price),
+              close: liveCoin.price,
+              timestamp: currentPeriodStart,
+              volume: Math.floor(50 + Math.random() * 150)
+            };
+            updated.push(newCandle);
+            if (updated.length > 24) {
+              updated.shift();
+            }
+          } else {
+            // Live feedback: update high, low, close of the active candle in real-time
+            const newClose = liveCoin.price;
+            const newHigh = Math.max(last.high, newClose);
+            const newLow = Math.min(last.low, newClose);
+            updated[lastIdx] = {
+              ...last,
+              high: parseFloat(newHigh.toFixed(4)),
+              low: parseFloat(newLow.toFixed(4)),
+              close: parseFloat(newClose.toFixed(4))
+            };
+          }
+        }
+        return {
+          ...prev,
+          [cacheKey]: updated
+        };
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [selectedCoin?.symbol, chartTimeframe, cryptoPrices]);
   const [quickTradeType, setQuickTradeType] = useState<'BUY' | 'SELL'>('BUY');
   const [quickTradeAmount, setQuickTradeAmount] = useState<string>('');
   const [tradeMessage, setTradeMessage] = useState<{ text: string; isError: boolean } | null>(null);
@@ -328,11 +439,49 @@ export default function StandardUserDashboard({
         console.warn("Crypto prices fetch timed out. Falling back to default offline prices.");
         setIsUsingFallbackPrices(true);
         setPricesLoadError("Network latency detected. Displaying offline rates.");
+        setCryptoPrices(prev => prev.map(c => {
+          const fallback = STATIC_CRYPTO.find(x => x.symbol === c.symbol);
+          return fallback ? { ...c, price: fallback.price, change24h: fallback.change24h } : c;
+        }));
       }
     }, 10000); // 10 seconds timeout
 
     return () => clearTimeout(timer);
   }, [pricesLoaded]);
+
+  // Listen to network status (online/offline)
+  useEffect(() => {
+    const handleOnline = () => {
+      setPricesLoaded(false);
+    };
+    const handleOffline = () => {
+      setIsUsingFallbackPrices(true);
+      setPricesLoadError("No internet connection detected. Offline mode activated.");
+      setCryptoPrices(prev => prev.map(c => ({ ...c, price: 0, change24h: 0 })));
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('online', handleOnline);
+      window.addEventListener('offline', handleOffline);
+      if (!navigator.onLine) {
+        handleOffline();
+      }
+    }
+
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('online', handleOnline);
+        window.removeEventListener('offline', handleOffline);
+      }
+    };
+  }, []);
+
+  // Arbitrage Config State
+  const [arbitrageConfig, setArbitrageConfig] = useState<ArbitrageConfig | null>(null);
+
+  // Arbitrage Calculator input states
+  const [arbAmount1, setArbAmount1] = useState('0.5');
+  const [arbAmount2, setArbAmount2] = useState('5.0');
 
   // Quick Trade state (simulation in trade tab)
   const [tradeFrom, setTradeFrom] = useState('BTC');
@@ -379,11 +528,19 @@ export default function StandardUserDashboard({
       } else {
         setIsUsingFallbackPrices(true);
         setPricesLoadError("No live prices found in database. Using default offline rates.");
+        setCryptoPrices(prev => prev.map(c => {
+          const fallback = STATIC_CRYPTO.find(x => x.symbol === c.symbol);
+          return fallback ? { ...c, price: fallback.price, change24h: fallback.change24h } : c;
+        }));
       }
     }, (err) => {
       console.error("Error listening to crypto prices:", err);
       setIsUsingFallbackPrices(true);
       setPricesLoadError("Failed to fetch live prices from server. Using offline rates.");
+      setCryptoPrices(prev => prev.map(c => {
+        const fallback = STATIC_CRYPTO.find(x => x.symbol === c.symbol);
+        return fallback ? { ...c, price: fallback.price, change24h: fallback.change24h } : c;
+      }));
     });
 
     const invCol = collection(db, 'investments');
@@ -407,11 +564,36 @@ export default function StandardUserDashboard({
       setActiveInvestments(invs);
     });
 
+    // Real-time listener for Arbitrage config
+    const arbDocRef = doc(db, 'settings', 'arbitrage_config');
+    const unsubscribeArbitrage = onSnapshot(arbDocRef, (snapshot) => {
+      if (snapshot.exists()) {
+        setArbitrageConfig(snapshot.data() as ArbitrageConfig);
+      } else {
+        setArbitrageConfig({
+          coin1Symbol: 'BTC',
+          coin1ExternalMin: 91500,
+          coin1ExternalMax: 92500,
+          coin1UseLiveOffset: true,
+          coin1OffsetPercentage: 2.5,
+          coin2Symbol: 'ETH',
+          coin2ExternalMin: 3350,
+          coin2ExternalMax: 3410,
+          coin2UseLiveOffset: true,
+          coin2OffsetPercentage: 2.8,
+          platformsList: ['Binance', 'Bybit', 'OKX', 'Coinbase']
+        });
+      }
+    }, (err) => {
+      console.error("Error listening to arbitrage config:", err);
+    });
+
     return () => {
       unsubscribeUser();
       unsubscribeTx();
       unsubscribePrices();
       unsubscribeInvestments();
+      unsubscribeArbitrage();
     };
   }, [user.uid]);
 
@@ -449,7 +631,7 @@ export default function StandardUserDashboard({
       }));
     }, 4000);
     return () => clearInterval(interval);
-  }, []);
+  }, [isUsingFallbackPrices]);
 
   // Handle live conversion calculation inside the Trade simulation tab using dynamic cryptoPrices
   useEffect(() => {
@@ -968,7 +1150,8 @@ export default function StandardUserDashboard({
 
   if (selectedCoin) {
     const liveCoin = cryptoPrices.find(c => c.symbol === selectedCoin.symbol) || selectedCoin;
-    const candles = generateCandleData(liveCoin.price, liveCoin.change24h, chartTimeframe);
+    const cacheKey = `${liveCoin.symbol}-${chartTimeframe}`;
+    const candles = candlesCache[cacheKey] || generateCandleData(liveCoin.price, liveCoin.change24h, chartTimeframe);
     const highs = candles.map(c => c.high);
     const lows = candles.map(c => c.low);
     const max = Math.max(...highs);
@@ -1166,11 +1349,11 @@ export default function StandardUserDashboard({
               <div className={`flex gap-1 p-0.5 rounded-lg border ${
                 isLightTheme ? 'bg-[#FFF8E1]/80 border-amber-200' : 'bg-slate-900 border-slate-800'
               }`}>
-                {(['1H', '24H', '1W', '1M'] as const).map(tf => (
+                {(['1m', '5m', '1h', '4h'] as const).map(tf => (
                   <button
                     key={tf}
                     onClick={() => setChartTimeframe(tf)}
-                    className={`px-2 py-0.5 text-[9px] font-extrabold rounded-md transition-all cursor-pointer ${
+                    className={`px-2 py-0.5 text-[9px] font-extrabold rounded-md transition-all uppercase cursor-pointer ${
                       chartTimeframe === tf 
                         ? (isLightTheme ? 'bg-amber-100 text-amber-800 shadow-xs border border-amber-200' : 'bg-slate-850 text-emerald-400 shadow-sm border border-slate-700/50') 
                         : (isLightTheme ? 'text-zinc-500 hover:text-zinc-700' : 'text-zinc-500 hover:text-zinc-300')
@@ -1190,15 +1373,49 @@ export default function StandardUserDashboard({
                 <line x1="0" y1="100" x2="350" y2="100" stroke={isLightTheme ? "#fcd34d" : "#1e293b"} strokeOpacity={isLightTheme ? "0.35" : "0.5"} strokeDasharray="3 3" />
                 <line x1="0" y1="175" x2="350" y2="175" stroke={isLightTheme ? "#fcd34d" : "#1e293b"} strokeOpacity={isLightTheme ? "0.35" : "0.5"} strokeDasharray="3 3" />
 
+                {/* SVG Definitions for Gradients & Glow Filters */}
+                <defs>
+                  <linearGradient id="upCandleGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stopColor="#10b981" />
+                    <stop offset="100%" stopColor="#047857" />
+                  </linearGradient>
+                  <linearGradient id="downCandleGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stopColor="#ef4444" />
+                    <stop offset="100%" stopColor="#b91c1c" />
+                  </linearGradient>
+                  <filter id="activeGlow" x="-20%" y="-20%" width="140%" height="140%">
+                    <feGaussianBlur stdDeviation="1.5" result="blur" />
+                    <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                  </filter>
+                </defs>
+
+                {/* Horizontal Grid lines with price labels */}
+                <g opacity="0.6">
+                  <line x1="0" y1="25" x2="305" y2="25" stroke={isLightTheme ? "#d97706" : "#334155"} strokeOpacity={isLightTheme ? "0.2" : "0.35"} strokeDasharray="3 3" />
+                  <text x="310" y="28" fill={isLightTheme ? "#b45309" : "#64748b"} fontSize="7" fontFamily="monospace" fontWeight="bold">
+                    ${(min + ((200 - 25 - 25) / 145) * range).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 3 })}
+                  </text>
+
+                  <line x1="0" y1="100" x2="305" y2="100" stroke={isLightTheme ? "#d97706" : "#334155"} strokeOpacity={isLightTheme ? "0.2" : "0.35"} strokeDasharray="3 3" />
+                  <text x="310" y="103" fill={isLightTheme ? "#b45309" : "#64748b"} fontSize="7" fontFamily="monospace" fontWeight="bold">
+                    ${(min + ((200 - 100 - 25) / 145) * range).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 3 })}
+                  </text>
+
+                  <line x1="0" y1="175" x2="305" y2="175" stroke={isLightTheme ? "#d97706" : "#334155"} strokeOpacity={isLightTheme ? "0.2" : "0.35"} strokeDasharray="3 3" />
+                  <text x="310" y="178" fill={isLightTheme ? "#b45309" : "#64748b"} fontSize="7" fontFamily="monospace" fontWeight="bold">
+                    ${(min + ((200 - 175 - 25) / 145) * range).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 3 })}
+                  </text>
+                </g>
+
                 {/* Vertical tracking crosshair line when hovering */}
                 {hoveredCandle && (
                   <line
-                    x1={15 + (candles.indexOf(hoveredCandle) / (candles.length - 1)) * 320}
+                    x1={15 + (candles.indexOf(hoveredCandle) / (candles.length - 1)) * 290}
                     y1="10"
-                    x2={15 + (candles.indexOf(hoveredCandle) / (candles.length - 1)) * 320}
+                    x2={15 + (candles.indexOf(hoveredCandle) / (candles.length - 1)) * 290}
                     y2="190"
                     stroke="#475569"
-                    strokeOpacity="0.75"
+                    strokeOpacity="0.7"
                     strokeWidth="1"
                     strokeDasharray="2 2"
                     pointerEvents="none"
@@ -1210,7 +1427,7 @@ export default function StandardUserDashboard({
                   <line
                     x1="0"
                     y1={getY(hoveredCandle.close)}
-                    x2="350"
+                    x2="305"
                     y2={getY(hoveredCandle.close)}
                     stroke="#475569"
                     strokeOpacity="0.5"
@@ -1224,7 +1441,7 @@ export default function StandardUserDashboard({
                 <line
                   x1="0"
                   y1={getY(liveCoin.price)}
-                  x2="350"
+                  x2="305"
                   y2={getY(liveCoin.price)}
                   stroke={liveCoin.change24h >= 0 ? "rgba(16, 185, 129, 0.65)" : "rgba(239, 68, 68, 0.65)"}
                   strokeWidth="1.25"
@@ -1235,7 +1452,7 @@ export default function StandardUserDashboard({
 
                 {/* Pulsing target coordinate dot on live price line */}
                 <circle
-                  cx="345"
+                  cx="305"
                   cy={getY(liveCoin.price)}
                   r="4"
                   fill={liveCoin.change24h >= 0 ? "#10b981" : "#ef4444"}
@@ -1243,7 +1460,7 @@ export default function StandardUserDashboard({
                   pointerEvents="none"
                 />
                 <circle
-                  cx="345"
+                  cx="305"
                   cy={getY(liveCoin.price)}
                   r="2"
                   fill={liveCoin.change24h >= 0 ? "#34d399" : "#f87171"}
@@ -1252,13 +1469,14 @@ export default function StandardUserDashboard({
 
                 {/* Candlesticks & Volumes */}
                 {candles.map((candle, i) => {
-                  const cx = 15 + (i / (candles.length - 1)) * 320;
+                  const cx = 15 + (i / (candles.length - 1)) * 290;
                   const yOpen = getY(candle.open);
                   const yClose = getY(candle.close);
                   const yHigh = getY(candle.high);
                   const yLow = getY(candle.low);
                   const isUp = candle.close >= candle.open;
-                  const bodyWidth = 9;
+                  const bodyWidth = 8;
+                  const isActive = i === candles.length - 1;
 
                   // Volume bar height simulation
                   const volHeight = 10 + (Math.sin(i * 1.5) + 1.2) * 6;
@@ -1278,7 +1496,8 @@ export default function StandardUserDashboard({
                         width={bodyWidth}
                         height={volHeight}
                         fill={isUp ? "#10b981" : "#ef4444"}
-                        className="opacity-15 group-hover/candle:opacity-35 transition-opacity"
+                        fillOpacity={isUp ? 0.2 : 0.25}
+                        className="hover:fill-opacity-40 transition-all duration-150"
                         rx="1"
                       />
 
@@ -1288,8 +1507,8 @@ export default function StandardUserDashboard({
                         y1={yHigh}
                         x2={cx}
                         y2={yLow}
-                        stroke={isUp ? "#34d399" : "#f87171"}
-                        strokeWidth="1.25"
+                        stroke={isUp ? "#10b981" : "#ef4444"}
+                        strokeWidth="1.5"
                         className="group-hover/candle:stroke-white transition-colors"
                       />
 
@@ -1299,11 +1518,12 @@ export default function StandardUserDashboard({
                         y={Math.min(yOpen, yClose)}
                         width={bodyWidth}
                         height={Math.max(2.5, Math.abs(yOpen - yClose))}
-                        fill={isUp ? "#10b981" : "#ef4444"}
-                        stroke={isUp ? "#34d399" : "#f87171"}
+                        fill={isUp ? "url(#upCandleGrad)" : "url(#downCandleGrad)"}
+                        stroke={isUp ? "#059669" : "#b91c1c"}
                         strokeWidth="0.75"
                         rx="1.5"
-                        className="group-hover/candle:brightness-125 group-hover/candle:stroke-white transition-all duration-150"
+                        filter={isActive ? "url(#activeGlow)" : undefined}
+                        className={`transition-all duration-150 group-hover/candle:stroke-white group-hover/candle:brightness-110 ${isActive ? 'animate-pulse' : ''}`}
                       />
 
                       {/* Hover capture block */}
@@ -1321,7 +1541,7 @@ export default function StandardUserDashboard({
                 {/* Interactive Tooltip showing exact OHLC values on hover */}
                 {hoveredCandle && (() => {
                   const hIndex = candles.indexOf(hoveredCandle);
-                  const cx = 15 + (hIndex / (candles.length - 1)) * 320;
+                  const cx = 15 + (hIndex / (candles.length - 1)) * 290;
                   const isLeftHalf = hIndex < candles.length / 2;
                   
                   // Position tooltip box horizontally. If left half, show on right; if right half, show on left.
@@ -1329,7 +1549,7 @@ export default function StandardUserDashboard({
                   
                   // Position tooltip box vertically, bounding it within safe limits of the SVG canvas height.
                   const cy = getY(hoveredCandle.close);
-                  const ty = Math.max(10, Math.min(115, cy - 37));
+                  const ty = Math.max(10, Math.min(105, cy - 42));
                   
                   const isUp = hoveredCandle.close >= hoveredCandle.open;
                   
@@ -1338,7 +1558,7 @@ export default function StandardUserDashboard({
                       {/* Tooltip Background Card with rounded corners, backdrop feel, and color-coded indicator border */}
                       <rect 
                         width="115" 
-                        height="74" 
+                        height="84" 
                         rx="8" 
                         fill="#090d16" 
                         fillOpacity="0.96" 
@@ -1381,10 +1601,16 @@ export default function StandardUserDashboard({
                         ${hoveredCandle.close.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
                       </text>
 
+                      {/* Actual Candle Time Row */}
+                      <text x="8" y="68" fill="#94a3b8" fontSize="7" fontFamily="monospace" fontWeight="bold">TIME:</text>
+                      <text x="107" y="68" fill="#a7f3d0" fontSize="7" fontFamily="monospace" fontWeight="900" textAnchor="end">
+                        {formatCandleTime(hoveredCandle.timestamp, chartTimeframe)}
+                      </text>
+
                       {/* Simulated Volume Row */}
-                      <text x="8" y="68" fill="#64748b" fontSize="6.5" fontFamily="monospace" fontWeight="bold">SIM VOLUME:</text>
-                      <text x="107" y="68" fill="#94a3b8" fontSize="6.5" fontFamily="monospace" fontWeight="bold" textAnchor="end">
-                        {(15 + (Math.sin(hIndex * 1.5) + 1.2) * 20).toFixed(2)}k USDT
+                      <text x="8" y="78" fill="#64748b" fontSize="6.5" fontFamily="monospace" fontWeight="bold">VOLUME:</text>
+                      <text x="107" y="78" fill="#94a3b8" fontSize="6.5" fontFamily="monospace" fontWeight="bold" textAnchor="end">
+                        {(hoveredCandle.volume || 100).toFixed(0)}k USDT
                       </text>
                     </g>
                   );
@@ -1393,8 +1619,9 @@ export default function StandardUserDashboard({
 
               {/* Dynamic Floating Price Tag Bubble on right aligned with the live price line */}
               <div 
-                className="absolute right-1 text-[8px] font-mono font-bold select-none pointer-events-none transition-all duration-300 px-1.5 py-0.5 rounded shadow-lg flex items-center gap-1 border border-slate-700/50"
+                className="absolute text-[8px] font-mono font-bold select-none pointer-events-none transition-all duration-300 px-1.5 py-0.5 rounded shadow-lg flex items-center gap-1 border border-slate-700/50"
                 style={{ 
+                  right: '44px',
                   top: `${getY(liveCoin.price)}px`, 
                   transform: 'translateY(-50%)',
                   backgroundColor: liveCoin.change24h >= 0 ? 'rgba(6, 78, 59, 0.95)' : 'rgba(127, 29, 29, 0.95)',
@@ -1650,6 +1877,19 @@ export default function StandardUserDashboard({
     );
   }
 
+  // Calculate MMF Earn totals
+  const activeInvs = activeInvestments.filter((inv: any) => inv.status === 'active');
+  const totalInvestedUSD = activeInvs.reduce((sum: number, inv: any) => {
+    const liveCoin = cryptoPrices.find((c: any) => c.symbol === inv.coinSymbol);
+    return sum + inv.amount * (liveCoin ? liveCoin.price : 0);
+  }, 0);
+
+  const totalDailyProfitUSD = activeInvs.reduce((sum: number, inv: any) => {
+    const liveCoin = cryptoPrices.find((c: any) => c.symbol === inv.coinSymbol);
+    const dailyEarningCoin = inv.amount * (inv.dailyRate / 100);
+    return sum + dailyEarningCoin * (liveCoin ? liveCoin.price : 0);
+  }, 0);
+
   return (
     <div 
       id="user-dashboard-root" 
@@ -1764,6 +2004,7 @@ export default function StandardUserDashboard({
                         setTradeMessage(null);
                         setQuickTradeAmount('');
                         setQuickTradeType('BUY');
+                        setSearchQuery('');
                       }
                     }
                   }}
@@ -1786,6 +2027,70 @@ export default function StandardUserDashboard({
                     <X size={14} />
                   </button>
                 )}
+
+                {/* Floating Search Dropdown overlay */}
+                {searchQuery.trim() !== '' && (
+                  <div className={`absolute left-0 right-0 mt-1.5 rounded-2xl border shadow-2xl z-50 max-h-72 overflow-y-auto ${
+                    isLightTheme
+                      ? 'bg-white border-zinc-200/95 text-zinc-800 shadow-amber-500/10'
+                      : 'bg-slate-900 border-slate-750 text-white shadow-black/40'
+                  }`}>
+                    {filteredCrypto.length > 0 ? (
+                      <div className="p-1.5 flex flex-col gap-0.5">
+                        <div className={`text-[10px] font-black uppercase tracking-wider px-3 py-1.5 ${
+                          isLightTheme ? 'text-zinc-400 border-b border-zinc-100' : 'text-zinc-500 border-b border-slate-800/80'
+                        }`}>
+                          Search Results ({filteredCrypto.length})
+                        </div>
+                        {filteredCrypto.map(coin => (
+                          <div
+                            key={coin.symbol}
+                            onClick={() => {
+                              setSelectedCoin(coin);
+                              setTradeMessage(null);
+                              setQuickTradeAmount('');
+                              setQuickTradeType('BUY');
+                              setSearchQuery('');
+                            }}
+                            className={`flex items-center justify-between p-2.5 rounded-xl cursor-pointer transition-all duration-150 ${
+                              isLightTheme
+                                ? 'hover:bg-amber-500/10 text-zinc-800 hover:text-amber-900'
+                                : 'hover:bg-slate-850 text-zinc-200 hover:text-white'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <CoinIcon symbol={coin.symbol} className="w-7 h-7 shrink-0" />
+                              <div className="min-w-0">
+                                <span className="font-bold text-xs block truncate leading-tight">{coin.name}</span>
+                                <span className={`text-[9px] font-extrabold uppercase tracking-wider block mt-0.5 ${
+                                  isLightTheme ? 'text-zinc-400' : 'text-zinc-500'
+                                }`}>{coin.symbol}</span>
+                              </div>
+                            </div>
+                            <div className="text-right shrink-0">
+                              <span className="font-bold text-xs font-mono block leading-tight">
+                                ${coin.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
+                              </span>
+                              <span className={`inline-flex items-center gap-0.5 text-[9px] font-bold mt-0.5 ${
+                                coin.change24h >= 0 
+                                  ? (isLightTheme ? 'text-emerald-600' : 'text-emerald-400') 
+                                  : (isLightTheme ? 'text-rose-600' : 'text-rose-400')
+                              }`}>
+                                {coin.change24h >= 0 ? <TrendingUp size={9} /> : <TrendingDown size={9} />}
+                                <span>{coin.change24h >= 0 ? '+' : ''}{coin.change24h.toFixed(2)}%</span>
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="p-5 text-center flex flex-col items-center justify-center gap-1">
+                        <span className={`text-xs font-bold ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>No tokens found</span>
+                        <span className={`text-[10px] ${isLightTheme ? 'text-zinc-400' : 'text-zinc-500'}`}>Try searching for Bitcoin, Ethereum, Tether, etc.</span>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Wallet Card */}
@@ -1796,11 +2101,24 @@ export default function StandardUserDashboard({
 
                 <div className="flex justify-between items-start select-none">
                   <div>
-                    <span className="text-[11px] font-bold text-white/80 uppercase tracking-wider">Wallet Balance</span>
-                    <h2 className="text-3xl font-black tracking-tight font-mono mt-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] font-bold text-white/80 uppercase tracking-wider">Wallet Balance</span>
+                      <button
+                        onClick={() => setIsBalanceBlurred(!isBalanceBlurred)}
+                        className="p-1 rounded-lg hover:bg-white/10 text-white/80 hover:text-white transition-all cursor-pointer inline-flex items-center justify-center shrink-0"
+                        title={isBalanceBlurred ? "Reveal balance" : "Hide balance"}
+                      >
+                        {isBalanceBlurred ? <EyeOff size={13} strokeWidth={2.5} /> : <Eye size={13} strokeWidth={2.5} />}
+                      </button>
+                    </div>
+                    <h2 className={`text-3xl font-black tracking-tight font-mono mt-1 transition-all duration-300 ${
+                      isBalanceBlurred ? 'filter blur-md select-none pointer-events-none' : ''
+                    }`}>
                       $ {totalPortfolioValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </h2>
-                    <div className="flex items-center gap-1 mt-1.5 text-[11px] font-bold">
+                    <div className={`flex items-center gap-1 mt-1.5 text-[11px] font-bold transition-all duration-300 ${
+                      isBalanceBlurred ? 'filter blur-md select-none pointer-events-none' : ''
+                    }`}>
                       {portfolioDailyChange.isPositive ? (
                         <span className="flex items-center gap-1 text-amber-100 bg-amber-700/30 px-2 py-0.5 rounded-full border border-amber-400/20 shadow-sm">
                           <TrendingUp size={11} className="text-amber-300 shrink-0" />
@@ -1929,11 +2247,24 @@ export default function StandardUserDashboard({
 
                 <div className="flex justify-between items-start select-none">
                   <div>
-                    <span className="text-[11px] font-bold text-white/80 uppercase tracking-wider">Wallet Balance</span>
-                    <h2 className="text-3xl font-black tracking-tight font-mono mt-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] font-bold text-white/80 uppercase tracking-wider">Wallet Balance</span>
+                      <button
+                        onClick={() => setIsBalanceBlurred(!isBalanceBlurred)}
+                        className="p-1 rounded-lg hover:bg-white/10 text-white/80 hover:text-white transition-all cursor-pointer inline-flex items-center justify-center shrink-0"
+                        title={isBalanceBlurred ? "Reveal balance" : "Hide balance"}
+                      >
+                        {isBalanceBlurred ? <EyeOff size={13} strokeWidth={2.5} /> : <Eye size={13} strokeWidth={2.5} />}
+                      </button>
+                    </div>
+                    <h2 className={`text-3xl font-black tracking-tight font-mono mt-1 transition-all duration-300 ${
+                      isBalanceBlurred ? 'filter blur-md select-none pointer-events-none' : ''
+                    }`}>
                       $ {totalPortfolioValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </h2>
-                    <div className="flex items-center gap-1 mt-1.5 text-[11px] font-bold">
+                    <div className={`flex items-center gap-1 mt-1.5 text-[11px] font-bold transition-all duration-300 ${
+                      isBalanceBlurred ? 'filter blur-md select-none pointer-events-none' : ''
+                    }`}>
                       {portfolioDailyChange.isPositive ? (
                         <span className="flex items-center gap-1 text-amber-100 bg-amber-700/30 px-2 py-0.5 rounded-full border border-amber-400/20 shadow-sm">
                           <TrendingUp size={11} className="text-amber-300 shrink-0" />
@@ -2260,12 +2591,355 @@ export default function StandardUserDashboard({
                   </button>
                 </div>
               </div>
+
+              {/* Arbitrage Value Gap Finder Card */}
+              {(() => {
+                const config = arbitrageConfig || {
+                  coin1Symbol: 'BTC',
+                  coin1ExternalMin: 91500,
+                  coin1ExternalMax: 92500,
+                  coin1UseLiveOffset: true,
+                  coin1OffsetPercentage: 2.5,
+                  coin2Symbol: 'ETH',
+                  coin2ExternalMin: 3350,
+                  coin2ExternalMax: 3410,
+                  coin2UseLiveOffset: true,
+                  coin2OffsetPercentage: 2.8,
+                  platformsList: ['Binance', 'Bybit', 'OKX', 'Coinbase']
+                };
+
+                const coin1Data = cryptoPrices.find(c => c.symbol === config.coin1Symbol);
+                const coin2Data = cryptoPrices.find(c => c.symbol === config.coin2Symbol);
+
+                const coin1Price = coin1Data ? coin1Data.price : 94250;
+                const coin2Price = coin2Data ? coin2Data.price : 3480;
+
+                const extMin1 = config.coin1UseLiveOffset 
+                  ? coin1Price * (1 - (config.coin1OffsetPercentage + 0.3) / 100) 
+                  : config.coin1ExternalMin;
+                const extMax1 = config.coin1UseLiveOffset 
+                  ? coin1Price * (1 - (config.coin1OffsetPercentage - 0.2) / 100) 
+                  : config.coin1ExternalMax;
+                const avgExt1 = (extMin1 + extMax1) / 2;
+                const spread1 = Math.max(0, coin1Price - avgExt1);
+                const spreadPct1 = avgExt1 > 0 ? (spread1 / avgExt1) * 100 : 0;
+
+                const extMin2 = config.coin2UseLiveOffset 
+                  ? coin2Price * (1 - (config.coin2OffsetPercentage + 0.3) / 100) 
+                  : config.coin2ExternalMin;
+                const extMax2 = config.coin2UseLiveOffset 
+                  ? coin2Price * (1 - (config.coin2OffsetPercentage - 0.2) / 100) 
+                  : config.coin2ExternalMax;
+                const avgExt2 = (extMin2 + extMax2) / 2;
+                const spread2 = Math.max(0, coin2Price - avgExt2);
+                const spreadPct2 = avgExt2 > 0 ? (spread2 / avgExt2) * 100 : 0;
+
+                const amountVal1 = parseFloat(arbAmount1) || 0;
+                const buyCost1 = amountVal1 * avgExt1;
+                const sellRev1 = amountVal1 * coin1Price;
+                const profit1 = Math.max(0, sellRev1 - buyCost1);
+
+                const amountVal2 = parseFloat(arbAmount2) || 0;
+                const buyCost2 = amountVal2 * avgExt2;
+                const sellRev2 = amountVal2 * coin2Price;
+                const profit2 = Math.max(0, sellRev2 - buyCost2);
+
+                return (
+                  <div className={`border rounded-3xl p-5 space-y-5 animate-fade-in ${
+                    isLightTheme ? 'bg-white border-zinc-200/80 shadow-xs' : 'bg-slate-800 border-slate-700/80'
+                  }`}>
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h3 className={`text-sm font-black tracking-tight flex items-center gap-1.5 ${isLightTheme ? 'text-zinc-800' : 'text-zinc-300'}`}>
+                          <TrendingUp size={16} className={isLightTheme ? 'text-amber-500' : 'text-emerald-400'} />
+                          Arbitrage Crypto
+                        </h3>
+                        <p className={`text-xs mt-0.5 font-bold ${isLightTheme ? 'text-amber-600' : 'text-amber-400'}`}>
+                          Buy Low on other exchanges, sell high on Arbitrage, get your profits
+                        </p>
+                      </div>
+                      <div className={`text-[10px] font-bold px-2 py-0.5 rounded-full border flex items-center gap-1 ${
+                        isLightTheme ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
+                      }`}>
+                        <Sparkles size={10} className="animate-pulse" />
+                        <span>Live Spreads</span>
+                      </div>
+                    </div>
+
+                    {/* Coins of the Day Section */}
+                    <div className="flex items-center gap-2 pt-1.5 pb-0.5 border-t border-dashed border-zinc-700/10">
+                      <span className="flex h-2 w-2 relative">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                      </span>
+                      <h4 className={`text-xs font-black tracking-widest uppercase bg-clip-text text-transparent bg-gradient-to-r ${
+                        isLightTheme ? 'from-rose-600 via-amber-600 to-yellow-600' : 'from-rose-500 via-amber-500 to-yellow-400'
+                      }`}>
+                        🔥 COINS OF THE DAY
+                      </h4>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                      {/* Coin 1 Card */}
+                      <div className={`p-4 rounded-2xl border flex flex-col justify-between space-y-4 relative overflow-hidden ${
+                        isLightTheme ? 'bg-zinc-50/50 border-zinc-200/60' : 'bg-slate-950/50 border-slate-850'
+                      }`}>
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <span className={`text-[10px] font-bold block ${isLightTheme ? 'text-zinc-400' : 'text-zinc-500'}`}>
+                              {coin1Data?.name || 'Bitcoin'}
+                            </span>
+                            <span className={`text-sm font-black tracking-wider ${isLightTheme ? 'text-zinc-800' : 'text-white'}`}>
+                              {config.coin1Symbol}
+                            </span>
+                          </div>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                            isLightTheme ? 'bg-emerald-50 text-emerald-600 border border-emerald-200/50' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/10'
+                          }`}>
+                            +{spreadPct1.toFixed(2)}% Spread
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3 py-1 font-mono text-[11px]">
+                          <div>
+                            <span className={`block text-[9px] font-bold uppercase tracking-wider ${isLightTheme ? 'text-zinc-400' : 'text-zinc-500'}`}>
+                              Other Exchanges Range
+                            </span>
+                            <span className={`font-black ${isLightTheme ? 'text-zinc-700' : 'text-zinc-300'}`}>
+                              ${extMin1.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })} - ${extMax1.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
+                            </span>
+                          </div>
+                          <div>
+                            <span className={`block text-[9px] font-bold uppercase tracking-wider ${isLightTheme ? 'text-zinc-400' : 'text-zinc-500'}`}>
+                              This Platform Price
+                            </span>
+                            <span className={`font-black ${isLightTheme ? 'text-zinc-800' : 'text-white'}`}>
+                              ${coin1Price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Coin 2 Card */}
+                      <div className={`p-4 rounded-2xl border flex flex-col justify-between space-y-4 relative overflow-hidden ${
+                        isLightTheme ? 'bg-zinc-50/50 border-zinc-200/60' : 'bg-slate-950/50 border-slate-850'
+                      }`}>
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <span className={`text-[10px] font-bold block ${isLightTheme ? 'text-zinc-400' : 'text-zinc-500'}`}>
+                              {coin2Data?.name || 'Ethereum'}
+                            </span>
+                            <span className={`text-sm font-black tracking-wider ${isLightTheme ? 'text-zinc-800' : 'text-white'}`}>
+                              {config.coin2Symbol}
+                            </span>
+                          </div>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                            isLightTheme ? 'bg-emerald-50 text-emerald-600 border border-emerald-200/50' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/10'
+                          }`}>
+                            +{spreadPct2.toFixed(2)}% Spread
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3 py-1 font-mono text-[11px]">
+                          <div>
+                            <span className={`block text-[9px] font-bold uppercase tracking-wider ${isLightTheme ? 'text-zinc-400' : 'text-zinc-500'}`}>
+                              Other Exchanges Range
+                            </span>
+                            <span className={`font-black ${isLightTheme ? 'text-zinc-700' : 'text-zinc-300'}`}>
+                              ${extMin2.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })} - ${extMax2.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
+                            </span>
+                          </div>
+                          <div>
+                            <span className={`block text-[9px] font-bold uppercase tracking-wider ${isLightTheme ? 'text-zinc-400' : 'text-zinc-500'}`}>
+                              This Platform Price
+                            </span>
+                            <span className={`font-black ${isLightTheme ? 'text-zinc-800' : 'text-white'}`}>
+                              ${coin2Price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Recommendations and steps visual block */}
+                    <div className={`p-4 rounded-2xl border ${
+                      isLightTheme ? 'bg-amber-50/20 border-amber-200/40' : 'bg-slate-950/20 border-slate-850/60'
+                    }`}>
+                      <h4 className={`text-xs font-black uppercase mb-2 flex items-center gap-1 ${isLightTheme ? 'text-zinc-700' : 'text-zinc-400'}`}>
+                        <span>📋 Quick Arbitrage Guide</span>
+                      </h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 text-[10px] leading-relaxed">
+                        <div className="space-y-1">
+                          <div className={`font-black flex items-center gap-1 ${isLightTheme ? 'text-zinc-800' : 'text-zinc-300'}`}>
+                            <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-black ${
+                              isLightTheme ? 'bg-amber-500 text-white' : 'bg-emerald-500 text-slate-950'
+                            }`}>1</span>
+                            <span>Acquire on Exchanges</span>
+                          </div>
+                          <p className={isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}>
+                            Purchase your coins on platforms like <span className="font-bold">{config.platformsList.join(', ')}</span> where they sell at a lower rate.
+                          </p>
+                        </div>
+                        <div className="space-y-1">
+                          <div className={`font-black flex items-center gap-1 ${isLightTheme ? 'text-zinc-800' : 'text-zinc-300'}`}>
+                            <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-black ${
+                              isLightTheme ? 'bg-amber-500 text-white' : 'bg-emerald-500 text-slate-950'
+                            }`}>2</span>
+                            <span>Transfer to Wallet</span>
+                          </div>
+                          <p className={isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}>
+                            Go to the **Deposit** screen, copy your unique wallet address, and send the coins from your exchange wallet to this app.
+                          </p>
+                        </div>
+                        <div className="space-y-1">
+                          <div className={`font-black flex items-center gap-1 ${isLightTheme ? 'text-zinc-800' : 'text-zinc-300'}`}>
+                            <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-black ${
+                              isLightTheme ? 'bg-amber-500 text-white' : 'bg-emerald-500 text-slate-950'
+                            }`}>3</span>
+                            <span>Sell Instant Profit</span>
+                          </div>
+                          <p className={isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}>
+                            Once deposit lands, convert your balances back to USDT/USD in the simulator above at our high platform price and pocket the spread instantly!
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           )}
 
           {/* TAB 4: EARN (MMF INVESTMENT) */}
           {activeTab === 'earn' && (
-            <div className="space-y-5">
+            <div className="space-y-5 animate-fade-in">
+              {/* Earn Specific Interactive Wallet Card */}
+              <div 
+                id="earn-investment-wallet-card" 
+                className={`relative overflow-hidden rounded-3xl p-6 border transition-all duration-300 ${
+                  isLightTheme 
+                    ? 'bg-[#FFF8E1] border-amber-300/90 text-zinc-800 shadow-md shadow-amber-500/5' 
+                    : 'bg-slate-900/40 border-slate-850/70 text-white shadow-md shadow-emerald-950/5'
+                }`}
+              >
+                {/* Micro Ambient Details */}
+                <div className={`absolute top-0 right-0 w-32 h-32 rounded-full blur-3xl -mr-10 -mt-10 animate-pulse duration-4000 ${
+                  isLightTheme ? 'bg-amber-500/5' : 'bg-white/5'
+                }`} />
+                <div className={`absolute bottom-0 left-0 w-24 h-24 rounded-full blur-2xl -ml-10 -mb-10 ${
+                  isLightTheme ? 'bg-amber-500/5' : 'bg-white/5'
+                }`} />
+
+                <div className="flex justify-between items-start select-none">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-[11px] font-bold uppercase tracking-wider ${
+                        isLightTheme ? 'text-zinc-500' : 'text-zinc-400'
+                      }`}>Total Amount Invested</span>
+                      <button
+                        onClick={() => setIsEarnBalanceBlurred(!isEarnBalanceBlurred)}
+                        className={`p-1 rounded-lg transition-all cursor-pointer inline-flex items-center justify-center shrink-0 ${
+                          isLightTheme ? 'hover:bg-amber-500/10 text-zinc-500 hover:text-zinc-700' : 'hover:bg-white/10 text-white/80 hover:text-white'
+                        }`}
+                        title={isEarnBalanceBlurred ? "Reveal investment data" : "Hide investment data"}
+                      >
+                        {isEarnBalanceBlurred ? <EyeOff size={13} strokeWidth={2.5} /> : <Eye size={13} strokeWidth={2.5} />}
+                      </button>
+                    </div>
+                    <h2 className={`text-3xl font-black tracking-tight font-mono mt-1 transition-all duration-300 ${
+                      isEarnBalanceBlurred ? 'filter blur-md select-none pointer-events-none' : ''
+                    } ${isLightTheme ? 'text-amber-900' : 'text-zinc-100'}`}>
+                      $ {totalInvestedUSD.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </h2>
+                    <div className={`flex items-center gap-1.5 mt-2 transition-all duration-300 ${
+                      isEarnBalanceBlurred ? 'filter blur-md select-none pointer-events-none' : ''
+                    }`}>
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono flex items-center gap-1 border ${
+                        isLightTheme 
+                          ? 'bg-amber-100/60 border-amber-200 text-amber-800' 
+                          : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
+                      }`}>
+                        <Sparkles size={10} className={`animate-spin ${isLightTheme ? 'text-amber-600' : 'text-emerald-300'}`} />
+                        {activeInvs.length} Active MMF {activeInvs.length === 1 ? 'Invest' : 'Investments'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Right Column: Daily Profit */}
+                  <div className="text-right flex flex-col items-end">
+                    <span className={`text-[11px] font-bold uppercase tracking-wider block ${
+                      isLightTheme ? 'text-zinc-500' : 'text-zinc-400'
+                    }`}>Today's Profit</span>
+                    <div className={`flex items-center justify-end gap-1.5 mt-1 transition-all duration-300 ${
+                      isEarnBalanceBlurred ? 'filter blur-md select-none pointer-events-none' : ''
+                    }`}>
+                      <span className={`text-2xl font-black font-mono ${
+                        isLightTheme ? 'text-emerald-600' : 'text-emerald-400'
+                      }`}>
+                        +$ {totalDailyProfitUSD.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                    <span className={`text-[9px] font-semibold block transition-all duration-300 ${
+                      isEarnBalanceBlurred ? 'filter blur-md select-none pointer-events-none' : ''
+                    } ${isLightTheme ? 'text-zinc-400' : 'text-zinc-500'}`}>
+                      Daily Distribution
+                    </span>
+                    
+                    <button 
+                      onClick={() => setEarnDisplayMode(earnDisplayMode === 'USD' ? 'CRYPTO' : 'USD')}
+                      className={`mt-2.5 flex items-center gap-1.5 px-2.5 py-1 rounded-xl border transition-all cursor-pointer text-[10px] font-bold select-none ${
+                        isEarnBalanceBlurred ? 'filter blur-md select-none pointer-events-none' : ''
+                      } ${
+                        isLightTheme 
+                          ? 'bg-amber-100/80 border-amber-200 hover:bg-amber-100 text-amber-800' 
+                          : 'bg-white/10 hover:bg-white/15 border-white/10 text-white'
+                      }`}
+                    >
+                      <TrendingUp size={11} className={isLightTheme ? 'text-amber-600' : 'text-teal-200'} />
+                      <span>{earnDisplayMode === 'USD' ? 'Show Coins' : 'Show USD'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Interactive Expanded Coin Breakdown Drawer inside the Card */}
+                {earnDisplayMode === 'CRYPTO' && activeInvs.length > 0 && (
+                  <div className={`mt-4 pt-3 border-t space-y-2 animate-fade-in select-none ${
+                    isLightTheme ? 'border-amber-200' : 'border-slate-800'
+                  }`}>
+                    <span className={`text-[9px] font-black uppercase tracking-wider block mb-1 ${
+                      isLightTheme ? 'text-amber-800' : 'text-teal-300'
+                    }`}>Your Portfolio Breakdown</span>
+                    <div className="grid grid-cols-2 gap-2 max-h-[100px] overflow-y-auto pr-1">
+                      {cryptoPrices.map(coin => {
+                        const coinInvs = activeInvs.filter((inv: any) => inv.coinSymbol === coin.symbol);
+                        if (coinInvs.length === 0) return null;
+                        const coinSum = coinInvs.reduce((sum: number, inv: any) => sum + inv.amount, 0);
+                        const coinDailyProfitSum = coinInvs.reduce((sum: number, inv: any) => sum + (inv.amount * (inv.dailyRate / 100)), 0);
+                        return (
+                          <div 
+                            key={coin.symbol} 
+                            className={`p-2 rounded-xl border flex justify-between items-center font-mono ${
+                              isLightTheme 
+                                ? 'bg-amber-50/50 border-amber-200/50' 
+                                : 'bg-black/20 border-white/5'
+                            }`}
+                          >
+                            <div>
+                              <span className={`text-[10px] font-black ${isLightTheme ? 'text-zinc-800' : 'text-white'}`}>{coin.symbol}</span>
+                              <span className={`text-[9px] block ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>{coinSum.toLocaleString(undefined, { maximumFractionDigits: 6 })}</span>
+                            </div>
+                            <div className="text-right">
+                              <span className="text-[9px] font-black text-emerald-600 dark:text-emerald-400">+{coinDailyProfitSum.toLocaleString(undefined, { maximumFractionDigits: 6 })}</span>
+                              <span className={`text-[8px] block ${isLightTheme ? 'text-zinc-400' : 'text-zinc-500'}`}>/day</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* mmf investment mode */}
               <div className={`border rounded-3xl p-5 space-y-5 animate-fade-in ${
                 isLightTheme ? 'bg-white border-zinc-200/80 shadow-xs' : 'bg-slate-800 border-slate-700/80'
@@ -2277,7 +2951,7 @@ export default function StandardUserDashboard({
                         <Coins size={16} className={isLightTheme ? 'text-amber-500' : 'text-emerald-400'} />
                         Crypto MMF Investment
                       </h3>
-                      <p className={`text-[11px] mt-0.5 ${isLightTheme ? 'text-zinc-400' : 'text-zinc-500'}`}>High-yield short term locked investments</p>
+                      <p className={`text-[11px] mt-0.5 ${isLightTheme ? 'text-zinc-400' : 'text-zinc-500'}`}>Invest in Crypto and Earn daily Profits</p>
                     </div>
 
                     {/* Display Alert Message feedback */}

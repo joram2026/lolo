@@ -92,5 +92,11 @@ service cloud.firestore {
       allow update: if isAdmin() || (isAuth() && resource.data.userId == request.auth.uid);
       allow delete: if isAdmin();
     }
+
+    // Settings configuration rules
+    match /settings/{settingId} {
+      allow read: if isAuth();
+      allow write: if isAdmin();
+    }
   }
 }
