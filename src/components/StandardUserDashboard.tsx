@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { motion } from 'motion/react';
 import { db } from '../firebase';
 import { doc, getDoc, onSnapshot, collection, query, where, getDocs, updateDoc, addDoc } from 'firebase/firestore';
 import { UserAccount, Transaction, CryptoPrice, ArbitrageConfig } from '../types';
@@ -8,14 +9,14 @@ import {
   TrendingUp, TrendingDown, ArrowUpRight, ArrowDownLeft, Search, 
   User, LogOut, ArrowRightLeft, ShieldCheck, Activity, Wallet, 
   HelpCircle, RefreshCw, Coins, ArrowRight, MessageSquare, AlertCircle,
-  History, ArrowLeft, X, ChevronDown, Check, Lock, Unlock, Eye, EyeOff, Sparkles
+  History, ArrowLeft, X, ChevronDown, Check, Lock, Unlock, Eye, EyeOff, Sparkles, BookOpen, Zap
 } from 'lucide-react';
 
 interface StandardUserDashboardProps {
   user: any;
   onLogout: () => void;
   onOpenProfile: () => void;
-  onOpenDeposit: () => void;
+  onOpenDeposit: (coinSymbol?: string) => void;
   onOpenWithdraw: () => void;
   path: string;
   navigate: (path: string) => void;
@@ -288,6 +289,7 @@ export default function StandardUserDashboard({
   const [activeInvestments, setActiveInvestments] = useState<any[]>([]);
   const processingInvestmentsRef = useRef<Set<string>>(new Set());
   const [tradeMode, setTradeMode] = useState<'swap' | 'mmf'>('swap');
+  const [tradeSubTab, setTradeSubTab] = useState<'arbitrage' | 'converter'>('arbitrage');
   const [mmfSubView, setMmfSubView] = useState<'main' | 'list' | 'form'>('main');
   const [selectedCoinForInvestment, setSelectedCoinForInvestment] = useState<CryptoPrice | null>(null);
   const [investmentAmount, setInvestmentAmount] = useState<string>('');
@@ -306,6 +308,17 @@ export default function StandardUserDashboard({
   const [isBalanceBlurred, setIsBalanceBlurred] = useState<boolean>(false);
   const [isEarnBalanceBlurred, setIsEarnBalanceBlurred] = useState<boolean>(false);
   const [earnDisplayMode, setEarnDisplayMode] = useState<'USD' | 'CRYPTO'>('USD');
+
+  // Active Coin for Dedicated Quick Arbitrage Guide Page
+  const [arbitrageGuideCoin, setArbitrageGuideCoin] = useState<{
+    symbol: string;
+    name: string;
+    price: number;
+    spreadPct: number;
+    extMin: number;
+    extMax: number;
+    platforms: string[];
+  } | null>(null);
 
   // Live Persistent Candlestick Engine
   const [candlesCache, setCandlesCache] = useState<Record<string, Candle[]>>({});
@@ -415,6 +428,7 @@ export default function StandardUserDashboard({
 
   const handleTabChange = (tabId: 'home' | 'wallet' | 'trade' | 'history' | 'earn') => {
     setActiveTab(tabId);
+    setArbitrageGuideCoin(null);
     if (tabId === 'home') {
       navigate('/dashboard');
     } else {
@@ -440,6 +454,9 @@ export default function StandardUserDashboard({
         setIsUsingFallbackPrices(true);
         setPricesLoadError("Network latency detected. Displaying offline rates.");
         setCryptoPrices(prev => prev.map(c => {
+          if (typeof navigator !== 'undefined' && !navigator.onLine) {
+            return { ...c, price: 0, change24h: 0 };
+          }
           const fallback = STATIC_CRYPTO.find(x => x.symbol === c.symbol);
           return fallback ? { ...c, price: fallback.price, change24h: fallback.change24h } : c;
         }));
@@ -529,6 +546,9 @@ export default function StandardUserDashboard({
         setIsUsingFallbackPrices(true);
         setPricesLoadError("No live prices found in database. Using default offline rates.");
         setCryptoPrices(prev => prev.map(c => {
+          if (typeof navigator !== 'undefined' && !navigator.onLine) {
+            return { ...c, price: 0, change24h: 0 };
+          }
           const fallback = STATIC_CRYPTO.find(x => x.symbol === c.symbol);
           return fallback ? { ...c, price: fallback.price, change24h: fallback.change24h } : c;
         }));
@@ -538,6 +558,9 @@ export default function StandardUserDashboard({
       setIsUsingFallbackPrices(true);
       setPricesLoadError("Failed to fetch live prices from server. Using offline rates.");
       setCryptoPrices(prev => prev.map(c => {
+        if (typeof navigator !== 'undefined' && !navigator.onLine) {
+          return { ...c, price: 0, change24h: 0 };
+        }
         const fallback = STATIC_CRYPTO.find(x => x.symbol === c.symbol);
         return fallback ? { ...c, price: fallback.price, change24h: fallback.change24h } : c;
       }));
@@ -600,7 +623,10 @@ export default function StandardUserDashboard({
   // Fluctuate prices live every 4 seconds to make the app feel real
   useEffect(() => {
     const interval = setInterval(() => {
+      if (typeof navigator !== 'undefined' && !navigator.onLine) return;
+
       setCryptoPrices(prev => prev.map(coin => {
+        if (coin.price === 0) return coin;
         if (coin.symbol === 'USDT' || coin.symbol === 'USDC') {
           // Keep stablecoins close to 1.00
           const change = (Math.random() - 0.5) * 0.0004;
@@ -675,6 +701,11 @@ export default function StandardUserDashboard({
 
   // Real-time helper for standard user's asset holdings
   const getCoinHolding = (symbol: string): number => {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      if (symbol === 'USDT' || symbol === 'USDC') {
+        return 0;
+      }
+    }
     if (symbol === 'USDT') {
       return profile?.balance || 0;
     }
@@ -814,7 +845,7 @@ export default function StandardUserDashboard({
 
         for (const inv of needingPayment) {
           const coinInfo = cryptoPrices.find(c => c.symbol === inv.coinSymbol);
-          const coinPrice = coinInfo?.price || 1.0;
+          const coinPrice = coinInfo ? coinInfo.price : 0;
 
           const created = inv.createdAt?.toDate ? inv.createdAt.toDate() : new Date(inv.createdAt);
           const createdDayEpoch = getKenyanDaysSinceEpoch(created);
@@ -894,7 +925,7 @@ export default function StandardUserDashboard({
   // Calculate dynamic userAssets based on getCoinHolding and live price updates
   const userAssets = ASSET_ALLOCATION_DEFS.map(def => {
     const coinInfo = cryptoPrices.find(c => c.symbol === def.symbol);
-    const price = coinInfo?.price || 1.00;
+    const price = coinInfo ? coinInfo.price : 0;
     const coinAmount = getCoinHolding(def.symbol);
     const lockedAmount = getLockedAmount(def.symbol);
     const unlockedAmount = Math.max(0, coinAmount - lockedAmount);
@@ -921,7 +952,7 @@ export default function StandardUserDashboard({
     userAssets.forEach(asset => {
       const coinInfo = cryptoPrices.find(c => c.symbol === asset.symbol);
       const change24h = coinInfo?.change24h || 0;
-      const currentPrice = coinInfo?.price || 1.00;
+      const currentPrice = coinInfo ? coinInfo.price : 0;
       
       // price_now = price_then * (1 + change24h/100) => price_then = price_now / (1 + change24h/100)
       const divider = 1 + (change24h / 100);
@@ -1129,7 +1160,7 @@ export default function StandardUserDashboard({
         userId: user.uid,
         userEmail: user.email,
         type: 'swap_crypto', 
-        amount: amt * (fromCoin?.price || 1), 
+        amount: amt * (fromCoin ? fromCoin.price : 0), 
         status: 'APPROVED',
         createdAt: new Date(),
         paymentMessage: `Crypto Exchange Swap: Exchanged ${amt} ${tradeFrom} to ${tradeResult} ${tradeTo}`
@@ -1725,8 +1756,8 @@ export default function StandardUserDashboard({
                 isLightTheme ? 'text-zinc-700' : 'text-zinc-300'
               }`}>Trading Desk</span>
               <span className="text-[10px] text-zinc-500 font-bold">
-                Available: ${Math.max(0, (profile?.balance || 0) - getLockedAmount('USDT')).toLocaleString(undefined, { minimumFractionDigits: 2 })} USDT
-                {getLockedAmount('USDT') > 0 && ` ($${profile?.balance?.toLocaleString(undefined, { minimumFractionDigits: 2 })} total)`}
+                Available: ${Math.max(0, getCoinHolding('USDT') - getLockedAmount('USDT')).toLocaleString(undefined, { minimumFractionDigits: 2 })} USDT
+                {getLockedAmount('USDT') > 0 && ` ($${getCoinHolding('USDT').toLocaleString(undefined, { minimumFractionDigits: 2 })} total)`}
               </span>
             </div>
 
@@ -1781,7 +1812,7 @@ export default function StandardUserDashboard({
                       type="button"
                       onClick={() => {
                         if (quickTradeType === 'BUY') {
-                          const availableSpend = Math.max(0, (profile?.balance || 0) - getLockedAmount('USDT'));
+                          const availableSpend = Math.max(0, getCoinHolding('USDT') - getLockedAmount('USDT'));
                           const spend = availableSpend * (pct / 100);
                           setQuickTradeAmount(parseFloat((spend / liveCoin.price).toFixed(6)).toString());
                         } else {
@@ -1893,73 +1924,77 @@ export default function StandardUserDashboard({
   return (
     <div 
       id="user-dashboard-root" 
-      className={`min-h-screen font-sans pb-28 transition-colors duration-300 ${
+      className={`min-h-screen font-sans transition-colors duration-300 ${
+        arbitrageGuideCoin || (activeTab === 'earn' && mmfSubView === 'form') ? 'pb-10' : 'pb-28'
+      } ${
         isLightTheme ? 'bg-[#FFF3D6] text-zinc-800' : 'bg-slate-900 text-zinc-100'
       }`}
     >
       {/* Top Header */}
-      <header className={`px-4 py-4 border-b sticky top-0 backdrop-blur-md z-20 flex justify-between items-center transition-colors duration-300 ${
-        isLightTheme 
-          ? 'bg-[#FFF3D6]/85 border-zinc-200/80' 
-          : 'bg-slate-900/85 border-slate-800'
-      }`}>
-        <div className="flex items-center gap-2">
-          <button 
-            id="profile-toggle-btn"
-            onClick={onOpenProfile}
-            className={`w-12 h-12 rounded-full p-[1.5px] hover:scale-105 active:scale-95 transition-all duration-300 group cursor-pointer relative ${
-              isLightTheme
-                ? 'bg-gradient-to-tr from-amber-400 via-amber-500 to-yellow-500 shadow-[0_0_12px_rgba(245,158,11,0.15)] hover:shadow-[0_0_16px_rgba(245,158,11,0.3)]'
-                : 'bg-gradient-to-tr from-emerald-400 via-teal-500 to-indigo-500 shadow-[0_0_12px_rgba(16,185,129,0.15)] hover:shadow-[0_0_16px_rgba(16,185,129,0.3)]'
-            }`}
-          >
-            <div className={`w-full h-full rounded-full flex items-center justify-center transition-all relative overflow-hidden ${
-              isLightTheme ? 'bg-white text-amber-500 group-hover:text-amber-600' : 'bg-slate-900 text-emerald-400 group-hover:text-white'
-            }`}>
-              <div className="absolute z-10">
-                <User size={14} className="group-hover:scale-110 transition-transform duration-300" />
+      {!arbitrageGuideCoin && !(activeTab === 'earn' && mmfSubView === 'form') && (
+        <header className={`px-4 py-4 border-b sticky top-0 backdrop-blur-md z-20 flex justify-between items-center transition-colors duration-300 ${
+          isLightTheme 
+            ? 'bg-[#FFF3D6]/85 border-zinc-200/80' 
+            : 'bg-slate-900/85 border-slate-800'
+        }`}>
+          <div className="flex items-center gap-2">
+            <button 
+              id="profile-toggle-btn"
+              onClick={onOpenProfile}
+              className={`w-12 h-12 rounded-full p-[1.5px] hover:scale-105 active:scale-95 transition-all duration-300 group cursor-pointer relative ${
+                isLightTheme
+                  ? 'bg-gradient-to-tr from-amber-400 via-amber-500 to-yellow-500 shadow-[0_0_12px_rgba(245,158,11,0.15)] hover:shadow-[0_0_16px_rgba(245,158,11,0.3)]'
+                  : 'bg-gradient-to-tr from-emerald-400 via-teal-500 to-indigo-500 shadow-[0_0_12px_rgba(16,185,129,0.15)] hover:shadow-[0_0_16px_rgba(16,185,129,0.3)]'
+              }`}
+            >
+              <div className={`w-full h-full rounded-full flex items-center justify-center transition-all relative overflow-hidden ${
+                isLightTheme ? 'bg-white text-amber-500 group-hover:text-amber-600' : 'bg-slate-900 text-emerald-400 group-hover:text-white'
+              }`}>
+                <div className="absolute z-10">
+                  <User size={14} className="group-hover:scale-110 transition-transform duration-300" />
+                </div>
+                <svg viewBox="0 0 100 100" className="absolute inset-0 w-full h-full animate-[spin_12s_linear_infinite] group-hover:animate-[spin_6s_linear_infinite] transition-all duration-500 pointer-events-none">
+                  <defs>
+                    <path
+                      id="dashboardHeaderProfileCirclePath"
+                      d="M 50,50 m -36,0 a 36,36 0 1,1 72,0 a 36,36 0 1,1 -72,0"
+                    />
+                  </defs>
+                  <text className={`text-[9.5px] font-black uppercase tracking-[0.16em] transition-colors duration-300 ${
+                    isLightTheme ? 'fill-amber-500/70 group-hover:fill-amber-600' : 'fill-emerald-400/70 group-hover:fill-emerald-300'
+                  }`}>
+                    <textPath href="#dashboardHeaderProfileCirclePath" startOffset="0%">
+                      PROFILE • PROFILE • PROFILE 
+                    </textPath>
+                  </text>
+                </svg>
               </div>
-              <svg viewBox="0 0 100 100" className="absolute inset-0 w-full h-full animate-[spin_12s_linear_infinite] group-hover:animate-[spin_6s_linear_infinite] transition-all duration-500 pointer-events-none">
-                <defs>
-                  <path
-                    id="dashboardHeaderProfileCirclePath"
-                    d="M 50,50 m -36,0 a 36,36 0 1,1 72,0 a 36,36 0 1,1 -72,0"
-                  />
-                </defs>
-                <text className={`text-[9.5px] font-black uppercase tracking-[0.16em] transition-colors duration-300 ${
-                  isLightTheme ? 'fill-amber-500/70 group-hover:fill-amber-600' : 'fill-emerald-400/70 group-hover:fill-emerald-300'
-                }`}>
-                  <textPath href="#dashboardHeaderProfileCirclePath" startOffset="0%">
-                    PROFILE • PROFILE • PROFILE 
-                  </textPath>
-                </text>
-              </svg>
+            </button>
+            <div>
+              <span className={`text-[10px] font-bold uppercase tracking-wider block ${isLightTheme ? 'text-zinc-400' : 'text-zinc-500'}`}>Logged In</span>
+              <span className={`text-xs font-black tracking-tight transition-colors duration-300 ${isLightTheme ? 'text-zinc-800' : 'text-zinc-200'}`}>
+                {profile?.displayName || user.displayName || user.email.split('@')[0]}
+              </span>
             </div>
-          </button>
-          <div>
-            <span className={`text-[10px] font-bold uppercase tracking-wider block ${isLightTheme ? 'text-zinc-400' : 'text-zinc-500'}`}>Logged In</span>
-            <span className={`text-xs font-black tracking-tight transition-colors duration-300 ${isLightTheme ? 'text-zinc-800' : 'text-zinc-200'}`}>
-              {profile?.displayName || user.displayName || user.email.split('@')[0]}
-            </span>
           </div>
-        </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            id="dashboard-logout-btn"
-            onClick={onLogout}
-            className={`px-3 py-1.5 border text-[10px] font-black uppercase tracking-wider rounded-xl transition-all active:scale-95 cursor-pointer flex items-center gap-1.5 ${
-              isLightTheme
-                ? 'bg-rose-50 hover:bg-rose-100 border-rose-200 text-rose-600'
-                : 'bg-rose-500/10 hover:bg-rose-500/20 border-rose-500/25 text-rose-400 hover:text-rose-300'
-            }`}
-            title="Log Out"
-          >
-            <LogOut size={11} />
-            <span>LOG OUT</span>
-          </button>
-        </div>
-      </header>
+          <div className="flex items-center gap-2">
+            <button
+              id="dashboard-logout-btn"
+              onClick={onLogout}
+              className={`px-3 py-1.5 border text-[10px] font-black uppercase tracking-wider rounded-xl transition-all active:scale-95 cursor-pointer flex items-center gap-1.5 ${
+                isLightTheme
+                  ? 'bg-rose-50 hover:bg-rose-100 border-rose-200 text-rose-600'
+                  : 'bg-rose-500/10 hover:bg-rose-500/20 border-rose-500/25 text-rose-400 hover:text-rose-300'
+              }`}
+              title="Log Out"
+            >
+              <LogOut size={11} />
+              <span>LOG OUT</span>
+            </button>
+          </div>
+        </header>
+      )}
 
       {loading ? (
         <div className="flex flex-col items-center justify-center min-h-[350px] gap-3">
@@ -1967,7 +2002,7 @@ export default function StandardUserDashboard({
           <span className="text-xs text-zinc-500 font-semibold">Decrypting wallet keys...</span>
         </div>
       ) : (
-        <main className="max-w-md mx-auto px-4 mt-5 space-y-6">
+        <main className={`max-w-md mx-auto px-4 space-y-6 ${arbitrageGuideCoin ? 'pt-4' : 'mt-5'}`}>
           {pricesLoadError && (
             <div className={`flex items-start gap-2.5 p-3.5 border rounded-2xl text-[11px] font-medium leading-relaxed shadow-lg animate-fade-in transition-colors duration-300 ${
               isLightTheme
@@ -1982,7 +2017,207 @@ export default function StandardUserDashboard({
             </div>
           )}
           
-          {/* TAB 1: HOME */}
+          {arbitrageGuideCoin ? (() => {
+            const liveGuideCoin = cryptoPrices.find(c => c.symbol === arbitrageGuideCoin.symbol);
+            const currentGuidePrice = liveGuideCoin ? liveGuideCoin.price : arbitrageGuideCoin.price;
+            const guidePriceRatio = arbitrageGuideCoin.price > 0 ? currentGuidePrice / arbitrageGuideCoin.price : 1;
+            const currentExtMin = arbitrageGuideCoin.extMin * guidePriceRatio;
+            const currentExtMax = arbitrageGuideCoin.extMax * guidePriceRatio;
+            const currentAvgExt = (currentExtMin + currentExtMax) / 2;
+            const currentSpread = Math.max(0, currentGuidePrice - currentAvgExt);
+            const currentSpreadPct = currentAvgExt > 0 ? (currentSpread / currentAvgExt) * 100 : arbitrageGuideCoin.spreadPct;
+
+            return (
+              <div className="space-y-6 animate-fade-in pb-10">
+                {/* Top Navigation / Back Header */}
+                <div className="flex items-center gap-3 border-b pb-4 border-zinc-200/80 dark:border-zinc-700/80">
+                  <button
+                    onClick={() => setArbitrageGuideCoin(null)}
+                    className={`p-2.5 rounded-xl font-black transition-all cursor-pointer shadow-xs flex items-center justify-center ${
+                      isLightTheme 
+                        ? 'bg-zinc-100 hover:bg-zinc-200 text-zinc-900 border border-zinc-200/80' 
+                        : 'bg-slate-800 hover:bg-slate-700 text-white border border-slate-700'
+                    }`}
+                    title="Back to Dashboard"
+                  >
+                    <ArrowLeft size={18} />
+                  </button>
+
+                  <h2 className={`text-sm sm:text-base font-black uppercase tracking-wider ${
+                    isLightTheme ? 'text-zinc-900' : 'text-white'
+                  }`}>
+                    ⚡ {arbitrageGuideCoin.symbol} ARBITRAGE GUIDE
+                  </h2>
+                </div>
+
+                {/* Coin Dedicated Header - Matches Arbitrage Card Theme */}
+                <div className={`p-5 sm:p-6 rounded-3xl border space-y-4 ${
+                  isLightTheme 
+                    ? 'bg-[#FFF8E1] border-amber-300/90 shadow-md' 
+                    : 'bg-slate-900/40 border-slate-850/70'
+                }`}>
+                  <div className="flex items-center gap-4">
+                    <CoinIcon symbol={arbitrageGuideCoin.symbol} className="w-12 h-12 rounded-full shrink-0 shadow-xs" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h1 className={`text-lg sm:text-xl font-black tracking-tight ${isLightTheme ? 'text-zinc-900' : 'text-white'}`}>
+                          {arbitrageGuideCoin.name} ({arbitrageGuideCoin.symbol})
+                        </h1>
+                        <span className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border ${
+                          isLightTheme ? 'bg-emerald-100 text-emerald-800 border-emerald-300' : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                        }`}>
+                          +{currentSpreadPct.toFixed(2)}% Spread
+                        </span>
+                      </div>
+                      <p className={`text-xs font-medium mt-0.5 ${isLightTheme ? 'text-zinc-600' : 'text-zinc-400'}`}>
+                        Dedicated Arbitrage Trading Tutorial & Market Rate Spread
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Price badges comparison row */}
+                  <div className="grid grid-cols-2 gap-2.5 pt-1">
+                    <div className={`p-3 rounded-2xl border flex flex-col justify-between ${
+                      isLightTheme ? 'bg-rose-500/10 border-rose-200' : 'bg-rose-500/10 border-rose-500/20'
+                    }`}>
+                      <span className={`block text-[9px] font-extrabold uppercase tracking-wider mb-1 ${
+                        isLightTheme ? 'text-black' : 'text-black font-extrabold bg-white/90 px-1 rounded-[3px] inline-block w-fit'
+                      }`}>
+                        Price in Binance, OKX, Bybit
+                      </span>
+                      <span className={`font-black font-mono text-xs ${isLightTheme ? 'text-rose-700' : 'text-rose-300'}`}>
+                        ${currentExtMin.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })} - ${currentExtMax.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
+                      </span>
+                    </div>
+
+                    <div className={`p-3 rounded-2xl border flex flex-col justify-between ${
+                      isLightTheme ? 'bg-emerald-500/10 border-emerald-300' : 'bg-emerald-500/10 border-emerald-500/20'
+                    }`}>
+                      <span className={`block text-[9px] font-extrabold uppercase tracking-wider mb-1 ${
+                        isLightTheme ? 'text-black' : 'text-black font-extrabold bg-white/90 px-1 rounded-[3px] inline-block w-fit'
+                      }`}>
+                        Price here
+                      </span>
+                      <span className={`font-black font-mono text-xs ${isLightTheme ? 'text-emerald-700' : 'text-emerald-300'}`}>
+                        ${currentGuidePrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Step-by-Step Tutorial Guide */}
+                <div className={`p-5 sm:p-6 rounded-3xl border space-y-4 ${
+                  isLightTheme ? 'bg-white border-zinc-200/80 shadow-md' : 'bg-slate-800 border-slate-700/80'
+                }`}>
+                  <div className="flex items-center gap-2 border-b pb-3 border-zinc-200/60 dark:border-zinc-700/60">
+                    <BookOpen className="text-amber-500 shrink-0" size={18} />
+                    <div>
+                      <h2 className={`text-sm sm:text-base font-black uppercase tracking-wide ${isLightTheme ? 'text-zinc-900' : 'text-white'}`}>
+                        STEPS TO FOLLOW
+                      </h2>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3.5">
+                    {/* Step 1 */}
+                    <div className={`p-3.5 rounded-2xl border space-y-1.5 ${
+                      isLightTheme ? 'bg-zinc-50 border-zinc-200/80' : 'bg-slate-900/60 border-slate-700/60'
+                    }`}>
+                      <div className="flex items-center gap-2">
+                        <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-black shrink-0 ${
+                          isLightTheme ? 'bg-amber-500 text-white' : 'bg-emerald-500 text-slate-950'
+                        }`}>1</span>
+                        <h3 className={`text-xs font-black ${isLightTheme ? 'text-zinc-900' : 'text-white'}`}>
+                          Acquire {arbitrageGuideCoin.symbol} on External Exchanges
+                        </h3>
+                      </div>
+                      <p className={`text-xs leading-relaxed pl-8 ${isLightTheme ? 'text-zinc-600' : 'text-zinc-300'}`}>
+                        Purchase <strong className="font-bold">{arbitrageGuideCoin.name} ({arbitrageGuideCoin.symbol})</strong> on major exchanges like <strong className="font-bold">{arbitrageGuideCoin.platforms.join(', ')}</strong> where it trades lower at <strong className="font-bold">${currentExtMin.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })} – ${currentExtMax.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}</strong>.
+                      </p>
+                    </div>
+
+                    {/* Step 2 */}
+                    <div className={`p-3.5 rounded-2xl border space-y-1.5 ${
+                      isLightTheme ? 'bg-zinc-50 border-zinc-200/80' : 'bg-slate-900/60 border-slate-700/60'
+                    }`}>
+                      <div className="flex items-center gap-2">
+                        <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-black shrink-0 ${
+                          isLightTheme ? 'bg-amber-500 text-white' : 'bg-emerald-500 text-slate-950'
+                        }`}>2</span>
+                        <h3 className={`text-xs font-black ${isLightTheme ? 'text-zinc-900' : 'text-white'}`}>
+                          Transfer {arbitrageGuideCoin.symbol} to Platform Wallet
+                        </h3>
+                      </div>
+                      <p className={`text-xs leading-relaxed pl-8 ${isLightTheme ? 'text-zinc-600' : 'text-zinc-300'}`}>
+                        Navigate to <strong className="font-bold">Wallet &gt; Deposit</strong> on this platform, choose <strong className="font-bold">{arbitrageGuideCoin.symbol}</strong>, copy your address, and transfer your tokens from your exchange account.
+                      </p>
+                    </div>
+
+                    {/* Step 3 */}
+                    <div className={`p-3.5 rounded-2xl border space-y-1.5 ${
+                      isLightTheme ? 'bg-zinc-50 border-zinc-200/80' : 'bg-slate-900/60 border-slate-700/60'
+                    }`}>
+                      <div className="flex items-center gap-2">
+                        <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-black shrink-0 ${
+                          isLightTheme ? 'bg-amber-500 text-white' : 'bg-emerald-500 text-slate-950'
+                        }`}>3</span>
+                        <h3 className={`text-xs font-black ${isLightTheme ? 'text-zinc-900' : 'text-white'}`}>
+                          Sell at Premium Rate (${currentGuidePrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })})
+                        </h3>
+                      </div>
+                      <p className={`text-xs leading-relaxed pl-8 ${isLightTheme ? 'text-zinc-600' : 'text-zinc-300'}`}>
+                        Once your deposit confirms, swap your <strong className="font-bold">{arbitrageGuideCoin.symbol}</strong> at our elevated platform rate of <strong className="font-bold text-emerald-600 dark:text-emerald-400">${currentGuidePrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}</strong> to capture your <strong className="font-bold text-amber-600 dark:text-amber-400">+{currentSpreadPct.toFixed(2)}% profit margin</strong>.
+                      </p>
+                    </div>
+
+                    {/* Step 4 */}
+                    <div className={`p-3.5 rounded-2xl border space-y-1.5 ${
+                      isLightTheme ? 'bg-zinc-50 border-zinc-200/80' : 'bg-slate-900/60 border-slate-700/60'
+                    }`}>
+                      <div className="flex items-center gap-2">
+                        <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-black shrink-0 ${
+                          isLightTheme ? 'bg-amber-500 text-white' : 'bg-emerald-500 text-slate-950'
+                        }`}>4</span>
+                        <h3 className={`text-xs font-black ${isLightTheme ? 'text-zinc-900' : 'text-white'}`}>
+                          Instant Profit Settlement
+                        </h3>
+                      </div>
+                      <p className={`text-xs leading-relaxed pl-8 ${isLightTheme ? 'text-zinc-600' : 'text-zinc-300'}`}>
+                        Your profits are instantly credited to your wallet balance. Withdraw anytime or repeat the arbitrage sequence.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Floating Draggable Deposit Button */}
+                <motion.button
+                  drag
+                  dragMomentum={false}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => {
+                    const sym = arbitrageGuideCoin?.symbol;
+                    if (sym) {
+                      sessionStorage.setItem('preselected_deposit_coin', sym);
+                      localStorage.setItem('preselected_deposit_coin', sym);
+                    }
+                    setArbitrageGuideCoin(null);
+                    onOpenDeposit(sym);
+                  }}
+                  className={`fixed bottom-8 right-6 z-50 px-5 py-3.5 rounded-2xl font-black text-xs sm:text-sm shadow-2xl flex items-center gap-2.5 cursor-grab active:cursor-grabbing border select-none ${
+                    isLightTheme 
+                      ? 'bg-amber-500 hover:bg-amber-600 text-white border-amber-400/80 shadow-amber-500/30' 
+                      : 'bg-emerald-500 hover:bg-emerald-600 text-slate-950 border-emerald-400/80 shadow-emerald-500/30'
+                  }`}
+                >
+                  <Sparkles size={16} className="animate-pulse shrink-0" />
+                  <span>Deposit {arbitrageGuideCoin.symbol} Now</span>
+                </motion.button>
+              </div>
+            );
+          })() : (
+            <>
+              {/* TAB 1: HOME */}
           {activeTab === 'home' && (
             <>
               {/* Search Bar */}
@@ -2450,10 +2685,50 @@ export default function StandardUserDashboard({
           {/* TAB 3: TRADE SIMULATOR */}
           {activeTab === 'trade' && (
             <div className="space-y-5">
-              {/* swap mode */}
-              <div className={`border rounded-3xl p-5 space-y-5 animate-fade-in ${
-                isLightTheme ? 'bg-white border-zinc-200/80 shadow-xs' : 'bg-slate-800 border-slate-700/80'
+              {/* Sub-navigation toggle bar between Arbitrage and Quick Converter */}
+              <div className={`p-1.5 rounded-2xl border flex items-center gap-1.5 shadow-xs ${
+                isLightTheme ? 'bg-zinc-100/90 border-zinc-200/80' : 'bg-slate-850 border-slate-750'
               }`}>
+                <button
+                  type="button"
+                  onClick={() => setTradeSubTab('arbitrage')}
+                  className={`flex-1 py-2.5 px-3 rounded-xl font-black text-xs transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                    tradeSubTab === 'arbitrage'
+                      ? (isLightTheme 
+                          ? 'bg-amber-500 text-white shadow-sm' 
+                          : 'bg-emerald-500 text-slate-950 shadow-sm')
+                      : (isLightTheme 
+                          ? 'text-zinc-600 hover:text-zinc-900 hover:bg-zinc-200/60' 
+                          : 'text-zinc-400 hover:text-white hover:bg-slate-800/60')
+                  }`}
+                >
+                  <Zap size={14} />
+                  <span>Arbitrage</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setTradeSubTab('converter')}
+                  className={`flex-1 py-2.5 px-3 rounded-xl font-black text-xs transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                    tradeSubTab === 'converter'
+                      ? (isLightTheme 
+                          ? 'bg-amber-500 text-white shadow-sm' 
+                          : 'bg-emerald-500 text-slate-950 shadow-sm')
+                      : (isLightTheme 
+                          ? 'text-zinc-600 hover:text-zinc-900 hover:bg-zinc-200/60' 
+                          : 'text-zinc-400 hover:text-white hover:bg-slate-800/60')
+                  }`}
+                >
+                  <ArrowRightLeft size={14} />
+                  <span>Quick Converter</span>
+                </button>
+              </div>
+
+              {/* SECONDARY SECTION: Quick Converter Simulator */}
+              {tradeSubTab === 'converter' && (
+                <div className={`border rounded-3xl p-5 space-y-5 animate-fade-in ${
+                  isLightTheme ? 'bg-white border-zinc-200/80 shadow-xs' : 'bg-slate-800 border-slate-700/80'
+                }`}>
                 <div>
                   <h3 className={`text-sm font-black tracking-tight flex items-center gap-1.5 ${isLightTheme ? 'text-zinc-800' : 'text-zinc-300'}`}>
                     <ArrowRightLeft size={16} className={isLightTheme ? 'text-amber-500' : 'text-emerald-400'} />
@@ -2591,9 +2866,11 @@ export default function StandardUserDashboard({
                   </button>
                 </div>
               </div>
+              )}
 
-              {/* Arbitrage Value Gap Finder Card */}
-              {(() => {
+              {/* DEFAULT SECTION: Arbitrage Opportunities */}
+              {tradeSubTab === 'arbitrage' && (
+                (() => {
                 const config = arbitrageConfig || {
                   coin1Symbol: 'BTC',
                   coin1ExternalMin: 91500,
@@ -2646,23 +2923,35 @@ export default function StandardUserDashboard({
 
                 return (
                   <div className={`border rounded-3xl p-5 space-y-5 animate-fade-in ${
-                    isLightTheme ? 'bg-white border-zinc-200/80 shadow-xs' : 'bg-slate-800 border-slate-700/80'
+                    isLightTheme ? 'bg-[#FFF8E1] border-amber-300/90 shadow-sm' : 'bg-slate-900/50 border-slate-800'
                   }`}>
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h3 className={`text-sm font-black tracking-tight flex items-center gap-1.5 ${isLightTheme ? 'text-zinc-800' : 'text-zinc-300'}`}>
-                          <TrendingUp size={16} className={isLightTheme ? 'text-amber-500' : 'text-emerald-400'} />
-                          Arbitrage Crypto
-                        </h3>
-                        <p className={`text-xs mt-0.5 font-bold ${isLightTheme ? 'text-amber-600' : 'text-amber-400'}`}>
-                          Buy Low on other exchanges, sell high on Arbitrage, get your profits
-                        </p>
-                      </div>
-                      <div className={`text-[10px] font-bold px-2 py-0.5 rounded-full border flex items-center gap-1 ${
-                        isLightTheme ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
-                      }`}>
-                        <Sparkles size={10} className="animate-pulse" />
-                        <span>Live Spreads</span>
+                    <div>
+                      <h3 className={`text-sm font-black tracking-tight flex items-center gap-1.5 ${isLightTheme ? 'text-zinc-800' : 'text-zinc-300'}`}>
+                        <TrendingUp size={16} className={isLightTheme ? 'text-amber-500' : 'text-emerald-400'} />
+                        Arbitrage Crypto
+                      </h3>
+                      <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${
+                          isLightTheme 
+                            ? 'bg-amber-500/10 border-amber-500/20 text-amber-800' 
+                            : 'bg-amber-400/10 border-amber-400/20 text-amber-300'
+                        }`}>
+                          Buy Low on other exchanges
+                        </span>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${
+                          isLightTheme 
+                            ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-800' 
+                            : 'bg-emerald-400/10 border-emerald-400/20 text-emerald-300'
+                        }`}>
+                          Sell High on Arbitrage
+                        </span>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${
+                          isLightTheme 
+                            ? 'bg-blue-500/10 border-blue-500/20 text-blue-800' 
+                            : 'bg-blue-400/10 border-blue-400/20 text-blue-300'
+                        }`}>
+                          Get Your Profits
+                        </span>
                       </div>
                     </div>
 
@@ -2681,132 +2970,154 @@ export default function StandardUserDashboard({
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                       {/* Coin 1 Card */}
-                      <div className={`p-4 rounded-2xl border flex flex-col justify-between space-y-4 relative overflow-hidden ${
-                        isLightTheme ? 'bg-zinc-50/50 border-zinc-200/60' : 'bg-slate-950/50 border-slate-850'
+                      <div className={`p-4 rounded-2xl border flex flex-col justify-between space-y-4 relative overflow-hidden transition-all duration-300 group hover:shadow-lg ${
+                        isLightTheme 
+                          ? 'bg-[#FAF9F6] border-amber-300/80 hover:border-amber-400 hover:bg-[#F0EFEA] shadow-xs' 
+                          : 'bg-slate-800/80 border-slate-700/80 hover:bg-slate-800'
                       }`}>
+                        {/* Subtle hover gradient border glow */}
+                        <div className="absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-amber-500/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+
                         <div className="flex justify-between items-start">
-                          <div>
-                            <span className={`text-[10px] font-bold block ${isLightTheme ? 'text-zinc-400' : 'text-zinc-500'}`}>
-                              {coin1Data?.name || 'Bitcoin'}
-                            </span>
-                            <span className={`text-sm font-black tracking-wider ${isLightTheme ? 'text-zinc-800' : 'text-white'}`}>
-                              {config.coin1Symbol}
-                            </span>
+                          <div className="flex items-center gap-2.5">
+                            <CoinIcon symbol={config.coin1Symbol} className="w-8 h-8 rounded-full shrink-0" />
+                            <div>
+                              <span className={`text-[10px] font-bold block ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                                {coin1Data?.name || 'Bitcoin'}
+                              </span>
+                              <span className={`text-sm font-black tracking-wider ${isLightTheme ? 'text-zinc-800' : 'text-white'}`}>
+                                {config.coin1Symbol}
+                              </span>
+                            </div>
                           </div>
                           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                            isLightTheme ? 'bg-emerald-50 text-emerald-600 border border-emerald-200/50' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/10'
+                            isLightTheme ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/15'
                           }`}>
                             +{spreadPct1.toFixed(2)}% Spread
                           </span>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-3 py-1 font-mono text-[11px]">
-                          <div>
-                            <span className={`block text-[9px] font-bold uppercase tracking-wider ${isLightTheme ? 'text-zinc-400' : 'text-zinc-500'}`}>
-                              Other Exchanges Range
+                        <div className="grid grid-cols-2 gap-2 pt-1">
+                          <div className={`p-2.5 rounded-xl border flex flex-col justify-between ${
+                            isLightTheme ? 'bg-rose-500/10 border-rose-200/80' : 'bg-rose-500/10 border-rose-500/20'
+                          }`}>
+                            <span className={`block text-[9px] font-extrabold uppercase tracking-wider mb-0.5 leading-tight ${isLightTheme ? 'text-black' : 'text-black font-extrabold bg-white/90 px-1 rounded-[3px] inline-block w-fit'}`}>
+                              Price in Binance,<br />OKX, Bybit
                             </span>
-                            <span className={`font-black ${isLightTheme ? 'text-zinc-700' : 'text-zinc-300'}`}>
+                            <span className={`font-black font-mono text-[10px] sm:text-[11px] ${isLightTheme ? 'text-rose-700' : 'text-rose-300'}`}>
                               ${extMin1.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })} - ${extMax1.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
                             </span>
                           </div>
-                          <div>
-                            <span className={`block text-[9px] font-bold uppercase tracking-wider ${isLightTheme ? 'text-zinc-400' : 'text-zinc-500'}`}>
-                              This Platform Price
+                          <div className={`p-2.5 rounded-xl border flex flex-col justify-between ${
+                            isLightTheme ? 'bg-emerald-500/10 border-emerald-300/80' : 'bg-emerald-500/10 border-emerald-500/20'
+                          }`}>
+                            <span className={`block text-[9px] font-extrabold uppercase tracking-wider mb-0.5 leading-tight ${isLightTheme ? 'text-black' : 'text-black font-extrabold bg-white/90 px-1 rounded-[3px] inline-block w-fit'}`}>
+                              Price here
                             </span>
-                            <span className={`font-black ${isLightTheme ? 'text-zinc-800' : 'text-white'}`}>
+                            <span className={`font-black font-mono text-[10px] sm:text-[11px] ${isLightTheme ? 'text-emerald-700' : 'text-emerald-300'}`}>
                               ${coin1Price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
                             </span>
                           </div>
                         </div>
+
+                        <button
+                          onClick={() => setArbitrageGuideCoin({
+                            symbol: config.coin1Symbol,
+                            name: coin1Data?.name || 'Bitcoin',
+                            price: coin1Price,
+                            spreadPct: spreadPct1,
+                            extMin: extMin1,
+                            extMax: extMax1,
+                            platforms: config.platformsList || ['Binance', 'OKX', 'Bybit']
+                          })}
+                          className={`w-full py-2 px-3 rounded-xl font-extrabold text-[11px] flex items-center justify-center gap-1.5 transition-all cursor-pointer mt-1 ${
+                            isLightTheme 
+                              ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-xs' 
+                              : 'bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-black'
+                          }`}
+                        >
+                          <BookOpen size={13} />
+                          <span>PROFIT ON {config.coin1Symbol}</span>
+                          <ArrowRight size={13} />
+                        </button>
                       </div>
 
                       {/* Coin 2 Card */}
-                      <div className={`p-4 rounded-2xl border flex flex-col justify-between space-y-4 relative overflow-hidden ${
-                        isLightTheme ? 'bg-zinc-50/50 border-zinc-200/60' : 'bg-slate-950/50 border-slate-850'
+                      <div className={`p-4 rounded-2xl border flex flex-col justify-between space-y-4 relative overflow-hidden transition-all duration-300 group hover:shadow-lg ${
+                        isLightTheme 
+                          ? 'bg-[#FAF9F6] border-amber-300/80 hover:border-amber-400 hover:bg-[#F0EFEA] shadow-xs' 
+                          : 'bg-slate-800/80 border-slate-700/80 hover:bg-slate-800'
                       }`}>
+                        {/* Subtle hover gradient border glow */}
+                        <div className="absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-amber-500/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+
                         <div className="flex justify-between items-start">
-                          <div>
-                            <span className={`text-[10px] font-bold block ${isLightTheme ? 'text-zinc-400' : 'text-zinc-500'}`}>
-                              {coin2Data?.name || 'Ethereum'}
-                            </span>
-                            <span className={`text-sm font-black tracking-wider ${isLightTheme ? 'text-zinc-800' : 'text-white'}`}>
-                              {config.coin2Symbol}
-                            </span>
+                          <div className="flex items-center gap-2.5">
+                            <CoinIcon symbol={config.coin2Symbol} className="w-8 h-8 rounded-full shrink-0" />
+                            <div>
+                              <span className={`text-[10px] font-bold block ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                                {coin2Data?.name || 'Ethereum'}
+                              </span>
+                              <span className={`text-sm font-black tracking-wider ${isLightTheme ? 'text-zinc-800' : 'text-white'}`}>
+                                {config.coin2Symbol}
+                              </span>
+                            </div>
                           </div>
                           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                            isLightTheme ? 'bg-emerald-50 text-emerald-600 border border-emerald-200/50' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/10'
+                            isLightTheme ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/15'
                           }`}>
                             +{spreadPct2.toFixed(2)}% Spread
                           </span>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-3 py-1 font-mono text-[11px]">
-                          <div>
-                            <span className={`block text-[9px] font-bold uppercase tracking-wider ${isLightTheme ? 'text-zinc-400' : 'text-zinc-500'}`}>
-                              Other Exchanges Range
+                        <div className="grid grid-cols-2 gap-2 pt-1">
+                          <div className={`p-2.5 rounded-xl border flex flex-col justify-between ${
+                            isLightTheme ? 'bg-rose-500/10 border-rose-200/80' : 'bg-rose-500/10 border-rose-500/20'
+                          }`}>
+                            <span className={`block text-[9px] font-extrabold uppercase tracking-wider mb-0.5 leading-tight ${isLightTheme ? 'text-black' : 'text-black font-extrabold bg-white/90 px-1 rounded-[3px] inline-block w-fit'}`}>
+                              Price in Binance,<br />OKX, Bybit
                             </span>
-                            <span className={`font-black ${isLightTheme ? 'text-zinc-700' : 'text-zinc-300'}`}>
+                            <span className={`font-black font-mono text-[10px] sm:text-[11px] ${isLightTheme ? 'text-rose-700' : 'text-rose-300'}`}>
                               ${extMin2.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })} - ${extMax2.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
                             </span>
                           </div>
-                          <div>
-                            <span className={`block text-[9px] font-bold uppercase tracking-wider ${isLightTheme ? 'text-zinc-400' : 'text-zinc-500'}`}>
-                              This Platform Price
+                          <div className={`p-2.5 rounded-xl border flex flex-col justify-between ${
+                            isLightTheme ? 'bg-emerald-500/10 border-emerald-300/80' : 'bg-emerald-500/10 border-emerald-500/20'
+                          }`}>
+                            <span className={`block text-[9px] font-extrabold uppercase tracking-wider mb-0.5 leading-tight ${isLightTheme ? 'text-black' : 'text-black font-extrabold bg-white/90 px-1 rounded-[3px] inline-block w-fit'}`}>
+                              Price here
                             </span>
-                            <span className={`font-black ${isLightTheme ? 'text-zinc-800' : 'text-white'}`}>
+                            <span className={`font-black font-mono text-[10px] sm:text-[11px] ${isLightTheme ? 'text-emerald-700' : 'text-emerald-300'}`}>
                               ${coin2Price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
                             </span>
                           </div>
                         </div>
-                      </div>
-                    </div>
 
-                    {/* Recommendations and steps visual block */}
-                    <div className={`p-4 rounded-2xl border ${
-                      isLightTheme ? 'bg-amber-50/20 border-amber-200/40' : 'bg-slate-950/20 border-slate-850/60'
-                    }`}>
-                      <h4 className={`text-xs font-black uppercase mb-2 flex items-center gap-1 ${isLightTheme ? 'text-zinc-700' : 'text-zinc-400'}`}>
-                        <span>📋 Quick Arbitrage Guide</span>
-                      </h4>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 text-[10px] leading-relaxed">
-                        <div className="space-y-1">
-                          <div className={`font-black flex items-center gap-1 ${isLightTheme ? 'text-zinc-800' : 'text-zinc-300'}`}>
-                            <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-black ${
-                              isLightTheme ? 'bg-amber-500 text-white' : 'bg-emerald-500 text-slate-950'
-                            }`}>1</span>
-                            <span>Acquire on Exchanges</span>
-                          </div>
-                          <p className={isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}>
-                            Purchase your coins on platforms like <span className="font-bold">{config.platformsList.join(', ')}</span> where they sell at a lower rate.
-                          </p>
-                        </div>
-                        <div className="space-y-1">
-                          <div className={`font-black flex items-center gap-1 ${isLightTheme ? 'text-zinc-800' : 'text-zinc-300'}`}>
-                            <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-black ${
-                              isLightTheme ? 'bg-amber-500 text-white' : 'bg-emerald-500 text-slate-950'
-                            }`}>2</span>
-                            <span>Transfer to Wallet</span>
-                          </div>
-                          <p className={isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}>
-                            Go to the **Deposit** screen, copy your unique wallet address, and send the coins from your exchange wallet to this app.
-                          </p>
-                        </div>
-                        <div className="space-y-1">
-                          <div className={`font-black flex items-center gap-1 ${isLightTheme ? 'text-zinc-800' : 'text-zinc-300'}`}>
-                            <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-black ${
-                              isLightTheme ? 'bg-amber-500 text-white' : 'bg-emerald-500 text-slate-950'
-                            }`}>3</span>
-                            <span>Sell Instant Profit</span>
-                          </div>
-                          <p className={isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}>
-                            Once deposit lands, convert your balances back to USDT/USD in the simulator above at our high platform price and pocket the spread instantly!
-                          </p>
-                        </div>
+                        <button
+                          onClick={() => setArbitrageGuideCoin({
+                            symbol: config.coin2Symbol,
+                            name: coin2Data?.name || 'Ethereum',
+                            price: coin2Price,
+                            spreadPct: spreadPct2,
+                            extMin: extMin2,
+                            extMax: extMax2,
+                            platforms: config.platformsList || ['Binance', 'OKX', 'Bybit']
+                          })}
+                          className={`w-full py-2 px-3 rounded-xl font-extrabold text-[11px] flex items-center justify-center gap-1.5 transition-all cursor-pointer mt-1 ${
+                            isLightTheme 
+                              ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-xs' 
+                              : 'bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-black'
+                          }`}
+                        >
+                          <BookOpen size={13} />
+                          <span>PROFIT ON {config.coin2Symbol}</span>
+                          <ArrowRight size={13} />
+                        </button>
                       </div>
                     </div>
                   </div>
                 );
-              })()}
+              })())}
             </div>
           )}
 
@@ -2814,131 +3125,133 @@ export default function StandardUserDashboard({
           {activeTab === 'earn' && (
             <div className="space-y-5 animate-fade-in">
               {/* Earn Specific Interactive Wallet Card */}
-              <div 
-                id="earn-investment-wallet-card" 
-                className={`relative overflow-hidden rounded-3xl p-6 border transition-all duration-300 ${
-                  isLightTheme 
-                    ? 'bg-[#FFF8E1] border-amber-300/90 text-zinc-800 shadow-md shadow-amber-500/5' 
-                    : 'bg-slate-900/40 border-slate-850/70 text-white shadow-md shadow-emerald-950/5'
-                }`}
-              >
-                {/* Micro Ambient Details */}
-                <div className={`absolute top-0 right-0 w-32 h-32 rounded-full blur-3xl -mr-10 -mt-10 animate-pulse duration-4000 ${
-                  isLightTheme ? 'bg-amber-500/5' : 'bg-white/5'
-                }`} />
-                <div className={`absolute bottom-0 left-0 w-24 h-24 rounded-full blur-2xl -ml-10 -mb-10 ${
-                  isLightTheme ? 'bg-amber-500/5' : 'bg-white/5'
-                }`} />
+              {mmfSubView !== 'form' && (
+                <div 
+                  id="earn-investment-wallet-card" 
+                  className={`relative overflow-hidden rounded-3xl p-6 border transition-all duration-300 ${
+                    isLightTheme 
+                      ? 'bg-[#FFF8E1] border-amber-300/90 text-zinc-800 shadow-md shadow-amber-500/5' 
+                      : 'bg-slate-900/40 border-slate-850/70 text-white shadow-md shadow-emerald-950/5'
+                  }`}
+                >
+                  {/* Micro Ambient Details */}
+                  <div className={`absolute top-0 right-0 w-32 h-32 rounded-full blur-3xl -mr-10 -mt-10 animate-pulse duration-4000 ${
+                    isLightTheme ? 'bg-amber-500/5' : 'bg-white/5'
+                  }`} />
+                  <div className={`absolute bottom-0 left-0 w-24 h-24 rounded-full blur-2xl -ml-10 -mb-10 ${
+                    isLightTheme ? 'bg-amber-500/5' : 'bg-white/5'
+                  }`} />
 
-                <div className="flex justify-between items-start select-none">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className={`text-[11px] font-bold uppercase tracking-wider ${
+                  <div className="flex justify-between items-start select-none">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[11px] font-bold uppercase tracking-wider ${
+                          isLightTheme ? 'text-zinc-500' : 'text-zinc-400'
+                        }`}>Total Amount Invested</span>
+                        <button
+                          onClick={() => setIsEarnBalanceBlurred(!isEarnBalanceBlurred)}
+                          className={`p-1 rounded-lg transition-all cursor-pointer inline-flex items-center justify-center shrink-0 ${
+                            isLightTheme ? 'hover:bg-amber-500/10 text-zinc-500 hover:text-zinc-700' : 'hover:bg-white/10 text-white/80 hover:text-white'
+                          }`}
+                          title={isEarnBalanceBlurred ? "Reveal investment data" : "Hide investment data"}
+                        >
+                          {isEarnBalanceBlurred ? <EyeOff size={13} strokeWidth={2.5} /> : <Eye size={13} strokeWidth={2.5} />}
+                        </button>
+                      </div>
+                      <h2 className={`text-3xl font-black tracking-tight font-mono mt-1 transition-all duration-300 ${
+                        isEarnBalanceBlurred ? 'filter blur-md select-none pointer-events-none' : ''
+                      } ${isLightTheme ? 'text-amber-900' : 'text-zinc-100'}`}>
+                        $ {totalInvestedUSD.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </h2>
+                      <div className={`flex items-center gap-1.5 mt-2 transition-all duration-300 ${
+                        isEarnBalanceBlurred ? 'filter blur-md select-none pointer-events-none' : ''
+                      }`}>
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono flex items-center gap-1 border ${
+                          isLightTheme 
+                            ? 'bg-amber-100/60 border-amber-200 text-amber-800' 
+                            : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
+                        }`}>
+                          <Sparkles size={10} className={`animate-spin ${isLightTheme ? 'text-amber-600' : 'text-emerald-300'}`} />
+                          {activeInvs.length} Active MMF {activeInvs.length === 1 ? 'Invest' : 'Investments'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Right Column: Daily Profit */}
+                    <div className="text-right flex flex-col items-end">
+                      <span className={`text-[11px] font-bold uppercase tracking-wider block ${
                         isLightTheme ? 'text-zinc-500' : 'text-zinc-400'
-                      }`}>Total Amount Invested</span>
-                      <button
-                        onClick={() => setIsEarnBalanceBlurred(!isEarnBalanceBlurred)}
-                        className={`p-1 rounded-lg transition-all cursor-pointer inline-flex items-center justify-center shrink-0 ${
-                          isLightTheme ? 'hover:bg-amber-500/10 text-zinc-500 hover:text-zinc-700' : 'hover:bg-white/10 text-white/80 hover:text-white'
+                      }`}>Today's Profit</span>
+                      <div className={`flex items-center justify-end gap-1.5 mt-1 transition-all duration-300 ${
+                        isEarnBalanceBlurred ? 'filter blur-md select-none pointer-events-none' : ''
+                      }`}>
+                        <span className={`text-2xl font-black font-mono ${
+                          isLightTheme ? 'text-emerald-600' : 'text-emerald-400'
+                        }`}>
+                          +$ {totalDailyProfitUSD.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                      <span className={`text-[9px] font-semibold block transition-all duration-300 ${
+                        isEarnBalanceBlurred ? 'filter blur-md select-none pointer-events-none' : ''
+                      } ${isLightTheme ? 'text-zinc-400' : 'text-zinc-500'}`}>
+                        Daily Distribution
+                      </span>
+                      
+                      <button 
+                        onClick={() => setEarnDisplayMode(earnDisplayMode === 'USD' ? 'CRYPTO' : 'USD')}
+                        className={`mt-2.5 flex items-center gap-1.5 px-2.5 py-1 rounded-xl border transition-all cursor-pointer text-[10px] font-bold select-none ${
+                          isEarnBalanceBlurred ? 'filter blur-md select-none pointer-events-none' : ''
+                        } ${
+                          isLightTheme 
+                            ? 'bg-amber-100/80 border-amber-200 hover:bg-amber-100 text-amber-800' 
+                            : 'bg-white/10 hover:bg-white/15 border-white/10 text-white'
                         }`}
-                        title={isEarnBalanceBlurred ? "Reveal investment data" : "Hide investment data"}
                       >
-                        {isEarnBalanceBlurred ? <EyeOff size={13} strokeWidth={2.5} /> : <Eye size={13} strokeWidth={2.5} />}
+                        <TrendingUp size={11} className={isLightTheme ? 'text-amber-600' : 'text-teal-200'} />
+                        <span>{earnDisplayMode === 'USD' ? 'Show Coins' : 'Show USD'}</span>
                       </button>
                     </div>
-                    <h2 className={`text-3xl font-black tracking-tight font-mono mt-1 transition-all duration-300 ${
-                      isEarnBalanceBlurred ? 'filter blur-md select-none pointer-events-none' : ''
-                    } ${isLightTheme ? 'text-amber-900' : 'text-zinc-100'}`}>
-                      $ {totalInvestedUSD.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                    </h2>
-                    <div className={`flex items-center gap-1.5 mt-2 transition-all duration-300 ${
-                      isEarnBalanceBlurred ? 'filter blur-md select-none pointer-events-none' : ''
-                    }`}>
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono flex items-center gap-1 border ${
-                        isLightTheme 
-                          ? 'bg-amber-100/60 border-amber-200 text-amber-800' 
-                          : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
-                      }`}>
-                        <Sparkles size={10} className={`animate-spin ${isLightTheme ? 'text-amber-600' : 'text-emerald-300'}`} />
-                        {activeInvs.length} Active MMF {activeInvs.length === 1 ? 'Invest' : 'Investments'}
-                      </span>
-                    </div>
                   </div>
 
-                  {/* Right Column: Daily Profit */}
-                  <div className="text-right flex flex-col items-end">
-                    <span className={`text-[11px] font-bold uppercase tracking-wider block ${
-                      isLightTheme ? 'text-zinc-500' : 'text-zinc-400'
-                    }`}>Today's Profit</span>
-                    <div className={`flex items-center justify-end gap-1.5 mt-1 transition-all duration-300 ${
-                      isEarnBalanceBlurred ? 'filter blur-md select-none pointer-events-none' : ''
+                  {/* Interactive Expanded Coin Breakdown Drawer inside the Card */}
+                  {earnDisplayMode === 'CRYPTO' && activeInvs.length > 0 && (
+                    <div className={`mt-4 pt-3 border-t space-y-2 animate-fade-in select-none ${
+                      isLightTheme ? 'border-amber-200' : 'border-slate-800'
                     }`}>
-                      <span className={`text-2xl font-black font-mono ${
-                        isLightTheme ? 'text-emerald-600' : 'text-emerald-400'
-                      }`}>
-                        +$ {totalDailyProfitUSD.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                      </span>
+                      <span className={`text-[9px] font-black uppercase tracking-wider block mb-1 ${
+                        isLightTheme ? 'text-amber-800' : 'text-teal-300'
+                      }`}>Your Portfolio Breakdown</span>
+                      <div className="grid grid-cols-2 gap-2 max-h-[100px] overflow-y-auto pr-1">
+                        {cryptoPrices.map(coin => {
+                          const coinInvs = activeInvs.filter((inv: any) => inv.coinSymbol === coin.symbol);
+                          if (coinInvs.length === 0) return null;
+                          const coinSum = coinInvs.reduce((sum: number, inv: any) => sum + inv.amount, 0);
+                          const coinDailyProfitSum = coinInvs.reduce((sum: number, inv: any) => sum + (inv.amount * (inv.dailyRate / 100)), 0);
+                          return (
+                            <div 
+                              key={coin.symbol} 
+                              className={`p-2 rounded-xl border flex justify-between items-center font-mono ${
+                                isLightTheme 
+                                  ? 'bg-amber-50/50 border-amber-200/50' 
+                                  : 'bg-black/20 border-white/5'
+                              }`}
+                            >
+                              <div>
+                                <span className={`text-[10px] font-black ${isLightTheme ? 'text-zinc-800' : 'text-white'}`}>{coin.symbol}</span>
+                                <span className={`text-[9px] block ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>{coinSum.toLocaleString(undefined, { maximumFractionDigits: 6 })}</span>
+                              </div>
+                              <div className="text-right">
+                                <span className="text-[9px] font-black text-emerald-600 dark:text-emerald-400">+{coinDailyProfitSum.toLocaleString(undefined, { maximumFractionDigits: 6 })}</span>
+                                <span className={`text-[8px] block ${isLightTheme ? 'text-zinc-400' : 'text-zinc-500'}`}>/day</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
-                    <span className={`text-[9px] font-semibold block transition-all duration-300 ${
-                      isEarnBalanceBlurred ? 'filter blur-md select-none pointer-events-none' : ''
-                    } ${isLightTheme ? 'text-zinc-400' : 'text-zinc-500'}`}>
-                      Daily Distribution
-                    </span>
-                    
-                    <button 
-                      onClick={() => setEarnDisplayMode(earnDisplayMode === 'USD' ? 'CRYPTO' : 'USD')}
-                      className={`mt-2.5 flex items-center gap-1.5 px-2.5 py-1 rounded-xl border transition-all cursor-pointer text-[10px] font-bold select-none ${
-                        isEarnBalanceBlurred ? 'filter blur-md select-none pointer-events-none' : ''
-                      } ${
-                        isLightTheme 
-                          ? 'bg-amber-100/80 border-amber-200 hover:bg-amber-100 text-amber-800' 
-                          : 'bg-white/10 hover:bg-white/15 border-white/10 text-white'
-                      }`}
-                    >
-                      <TrendingUp size={11} className={isLightTheme ? 'text-amber-600' : 'text-teal-200'} />
-                      <span>{earnDisplayMode === 'USD' ? 'Show Coins' : 'Show USD'}</span>
-                    </button>
-                  </div>
+                  )}
                 </div>
-
-                {/* Interactive Expanded Coin Breakdown Drawer inside the Card */}
-                {earnDisplayMode === 'CRYPTO' && activeInvs.length > 0 && (
-                  <div className={`mt-4 pt-3 border-t space-y-2 animate-fade-in select-none ${
-                    isLightTheme ? 'border-amber-200' : 'border-slate-800'
-                  }`}>
-                    <span className={`text-[9px] font-black uppercase tracking-wider block mb-1 ${
-                      isLightTheme ? 'text-amber-800' : 'text-teal-300'
-                    }`}>Your Portfolio Breakdown</span>
-                    <div className="grid grid-cols-2 gap-2 max-h-[100px] overflow-y-auto pr-1">
-                      {cryptoPrices.map(coin => {
-                        const coinInvs = activeInvs.filter((inv: any) => inv.coinSymbol === coin.symbol);
-                        if (coinInvs.length === 0) return null;
-                        const coinSum = coinInvs.reduce((sum: number, inv: any) => sum + inv.amount, 0);
-                        const coinDailyProfitSum = coinInvs.reduce((sum: number, inv: any) => sum + (inv.amount * (inv.dailyRate / 100)), 0);
-                        return (
-                          <div 
-                            key={coin.symbol} 
-                            className={`p-2 rounded-xl border flex justify-between items-center font-mono ${
-                              isLightTheme 
-                                ? 'bg-amber-50/50 border-amber-200/50' 
-                                : 'bg-black/20 border-white/5'
-                            }`}
-                          >
-                            <div>
-                              <span className={`text-[10px] font-black ${isLightTheme ? 'text-zinc-800' : 'text-white'}`}>{coin.symbol}</span>
-                              <span className={`text-[9px] block ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>{coinSum.toLocaleString(undefined, { maximumFractionDigits: 6 })}</span>
-                            </div>
-                            <div className="text-right">
-                              <span className="text-[9px] font-black text-emerald-600 dark:text-emerald-400">+{coinDailyProfitSum.toLocaleString(undefined, { maximumFractionDigits: 6 })}</span>
-                              <span className={`text-[8px] block ${isLightTheme ? 'text-zinc-400' : 'text-zinc-500'}`}>/day</span>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
+              )}
 
               {/* mmf investment mode */}
               <div className={`border rounded-3xl p-5 space-y-5 animate-fade-in ${
@@ -3388,7 +3701,14 @@ export default function StandardUserDashboard({
                           {investmentError.includes("deposit") && (
                             <button
                               type="button"
-                              onClick={onOpenDeposit}
+                              onClick={() => {
+                                const sym = selectedCoinForInvestment?.symbol;
+                                if (sym) {
+                                  sessionStorage.setItem('preselected_deposit_coin', sym);
+                                  localStorage.setItem('preselected_deposit_coin', sym);
+                                }
+                                onOpenDeposit(sym);
+                              }}
                               className={`mt-1 w-full py-1.5 border text-[10px] font-bold uppercase tracking-wider rounded-lg transition-colors cursor-pointer ${
                                 isLightTheme 
                                   ? 'bg-amber-550/10 hover:bg-amber-500/20 border-amber-500/30 text-amber-850' 
@@ -3437,42 +3757,46 @@ export default function StandardUserDashboard({
               <ActivityLog userId={user.uid} isLightTheme={isLightTheme} />
             </div>
           )}
+            </>
+          )}
 
         </main>
       )}
 
       {/* STICKY BOTTOM NAVIGATION */}
-      <footer className={`fixed bottom-0 left-0 right-0 z-30 px-4 py-2 flex justify-around max-w-md mx-auto border-t ${
-        isLightTheme 
-          ? 'bg-[#FFF3D6] border-zinc-200/80 shadow-[0_-4px_12px_rgba(0,0,0,0.03)]' 
-          : 'bg-slate-900 border-slate-800/80'
-      }`}>
-        {([
-          { id: 'home', label: 'Home', icon: Coins },
-          { id: 'wallet', label: 'Wallet', icon: Wallet },
-          { id: 'trade', label: 'Trade', icon: ArrowRightLeft },
-          { id: 'earn', label: 'Earn', icon: TrendingUp },
-          { id: 'history', label: 'History', icon: History }
-        ] as const).map(tab => {
-          const Icon = tab.icon;
-          const isSelected = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              id={`nav-tab-btn-${tab.id}`}
-              onClick={() => handleTabChange(tab.id)}
-              className={`flex flex-col items-center gap-1 py-1.5 px-3 rounded-xl transition-all cursor-pointer ${
-                isSelected 
-                  ? (isLightTheme ? 'text-amber-700 bg-amber-500/10 font-black' : 'text-amber-400 bg-amber-500/10 font-black') 
-                  : (isLightTheme ? 'text-zinc-700 hover:text-zinc-950' : 'text-white hover:text-zinc-300')
-              }`}
-            >
-              <Icon size={18} className={isSelected ? 'scale-110 transition-transform' : ''} />
-              <span className="text-[10px] font-bold tracking-tight">{tab.label}</span>
-            </button>
-          );
-        })}
-      </footer>
+      {!arbitrageGuideCoin && !(activeTab === 'earn' && mmfSubView === 'form') && (
+        <footer className={`fixed bottom-0 left-0 right-0 z-30 px-4 py-2 flex justify-around max-w-md mx-auto border-t ${
+          isLightTheme 
+            ? 'bg-[#FFF3D6] border-zinc-200/80 shadow-[0_-4px_12px_rgba(0,0,0,0.03)]' 
+            : 'bg-slate-900 border-slate-800/80'
+        }`}>
+          {([
+            { id: 'home', label: 'Home', icon: Coins },
+            { id: 'wallet', label: 'Wallet', icon: Wallet },
+            { id: 'trade', label: 'Trade', icon: ArrowRightLeft },
+            { id: 'earn', label: 'Earn', icon: TrendingUp },
+            { id: 'history', label: 'History', icon: History }
+          ] as const).map(tab => {
+            const Icon = tab.icon;
+            const isSelected = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                id={`nav-tab-btn-${tab.id}`}
+                onClick={() => handleTabChange(tab.id)}
+                className={`flex flex-col items-center gap-1 py-1.5 px-3 rounded-xl transition-all cursor-pointer ${
+                  isSelected 
+                    ? (isLightTheme ? 'text-amber-700 bg-amber-500/10 font-black' : 'text-amber-400 bg-amber-500/10 font-black') 
+                    : (isLightTheme ? 'text-zinc-700 hover:text-zinc-950' : 'text-white hover:text-zinc-300')
+                }`}
+              >
+                <Icon size={18} className={isSelected ? 'scale-110 transition-transform' : ''} />
+                <span className="text-[10px] font-bold tracking-tight">{tab.label}</span>
+              </button>
+            );
+          })}
+        </footer>
+      )}
 
 
 

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { collection, addDoc, getDocs, serverTimestamp } from 'firebase/firestore';
 import { CryptoNetwork, P2PMerchant, Transaction } from '../types';
+import { DEFAULT_NETWORKS, DEFAULT_MERCHANTS } from '../seedData';
 import { 
   ArrowLeft, Coins, Users, CreditCard, ChevronRight, Copy, Check, 
   Upload, Sparkles, MessageSquare, AlertCircle, RefreshCw, Star 
@@ -12,9 +13,10 @@ interface DepositWorkflowProps {
   user: any;
   onBack: () => void;
   onSuccess: () => void;
+  initialCoinSymbol?: string;
 }
 
-export default function DepositWorkflow({ user, onBack, onSuccess }: DepositWorkflowProps) {
+export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSymbol }: DepositWorkflowProps) {
   const [method, setMethod] = useState<'selection' | 'crypto_coin_select' | 'crypto' | 'crypto_confirm' | 'p2p' | 'p2p_calc' | 'p2p_instructions' | 'p2p_confirm'>('selection');
 
   const formatCoinName = (tokenName: string) => {
@@ -55,20 +57,70 @@ export default function DepositWorkflow({ user, onBack, onSuccess }: DepositWork
       try {
         const netCol = collection(db, 'crypto_networks');
         const netSnap = await getDocs(netCol);
-        const netList = netSnap.docs.map(doc => doc.data() as CryptoNetwork);
+        let netList = netSnap.docs.map(doc => doc.data() as CryptoNetwork);
+
+        // Merge with DEFAULT_NETWORKS to ensure all assets are available
+        const existingIds = new Set(netList.map(n => n.id.toLowerCase()));
+        DEFAULT_NETWORKS.forEach(def => {
+          if (!existingIds.has(def.id.toLowerCase())) {
+            netList.push(def);
+          }
+        });
+
         const order = ['usdt', 'usdc', 'btc', 'eth', 'sol', 'bnb', 'xrp', 'wld', 'trx', 'doge'];
-        netList.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
+        netList.sort((a, b) => {
+          const indexA = order.indexOf(a.id.toLowerCase());
+          const indexB = order.indexOf(b.id.toLowerCase());
+          if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+          if (indexA !== -1) return -1;
+          if (indexB !== -1) return 1;
+          return a.id.localeCompare(b.id);
+        });
         setNetworks(netList);
-        if (netList.length > 0) {
+
+        const rawPreselected = initialCoinSymbol || sessionStorage.getItem('preselected_deposit_coin') || localStorage.getItem('preselected_deposit_coin');
+        if (rawPreselected) {
+          sessionStorage.removeItem('preselected_deposit_coin');
+          localStorage.removeItem('preselected_deposit_coin');
+
+          const preselected = rawPreselected.trim().toLowerCase();
+
+          const target = netList.find(n => 
+            n.id.toLowerCase() === preselected ||
+            n.id.toLowerCase() === preselected.replace(/[^a-z0-9]/g, '') ||
+            n.tokenName.toLowerCase() === preselected ||
+            n.tokenName.toLowerCase().includes(`(${preselected})`) ||
+            n.tokenName.toLowerCase().includes(preselected) ||
+            preselected.includes(n.id.toLowerCase())
+          );
+
+          if (target) {
+            setSelectedCoin(target);
+            if (target.networks && target.networks.length > 0) {
+              setSelectedNetwork(target.networks[0]);
+            } else {
+              setSelectedNetwork('');
+            }
+            setMethod('crypto');
+          } else if (netList.length > 0) {
+            setSelectedCoin(netList[0]);
+            if (netList[0].networks && netList[0].networks.length > 0) {
+              setSelectedNetwork(netList[0].networks[0]);
+            }
+          }
+        } else if (netList.length > 0) {
           setSelectedCoin(netList[0]);
-          if (netList[0].networks.length > 0) {
+          if (netList[0].networks && netList[0].networks.length > 0) {
             setSelectedNetwork(netList[0].networks[0]);
           }
         }
 
         const merchCol = collection(db, 'p2p_merchants');
         const merchSnap = await getDocs(merchCol);
-        const merchList = merchSnap.docs.map(doc => doc.data() as P2PMerchant);
+        let merchList = merchSnap.docs.map(doc => doc.data() as P2PMerchant);
+        if (merchList.length === 0) {
+          merchList = DEFAULT_MERCHANTS;
+        }
         setMerchants(merchList);
       } catch (err) {
         console.error('Error fetching deposit configurations:', err);
@@ -78,7 +130,7 @@ export default function DepositWorkflow({ user, onBack, onSuccess }: DepositWork
       }
     }
     fetchData();
-  }, []);
+  }, [initialCoinSymbol]);
 
   // Recalculate USD based on local currency input for P2P BUY
   useEffect(() => {

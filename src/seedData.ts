@@ -2,7 +2,7 @@ import { collection, getDocs, writeBatch, doc } from 'firebase/firestore';
 import { db } from './firebase';
 import { CryptoNetwork, P2PMerchant, CryptoPrice } from './types';
 
-const DEFAULT_NETWORKS: CryptoNetwork[] = [
+export const DEFAULT_NETWORKS: CryptoNetwork[] = [
   {
     id: 'usdt',
     tokenName: 'Tether (USDT)',
@@ -94,7 +94,7 @@ const DEFAULT_NETWORKS: CryptoNetwork[] = [
   }
 ];
 
-const DEFAULT_MERCHANTS: P2PMerchant[] = [
+export const DEFAULT_MERCHANTS: P2PMerchant[] = [
   {
     id: 'alpha-trades',
     name: 'Alpha P2P (M-Pesa)',

@@ -14,6 +14,7 @@ export default function App() {
   const [user, setUser] = useState<any | null>(null);
   const [initializing, setInitializing] = useState(true);
   const [successMessage, setSuccessMessage] = useState('');
+  const [depositCoin, setDepositCoin] = useState<string | undefined>(undefined);
 
   // Helper to parse clean path from hash
   const getPathFromHash = () => {
@@ -199,6 +200,17 @@ export default function App() {
     return <AdminPanel onLogout={handleLogout} />;
   }
 
+  const handleOpenDeposit = (coinSymbol?: string) => {
+    if (coinSymbol) {
+      setDepositCoin(coinSymbol);
+      sessionStorage.setItem('preselected_deposit_coin', coinSymbol);
+      localStorage.setItem('preselected_deposit_coin', coinSymbol);
+    } else {
+      setDepositCoin(undefined);
+    }
+    navigate('/deposit');
+  };
+
   // 3. Standard User Account Flows
   const showDashboard = ['/dashboard', '/wallet', '/trade', '/earn', '/history'].includes(path);
 
@@ -210,7 +222,7 @@ export default function App() {
           user={user}
           onLogout={handleLogout}
           onOpenProfile={() => navigate('/profile')}
-          onOpenDeposit={() => navigate('/deposit')}
+          onOpenDeposit={handleOpenDeposit}
           onOpenWithdraw={() => navigate('/withdraw')}
           path={path}
           navigate={navigate}
@@ -227,6 +239,7 @@ export default function App() {
       {path === '/deposit' && (
         <DepositWorkflow
           user={user}
+          initialCoinSymbol={depositCoin}
           onBack={() => navigate('/dashboard')}
           onSuccess={() => handleTxSuccess('Your deposit request has been submitted to the Admin Escrow Queue for verification.')}
         />
