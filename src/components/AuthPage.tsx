@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { auth, db } from '../firebase';
+import { useToast } from '../context/ToastContext';
 import { 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
@@ -33,14 +34,31 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
   const [showResetPassword, setShowResetPassword] = useState(false);
   const [displayName, setDisplayName] = useState('');
   const [referral, setReferral] = useState('');
+  const toast = useToast();
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [errorState, setErrorState] = useState<string | null>(null);
+  const setError = (msg: string | null) => {
+    setErrorState(msg);
+    if (msg) toast.error(msg, 'Authentication Error');
+  };
+  const error = errorState;
+
+  const [successMsgState, setSuccessMsgState] = useState<string | null>(null);
+  const setSuccessMsg = (msg: string | null) => {
+    setSuccessMsgState(msg);
+    if (msg) toast.success(msg, 'Authentication');
+  };
+  const successMsg = successMsgState;
 
   // Two-Factor Authentication Login States
   const [show2faPrompt, setShow2faPrompt] = useState(false);
   const [twoFactorCode, setTwoFactorCode] = useState('');
-  const [twoFactorError, setTwoFactorError] = useState<string | null>(null);
+  const [twoFactorErrorState, setTwoFactorErrorState] = useState<string | null>(null);
+  const setTwoFactorError = (msg: string | null) => {
+    setTwoFactorErrorState(msg);
+    if (msg) toast.error(msg, '2FA Code Error');
+  };
+  const twoFactorError = twoFactorErrorState;
 
   const [showPassword, setShowPassword] = useState(false);
 
@@ -480,12 +498,7 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
                 </p>
               </div>
 
-              {twoFactorError && (
-                <div id="auth-2fa-error-banner" className="p-3 bg-red-50 border border-red-100 text-red-600 rounded-xl text-xs flex items-start gap-2">
-                  <AlertCircle size={16} className="mt-0.5 shrink-0" />
-                  <span>{twoFactorError}</span>
-                </div>
-              )}
+
 
               <form onSubmit={handleVerify2faLogin} className="space-y-4">
                 <div className="space-y-2">
@@ -537,19 +550,7 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
                 </p>
               </div>
 
-              {error && (
-                <div id="auth-error-banner" className="p-3 bg-red-50 border border-red-100 text-red-600 rounded-xl text-xs flex items-start gap-2">
-                  <AlertCircle size={16} className="mt-0.5 shrink-0" />
-                  <span>{error}</span>
-                </div>
-              )}
 
-              {successMsg && (
-                <div id="auth-success-banner" className="p-3 bg-emerald-50 border border-emerald-100 text-emerald-700 rounded-xl text-xs flex items-start gap-2">
-                  <Sparkles size={16} className="mt-0.5 shrink-0 text-emerald-600" />
-                  <span>{successMsg}</span>
-                </div>
-              )}
 
               <form onSubmit={handleSubmit} className="space-y-4">
                 
@@ -585,7 +586,7 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
                       id="auth-email"
                       type="email"
                       required
-                      placeholder="love@gmail.com or personal"
+                      placeholder="alex@gmail.com or personal"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       className="w-full pl-9 pr-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 placeholder-zinc-400 text-zinc-800"

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { db, auth } from '../firebase';
 import { sendPasswordResetEmail } from 'firebase/auth';
+import { useToast } from '../context/ToastContext';
 import { 
   collection, doc, getDocs, updateDoc, deleteDoc, runTransaction, 
   setDoc, query, orderBy, serverTimestamp, writeBatch, getDoc 
@@ -126,9 +127,12 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
     rating: '5.0',
     providers: 'M-Pesa, MTN Mobile Money',
     rate: '3750.0',
-    type: 'both' as 'buy' | 'sell' | 'both'
+    type: 'both' as 'buy' | 'sell' | 'both',
+    minLimit: '500',
+    maxLimit: '500000'
   });
 
+  const toast = useToast();
   const [customWipeUID, setCustomWipeUID] = useState('');
   const [loading, setLoading] = useState(true);
   const [actioning, setActioning] = useState<string | null>(null);
@@ -404,9 +408,13 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
 
   const showFeedback = (type: 'success' | 'error' | 'info', text: string) => {
     setFeedbackMsg({ type, text });
-    setTimeout(() => {
-      setFeedbackMsg(null);
-    }, 5000);
+    if (type === 'success') {
+      toast.success(text, 'Success');
+    } else if (type === 'error') {
+      toast.error(text, 'Error');
+    } else {
+      toast.info(text, 'System Notice');
+    }
   };
 
   // Helper date formatter
@@ -765,7 +773,9 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
       rating: m.rating.toString(),
       providers: m.providers.join(', '),
       rate: m.rate.toString(),
-      type: m.type || 'both'
+      type: m.type || 'both',
+      minLimit: (m.minLimit !== undefined ? m.minLimit : 500).toString(),
+      maxLimit: (m.maxLimit !== undefined ? m.maxLimit : 500000).toString()
     });
   };
 
@@ -778,7 +788,9 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
       rating: '5.0',
       providers: 'M-Pesa, MTN Mobile Money',
       rate: '3750.0',
-      type: 'both'
+      type: 'both',
+      minLimit: '500',
+      maxLimit: '500000'
     });
   };
 
@@ -800,7 +812,9 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
         rating: parseFloat(merchantForm.rating) || 5.0,
         providers: providersList,
         rate: parseFloat(merchantForm.rate) || 1.0,
-        type: merchantForm.type
+        type: merchantForm.type,
+        minLimit: parseFloat(merchantForm.minLimit) || 0,
+        maxLimit: parseFloat(merchantForm.maxLimit) || 0
       });
 
       showFeedback('success', `P2P Merchant "${merchantForm.name}" successfully saved.`);
@@ -1012,31 +1026,7 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
   return (
     <div id="admin-panel" className="min-h-screen bg-slate-900 text-zinc-100 font-sans pb-24">
       
-      {/* Feedback Messages */}
-      {feedbackMsg && (
-        <div 
-          id="admin-alert-toast" 
-          className={`fixed top-16 right-4 left-4 sm:left-auto sm:w-96 p-4 z-50 rounded-2xl shadow-2xl border text-xs flex gap-2 animate-fade-in ${
-            feedbackMsg.type === 'success' 
-              ? 'bg-emerald-950/90 border-emerald-500/30 text-emerald-300' 
-              : feedbackMsg.type === 'info'
-              ? 'bg-zinc-950/95 border-cyan-500/30 text-cyan-300'
-              : 'bg-red-950/90 border-red-500/30 text-red-300'
-          }`}
-        >
-          <ShieldAlert className="shrink-0" size={16} />
-          <div>
-            <p className="font-bold uppercase tracking-wider">
-              {feedbackMsg.type === 'success' 
-                ? 'Operation Success' 
-                : feedbackMsg.type === 'info'
-                ? 'System Alert'
-                : 'Operation Failed'}
-            </p>
-            <p className="mt-0.5 font-medium">{feedbackMsg.text}</p>
-          </div>
-        </div>
-      )}
+
 
       {/* Admin Header */}
       <div className="bg-slate-800 border-b border-slate-700/80 sticky top-0 z-40 px-4 py-3.5 flex justify-between items-center">
@@ -2424,6 +2414,35 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                     </div>
                   </div>
 
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-zinc-500 font-bold">Min Trade Limit (Shs)</label>
+                      <input
+                        id="merchant-min-limit-input"
+                        type="number"
+                        step="any"
+                        required
+                        placeholder="500"
+                        value={merchantForm.minLimit}
+                        onChange={(e) => setMerchantForm({ ...merchantForm, minLimit: e.target.value })}
+                        className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 text-white font-mono"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-zinc-500 font-bold">Max Trade Limit (Shs)</label>
+                      <input
+                        id="merchant-max-limit-input"
+                        type="number"
+                        step="any"
+                        required
+                        placeholder="500000"
+                        value={merchantForm.maxLimit}
+                        onChange={(e) => setMerchantForm({ ...merchantForm, maxLimit: e.target.value })}
+                        className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 text-white font-mono"
+                      />
+                    </div>
+                  </div>
+
                   <div className="space-y-1">
                     <label className="text-[10px] text-zinc-500 font-bold">Payment Providers (comma-separated)</label>
                     <input
@@ -2468,6 +2487,9 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                           </div>
                           <span className="text-[10px] text-zinc-500 block font-mono mt-0.5">
                             No: {m.paymentNumber} | Rate: {m.rate?.toLocaleString()} Shs/USD
+                          </span>
+                          <span className="text-[10px] text-amber-500/90 font-mono block mt-0.5">
+                            Limits: Min {(m.minLimit || 500).toLocaleString()} Shs — Max {(m.maxLimit || 500000).toLocaleString()} Shs
                           </span>
                           <span className="text-[9px] text-zinc-400 block mt-0.5">
                             Providers: {m.providers?.join(', ')}

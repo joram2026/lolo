@@ -9,6 +9,7 @@ import DepositWorkflow from './components/DepositWorkflow';
 import WithdrawalWorkflow from './components/WithdrawalWorkflow';
 import { seedFirestoreIfNeeded } from './seedData';
 import { Sparkles, ArrowLeft, CheckCircle2, ShieldCheck, Heart } from 'lucide-react';
+import { useToast } from './context/ToastContext';
 
 export default function App() {
   const [user, setUser] = useState<any | null>(null);
@@ -165,7 +166,9 @@ export default function App() {
     }
   };
 
+  const toast = useToast();
   const handleTxSuccess = (msg: string) => {
+    toast.success(msg, 'Transaction Request');
     setSuccessMessage(msg);
     navigate('/tx_success');
   };
@@ -200,13 +203,16 @@ export default function App() {
     return <AdminPanel onLogout={handleLogout} />;
   }
 
-  const handleOpenDeposit = (coinSymbol?: string) => {
-    if (coinSymbol) {
-      setDepositCoin(coinSymbol);
-      sessionStorage.setItem('preselected_deposit_coin', coinSymbol);
-      localStorage.setItem('preselected_deposit_coin', coinSymbol);
+  const handleOpenDeposit = (coinSymbol?: any) => {
+    if (typeof coinSymbol === 'string' && coinSymbol.trim()) {
+      const cleanCoin = coinSymbol.trim();
+      setDepositCoin(cleanCoin);
+      sessionStorage.setItem('preselected_deposit_coin', cleanCoin);
+      localStorage.setItem('preselected_deposit_coin', cleanCoin);
     } else {
       setDepositCoin(undefined);
+      sessionStorage.removeItem('preselected_deposit_coin');
+      localStorage.removeItem('preselected_deposit_coin');
     }
     navigate('/deposit');
   };
@@ -249,6 +255,7 @@ export default function App() {
         <WithdrawalWorkflow
           user={user}
           onBack={() => navigate('/dashboard')}
+          onGoToProfile={() => navigate('/profile')}
           onSuccess={() => handleTxSuccess('Your withdrawal request has been placed in the queue or processed successfully.')}
         />
       )}

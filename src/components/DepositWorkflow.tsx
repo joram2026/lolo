@@ -8,6 +8,7 @@ import {
   Upload, Sparkles, MessageSquare, AlertCircle, RefreshCw, Star 
 } from 'lucide-react';
 import { CoinIcon } from './StandardUserDashboard';
+import { useToast } from '../context/ToastContext';
 
 interface DepositWorkflowProps {
   user: any;
@@ -46,9 +47,18 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
   const [p2pTxId] = useState<string>(() => 'ARBITRAGE-P2P-' + Math.floor(1000000 + Math.random() * 9000000));
   const [p2pMessage, setP2pMessage] = useState<string>('');
 
+  const toast = useToast();
   const [loading, setLoading] = useState<boolean>(false);
   const [submitting, setSubmitting] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
+  const [errorState, setErrorState] = useState<string | null>(null);
+
+  const setError = (msg: string | null) => {
+    setErrorState(msg);
+    if (msg) {
+      toast.error(msg, 'Deposit Error');
+    }
+  };
+  const error = errorState;
 
   // Fetch networks & P2P merchants on load
   useEffect(() => {
@@ -78,13 +88,20 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
         });
         setNetworks(netList);
 
-        const rawPreselected = initialCoinSymbol || sessionStorage.getItem('preselected_deposit_coin') || localStorage.getItem('preselected_deposit_coin');
-        if (rawPreselected) {
-          sessionStorage.removeItem('preselected_deposit_coin');
-          localStorage.removeItem('preselected_deposit_coin');
+        const rawPreselected = (typeof initialCoinSymbol === 'string' ? initialCoinSymbol : '') || sessionStorage.getItem('preselected_deposit_coin') || localStorage.getItem('preselected_deposit_coin');
+        sessionStorage.removeItem('preselected_deposit_coin');
+        localStorage.removeItem('preselected_deposit_coin');
 
-          const preselected = rawPreselected.trim().toLowerCase();
+        let rawString = '';
+        if (typeof rawPreselected === 'string') {
+          rawString = rawPreselected;
+        } else if (rawPreselected && typeof rawPreselected === 'object' && 'symbol' in rawPreselected) {
+          rawString = String((rawPreselected as any).symbol || '');
+        }
 
+        const preselected = rawString.trim().toLowerCase();
+
+        if (preselected) {
           const target = netList.find(n => 
             n.id.toLowerCase() === preselected ||
             n.id.toLowerCase() === preselected.replace(/[^a-z0-9]/g, '') ||
@@ -121,6 +138,17 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
         if (merchList.length === 0) {
           merchList = DEFAULT_MERCHANTS;
         }
+        if (typeof navigator !== 'undefined' && !navigator.onLine) {
+          merchList = merchList.map(m => ({
+            ...m,
+            rate: 0,
+            completionRate: 0,
+            completedOrders: 0,
+            minLimit: 0,
+            maxLimit: 0,
+            rating: 0,
+          }));
+        }
         setMerchants(merchList);
       } catch (err) {
         console.error('Error fetching deposit configurations:', err);
@@ -132,21 +160,88 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
     fetchData();
   }, [initialCoinSymbol]);
 
+  // Handle offline mode for P2P merchants
+  useEffect(() => {
+    const applyOfflineMerchants = () => {
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        setMerchants(prev => prev.map(m => ({
+          ...m,
+          rate: 0,
+          completionRate: 0,
+          completedOrders: 0,
+          minLimit: 0,
+          maxLimit: 0,
+          rating: 0,
+        })));
+        setSelectedMerchant(prev => prev ? {
+          ...prev,
+          rate: 0,
+          completionRate: 0,
+          completedOrders: 0,
+          minLimit: 0,
+          maxLimit: 0,
+          rating: 0,
+        } : null);
+      }
+    };
+
+    window.addEventListener('offline', applyOfflineMerchants);
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      applyOfflineMerchants();
+    }
+    return () => {
+      window.removeEventListener('offline', applyOfflineMerchants);
+    };
+  }, []);
+
   // Recalculate USD based on local currency input for P2P BUY
   useEffect(() => {
     if (selectedMerchant && amountShillings) {
       const shillings = parseFloat(amountShillings) || 0;
-      setCalculatedUSD(parseFloat((shillings / selectedMerchant.rate).toFixed(2)));
+      if (!selectedMerchant.rate || selectedMerchant.rate <= 0) {
+        setCalculatedUSD(0);
+      } else {
+        setCalculatedUSD(parseFloat((shillings / selectedMerchant.rate).toFixed(2)));
+      }
     } else {
       setCalculatedUSD(0);
     }
   }, [amountShillings, selectedMerchant]);
 
-  // Copy target wallet address to clipboard
+  // Copy target text to clipboard
   const handleCopy = (text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    if (!text) return;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(() => {
+        setCopied(true);
+        toast.success(`Copied "${text}" to clipboard!`, 'Copied');
+        setTimeout(() => setCopied(false), 2500);
+      }).catch(() => {
+        fallbackCopyTextToClipboard(text);
+      });
+    } else {
+      fallbackCopyTextToClipboard(text);
+    }
+  };
+
+  const fallbackCopyTextToClipboard = (text: string) => {
+    const textArea = document.createElement("textarea");
+    textArea.value = text;
+    textArea.style.top = "0";
+    textArea.style.left = "0";
+    textArea.style.position = "fixed";
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    try {
+      document.execCommand('copy');
+      setCopied(true);
+      toast.success(`Copied "${text}" to clipboard!`, 'Copied');
+      setTimeout(() => setCopied(false), 2500);
+    } catch (err) {
+      toast.error('Failed to copy to clipboard', 'Error');
+    }
+    document.body.removeChild(textArea);
   };
 
   // Process uploaded image file to base64
@@ -262,8 +357,8 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
             {method === 'crypto_coin_select' && 'Select Coin'}
             {method === 'crypto' && 'Crypto Deposit Details'}
             {method === 'crypto_confirm' && 'Upload Deposit Proof'}
-            {method === 'p2p' && 'P2P Merchant Board'}
-            {method === 'p2p_calc' && 'Conversion Calculator'}
+            {method === 'p2p' && 'P2P deposit verified Merchants'}
+            {method === 'p2p_calc' && 'P2P Deposit'}
             {method === 'p2p_instructions' && 'Complete Merchant Payment'}
             {method === 'p2p_confirm' && 'Paste Receipt Verification'}
           </h2>
@@ -273,19 +368,14 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
             {method === 'crypto' && `Configure network and transfer details for ${selectedCoin ? formatCoinName(selectedCoin.tokenName) : ''}`}
             {method === 'crypto_confirm' && 'Provide screenshot evidence of asset transfer'}
             {method === 'p2p' && 'Buy USD from active verified agents'}
-            {method === 'p2p_calc' && `Calculate conversion rates for ${selectedMerchant?.name}`}
+            {method === 'p2p_calc' && `Conversion buying rates with ${selectedMerchant?.name}`}
             {method === 'p2p_instructions' && 'Transfer funds to merchant payment details'}
             {method === 'p2p_confirm' && 'Paste raw SMS/receipt for instant escrow check'}
           </p>
         </div>
       </div>
 
-      {error && (
-        <div id="deposit-error-banner" className="p-3 mb-5 bg-red-50 border border-red-200 text-red-800 rounded-xl text-xs flex items-start gap-2.5">
-          <AlertCircle size={16} className="mt-0.5 shrink-0" />
-          <span>{error}</span>
-        </div>
-      )}
+
 
       {loading && (
         <div className="flex flex-col items-center justify-center min-h-[250px] gap-3">
@@ -309,8 +399,8 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
                     <Coins size={20} />
                   </div>
                   <div>
-                    <h3 className="font-bold text-sm text-zinc-800">Crypto Stablecoin Deposit</h3>
-                    <p className="text-xs text-zinc-500 mt-0.5">Deposit USDT or USDC on Tron, Ethereum, or Solana</p>
+                    <h3 className="font-bold text-sm text-zinc-800">Crypto deposit</h3>
+                    <p className="text-xs text-zinc-500 mt-0.5">Deposit Crypto Coins from other exchanges</p>
                   </div>
                 </div>
                 <ChevronRight size={16} className="text-zinc-400" />
@@ -326,8 +416,8 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
                     <Users size={20} />
                   </div>
                   <div>
-                    <h3 className="font-bold text-sm text-zinc-800">P2P Escrow Deposit (Mobile Money)</h3>
-                    <p className="text-xs text-zinc-500 mt-0.5">Pay local currency (KES/UGX) to buy USD instantly</p>
+                    <h3 className="font-bold text-sm text-zinc-800">P2P Deposit (Mpesa, Airtel Money, Bank)</h3>
+                    <p className="text-xs text-zinc-500 mt-0.5">Pay local currency (Ksh) to buy USD instantly</p>
                   </div>
                 </div>
                 <ChevronRight size={16} className="text-zinc-400" />
@@ -603,6 +693,9 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
                             <div className="text-base font-black text-amber-600 font-mono mt-0.5">
                               {merch.rate.toLocaleString()} Shs <span className="text-xs text-zinc-400 font-normal">/ 1 USD</span>
                             </div>
+                            <div className="text-[10px] text-zinc-500 font-medium mt-1">
+                              Limits: <span className="font-mono font-bold text-zinc-700">{(merch.minLimit || 500).toLocaleString()} Shs - {(merch.maxLimit || 500000).toLocaleString()} Shs</span>
+                            </div>
                             <div className="flex gap-1.5 mt-1.5">
                               {merch.providers.map(prov => (
                                 <span key={prov} className="text-[9px] px-2 py-0.5 bg-zinc-50 border border-zinc-200 text-zinc-500 rounded-md font-semibold">
@@ -616,6 +709,7 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
                             id={`p2p-buy-btn-${merch.id}`}
                             onClick={() => {
                               setSelectedMerchant(merch);
+                              setAmountShillings((merch.minLimit || 500).toString());
                               setMethod('p2p_calc');
                             }}
                             className="px-5 py-2 bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600 rounded-xl text-xs font-bold shadow-md shadow-amber-500/10 cursor-pointer"
@@ -643,9 +737,11 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
                     <span>{selectedMerchant.rating}</span>
                   </div>
                 </div>
-                <div className="mt-2 text-xs text-zinc-500">
-                  <span>Merchant Rate: </span>
-                  <span className="font-mono font-bold text-zinc-700">{selectedMerchant.rate} Shs = 1.00 USD</span>
+                <div className="mt-2 text-xs text-zinc-500 flex justify-between items-center">
+                  <span>Merchant Rate: <strong className="font-mono text-zinc-700">{selectedMerchant.rate} Shs = 1.00 USD</strong></span>
+                  <span className="text-[10px] font-mono text-amber-600 font-bold bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                    Min {(selectedMerchant.minLimit || 500).toLocaleString()} - Max {(selectedMerchant.maxLimit || 500000).toLocaleString()} Shs
+                  </span>
                 </div>
               </div>
 
@@ -654,7 +750,9 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
                 <div className="space-y-1.5">
                   <div className="flex justify-between items-center">
                     <label className="text-xs font-semibold text-zinc-500">Amount (Local Currency - Shillings)</label>
-                    <span className="text-[10px] text-zinc-400 font-semibold">Max Limit: 1,000,000 Shs</span>
+                    <span className="text-[10px] text-zinc-500 font-semibold">
+                      Max: {(selectedMerchant.maxLimit || 500000).toLocaleString()} Shs
+                    </span>
                   </div>
                   <div className="relative">
                     <input
@@ -668,7 +766,7 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
                     />
                     <button
                       type="button"
-                      onClick={() => setAmountShillings('1000000')}
+                      onClick={() => setAmountShillings((selectedMerchant.maxLimit || 500000).toString())}
                       className="absolute inset-y-0 right-0 pr-3 flex items-center"
                     >
                       <span className="bg-amber-500/15 hover:bg-amber-500/25 text-amber-600 font-black text-[10px] px-2.5 py-1 rounded-md border border-amber-500/30 transition-all cursor-pointer">
@@ -690,7 +788,21 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
               <button
                 id="p2p-proceed-to-pay"
                 disabled={calculatedUSD <= 0}
-                onClick={() => setMethod('p2p_instructions')}
+                onClick={() => {
+                  setError(null);
+                  const shillings = parseFloat(amountShillings) || 0;
+                  const min = selectedMerchant.minLimit || 500;
+                  const max = selectedMerchant.maxLimit || 500000;
+                  if (shillings < min) {
+                    setError(`Minimum order limit for ${selectedMerchant.name} is ${min.toLocaleString()} Shs.`);
+                    return;
+                  }
+                  if (shillings > max) {
+                    setError(`Maximum order limit for ${selectedMerchant.name} is ${max.toLocaleString()} Shs.`);
+                    return;
+                  }
+                  setMethod('p2p_instructions');
+                }}
                 className="w-full flex items-center justify-between py-3 px-5 bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600 disabled:bg-zinc-200 disabled:text-zinc-400 rounded-xl text-sm font-bold transition-all shadow-md mt-6 cursor-pointer"
               >
                 <span>Proceed to Pay</span>
@@ -711,15 +823,17 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
                     <span className="font-bold text-zinc-800">{selectedMerchant.name}</span>
                   </div>
                   <div className="flex justify-between items-center text-xs border-b border-zinc-100 pb-2">
-                    <span className="text-zinc-500">Merchant Payment Phone</span>
+                    <span className="text-zinc-500">Payment Number</span>
                     <div className="flex items-center gap-1.5">
                       <span className="font-mono font-bold text-amber-600">{selectedMerchant.paymentNumber}</span>
                       <button 
                         id="copy-merchant-phone"
+                        type="button"
                         onClick={() => handleCopy(selectedMerchant.paymentNumber)}
-                        className="text-zinc-400 hover:text-zinc-600 p-0.5"
+                        className="text-zinc-400 hover:text-amber-600 p-1.5 rounded-lg hover:bg-amber-50 transition-colors flex items-center justify-center cursor-pointer"
+                        title="Copy Payment Number"
                       >
-                        <Copy size={12} />
+                        {copied ? <Check size={14} className="text-emerald-600" /> : <Copy size={14} />}
                       </button>
                     </div>
                   </div>
@@ -733,8 +847,8 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
                   </div>
                 </div>
 
-                <div className="p-3 bg-amber-50 border border-amber-100 text-amber-800 text-[10px] rounded-xl leading-relaxed">
-                  <strong>Notice:</strong> Please send the exact amount of local money. Include the reference <strong>{p2pTxId}</strong> in the payment description if your mobile wallet supports it.
+                <div className="p-3.5 bg-amber-50 border border-amber-200/80 text-amber-900 text-xs rounded-xl leading-relaxed">
+                  <strong>Notice:</strong> Please send the exact amount of shillings to the payment Number above. Use Mpesa, Airtel Money or Bank Transfer to make payment. Once you have made payment, copy the payment message and click the button below to continue.
                 </div>
               </div>
 

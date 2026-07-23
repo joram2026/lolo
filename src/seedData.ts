@@ -102,7 +102,9 @@ export const DEFAULT_MERCHANTS: P2PMerchant[] = [
     rating: 4.9,
     providers: ['M-Pesa', 'Airtel Money'],
     rate: 135.0, // 1 USD = 135 KES
-    type: 'both'
+    type: 'both',
+    minLimit: 500,
+    maxLimit: 500000
   },
   {
     id: 'uganda-escrow',
@@ -111,7 +113,9 @@ export const DEFAULT_MERCHANTS: P2PMerchant[] = [
     rating: 4.8,
     providers: ['MTN Mobile Money', 'Airtel Money'],
     rate: 3750.0, // 1 USD = 3750 UGX
-    type: 'both'
+    type: 'both',
+    minLimit: 10000,
+    maxLimit: 10000000
   },
   {
     id: 'safaricom-pro',
@@ -120,7 +124,9 @@ export const DEFAULT_MERCHANTS: P2PMerchant[] = [
     rating: 4.95,
     providers: ['M-Pesa'],
     rate: 134.50,
-    type: 'both'
+    type: 'both',
+    minLimit: 1000,
+    maxLimit: 300000
   }
 ];
 

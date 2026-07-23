@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { db } from '../firebase';
 import { doc, getDoc, onSnapshot, collection, query, where, getDocs, updateDoc, addDoc } from 'firebase/firestore';
 import { UserAccount, Transaction, CryptoPrice, ArbitrageConfig } from '../types';
+import { useToast } from '../context/ToastContext';
 import NewsCarousel from './NewsCarousel';
 import ActivityLog from './ActivityLog';
 import { 
@@ -281,6 +282,9 @@ export default function StandardUserDashboard({
   navigate
 }: StandardUserDashboardProps) {
   
+  // Toast Hook
+  const toast = useToast();
+
   // Real-time state
   const [profile, setProfile] = useState<UserAccount | null>(null);
   const [userTransactions, setUserTransactions] = useState<Transaction[]>([]);
@@ -295,11 +299,27 @@ export default function StandardUserDashboard({
   const [investmentAmount, setInvestmentAmount] = useState<string>('');
   const [investmentDays, setInvestmentDays] = useState<string>('5');
   const [investmentLoading, setInvestmentLoading] = useState<boolean>(false);
-  const [investmentError, setInvestmentError] = useState<string | null>(null);
-  const [investmentSuccess, setInvestmentSuccess] = useState<string | null>(null);
+  const [investmentErrorState, setInvestmentErrorState] = useState<string | null>(null);
+  const [investmentSuccessState, setInvestmentSuccessState] = useState<string | null>(null);
+
+  const setInvestmentError = (msg: string | null) => {
+    setInvestmentErrorState(msg);
+    if (msg) toast.error(msg, 'Investment Error');
+  };
+  const setInvestmentSuccess = (msg: string | null) => {
+    setInvestmentSuccessState(msg);
+    if (msg) toast.success(msg, 'Investment Success');
+  };
+  const investmentError = investmentErrorState;
+  const investmentSuccess = investmentSuccessState;
   
   // Live fluctuating crypto prices state
-  const [cryptoPrices, setCryptoPrices] = useState<CryptoPrice[]>(STATIC_CRYPTO);
+  const [cryptoPrices, setCryptoPrices] = useState<CryptoPrice[]>(() => {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      return STATIC_CRYPTO.map(c => ({ ...c, price: 0, change24h: 0 }));
+    }
+    return STATIC_CRYPTO;
+  });
   
   // Selected coin for high-fidelity interactive modal/chart details
   const [selectedCoin, setSelectedCoin] = useState<CryptoPrice | null>(null);
@@ -405,7 +425,15 @@ export default function StandardUserDashboard({
   }, [selectedCoin?.symbol, chartTimeframe, cryptoPrices]);
   const [quickTradeType, setQuickTradeType] = useState<'BUY' | 'SELL'>('BUY');
   const [quickTradeAmount, setQuickTradeAmount] = useState<string>('');
-  const [tradeMessage, setTradeMessage] = useState<{ text: string; isError: boolean } | null>(null);
+  const [tradeMessageState, setTradeMessageState] = useState<{ text: string; isError: boolean } | null>(null);
+  const setTradeMessage = (msg: { text: string; isError: boolean } | null) => {
+    setTradeMessageState(msg);
+    if (msg) {
+      if (msg.isError) toast.error(msg.text, 'Trade Error');
+      else toast.success(msg.text, 'Trade Executed');
+    }
+  };
+  const tradeMessage = tradeMessageState;
   const [tradeLoading, setTradeLoading] = useState(false);
 
   // Bottom Sticky Nav Tab
@@ -453,27 +481,29 @@ export default function StandardUserDashboard({
         console.warn("Crypto prices fetch timed out. Falling back to default offline prices.");
         setIsUsingFallbackPrices(true);
         setPricesLoadError("Network latency detected. Displaying offline rates.");
-        setCryptoPrices(prev => prev.map(c => {
-          if (typeof navigator !== 'undefined' && !navigator.onLine) {
-            return { ...c, price: 0, change24h: 0 };
-          }
-          const fallback = STATIC_CRYPTO.find(x => x.symbol === c.symbol);
-          return fallback ? { ...c, price: fallback.price, change24h: fallback.change24h } : c;
-        }));
+        setCryptoPrices(prev => prev.map(c => ({ ...c, price: 0, change24h: 0 })));
       }
     }, 10000); // 10 seconds timeout
 
     return () => clearTimeout(timer);
   }, [pricesLoaded]);
 
+  // Ensure prices are forced to 0 whenever using fallback/offline rates
+  useEffect(() => {
+    if (isUsingFallbackPrices || (typeof navigator !== 'undefined' && !navigator.onLine)) {
+      setCryptoPrices(prev => prev.map(c => ({ ...c, price: 0, change24h: 0 })));
+    }
+  }, [isUsingFallbackPrices]);
+
   // Listen to network status (online/offline)
   useEffect(() => {
     const handleOnline = () => {
       setPricesLoaded(false);
+      toast.success('Connection restored! Re-syncing live market rates.', 'Online');
     };
     const handleOffline = () => {
       setIsUsingFallbackPrices(true);
-      setPricesLoadError("No internet connection detected. Offline mode activated.");
+      toast.warning('No internet connection. Offline mode activated.', 'Offline');
       setCryptoPrices(prev => prev.map(c => ({ ...c, price: 0, change24h: 0 })));
     };
 
@@ -533,7 +563,8 @@ export default function StandardUserDashboard({
 
     const pricesCol = collection(db, 'crypto_prices');
     const unsubscribePrices = onSnapshot(pricesCol, (snapshot) => {
-      if (!snapshot.empty) {
+      const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+      if (!snapshot.empty && !isOffline) {
         const fetched = snapshot.docs.map(doc => doc.data() as CryptoPrice);
         const order = ['USDT', 'USDC', 'BTC', 'ETH', 'SOL', 'BNB', 'XRP', 'WLD', 'TRX', 'DOGE'];
         // Sort according to standard order
@@ -544,26 +575,18 @@ export default function StandardUserDashboard({
         setPricesLoadError(null);
       } else {
         setIsUsingFallbackPrices(true);
-        setPricesLoadError("No live prices found in database. Using default offline rates.");
-        setCryptoPrices(prev => prev.map(c => {
-          if (typeof navigator !== 'undefined' && !navigator.onLine) {
-            return { ...c, price: 0, change24h: 0 };
-          }
-          const fallback = STATIC_CRYPTO.find(x => x.symbol === c.symbol);
-          return fallback ? { ...c, price: fallback.price, change24h: fallback.change24h } : c;
-        }));
+        if (isOffline) {
+          setPricesLoadError("No internet connection detected. Offline mode activated.");
+        } else {
+          setPricesLoadError("No live prices found in database. Using default offline rates.");
+        }
+        setCryptoPrices(prev => prev.map(c => ({ ...c, price: 0, change24h: 0 })));
       }
     }, (err) => {
       console.error("Error listening to crypto prices:", err);
       setIsUsingFallbackPrices(true);
       setPricesLoadError("Failed to fetch live prices from server. Using offline rates.");
-      setCryptoPrices(prev => prev.map(c => {
-        if (typeof navigator !== 'undefined' && !navigator.onLine) {
-          return { ...c, price: 0, change24h: 0 };
-        }
-        const fallback = STATIC_CRYPTO.find(x => x.symbol === c.symbol);
-        return fallback ? { ...c, price: fallback.price, change24h: fallback.change24h } : c;
-      }));
+      setCryptoPrices(prev => prev.map(c => ({ ...c, price: 0, change24h: 0 })));
     });
 
     const invCol = collection(db, 'investments');
@@ -734,7 +757,7 @@ export default function StandardUserDashboard({
 
     const daysVal = parseInt(investmentDays);
     if (isNaN(daysVal) || daysVal < 5) {
-      setInvestmentError("Minimum lock duration is 5 days.");
+      setInvestmentError("Minimum investment duration is 5 days.");
       return;
     }
 
@@ -1095,7 +1118,15 @@ export default function StandardUserDashboard({
   };
 
   const [swapLoading, setSwapLoading] = useState(false);
-  const [swapMessage, setSwapMessage] = useState<{ text: string; isError: boolean } | null>(null);
+  const [swapMessageState, setSwapMessageState] = useState<{ text: string; isError: boolean } | null>(null);
+  const setSwapMessage = (msg: { text: string; isError: boolean } | null) => {
+    setSwapMessageState(msg);
+    if (msg) {
+      if (msg.isError) toast.error(msg.text, 'Swap Error');
+      else toast.success(msg.text, 'Swap Successful');
+    }
+  };
+  const swapMessage = swapMessageState;
 
   const handleSwapConvert = async () => {
     setSwapMessage(null);
@@ -1870,17 +1901,7 @@ export default function StandardUserDashboard({
               )}
             </div>
 
-            {/* Response alerts */}
-            {tradeMessage && (
-              <div className={`p-3.5 rounded-xl border text-xs flex items-start gap-2.5 ${
-                tradeMessage.isError 
-                  ? 'bg-red-500/10 border-red-500/20 text-red-400' 
-                  : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
-              }`}>
-                <AlertCircle size={15} className="mt-0.5 shrink-0" />
-                <span className="leading-relaxed font-medium">{tradeMessage.text}</span>
-              </div>
-            )}
+
 
             {/* Submission Button */}
             <button
@@ -2732,7 +2753,7 @@ export default function StandardUserDashboard({
                 <div>
                   <h3 className={`text-sm font-black tracking-tight flex items-center gap-1.5 ${isLightTheme ? 'text-zinc-800' : 'text-zinc-300'}`}>
                     <ArrowRightLeft size={16} className={isLightTheme ? 'text-amber-500' : 'text-emerald-400'} />
-                    Quick Converter Simulator
+                    Quick Converter
                   </h3>
                   <p className={`text-xs mt-0.5 ${isLightTheme ? 'text-zinc-400' : 'text-zinc-500'}`}>Learn stablecoin rates and instantly swap between token balances.</p>
                 </div>
@@ -2829,17 +2850,7 @@ export default function StandardUserDashboard({
                     </div>
                   )}
 
-                  {/* Messages feedback */}
-                  {swapMessage && (
-                    <div className={`p-3.5 rounded-xl border text-xs flex items-start gap-2.5 ${
-                      swapMessage.isError 
-                        ? (isLightTheme ? 'bg-red-50 border-red-200 text-red-800' : 'bg-red-500/10 border-red-500/20 text-red-400') 
-                        : (isLightTheme ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400')
-                    }`}>
-                      <AlertCircle size={15} className="mt-0.5 shrink-0" />
-                      <span className="leading-relaxed font-medium">{swapMessage.text}</span>
-                    </div>
-                  )}
+
 
                   {/* Execution Button */}
                   <button
@@ -3267,23 +3278,7 @@ export default function StandardUserDashboard({
                       <p className={`text-[11px] mt-0.5 ${isLightTheme ? 'text-zinc-400' : 'text-zinc-500'}`}>Invest in Crypto and Earn daily Profits</p>
                     </div>
 
-                    {/* Display Alert Message feedback */}
-                    {investmentSuccess && (
-                      <div className={`p-3 border rounded-xl text-xs flex gap-2 ${
-                        isLightTheme ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
-                      }`}>
-                        <Check size={14} className="shrink-0 mt-0.5" />
-                        <span>{investmentSuccess}</span>
-                      </div>
-                    )}
-                    {investmentError && (
-                      <div className={`p-3 border rounded-xl text-xs flex gap-2 ${
-                        isLightTheme ? 'bg-red-50 border-red-200 text-red-800' : 'bg-red-500/10 border-red-500/20 text-red-400'
-                      }`}>
-                        <AlertCircle size={14} className="shrink-0 mt-0.5" />
-                        <span>{investmentError}</span>
-                      </div>
-                    )}
+
 
                     {/* Coins Cards Grid */}
                     <div className="grid grid-cols-2 gap-3.5">
@@ -3644,7 +3639,7 @@ export default function StandardUserDashboard({
                       </div>
 
                       <div className="space-y-1.5">
-                        <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block">Lock Duration (Days)</label>
+                        <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block">Investment Duration (Days)</label>
                         <input
                           id="investment-days-input"
                           type="number"

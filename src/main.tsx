@@ -2,6 +2,7 @@ import {StrictMode} from 'react';
 import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
+import { ToastProvider } from './context/ToastContext.tsx';
 
 // Register Service Worker for Progressive Web App (PWA) support on Android/iOS
 if ('serviceWorker' in navigator) {
@@ -45,6 +46,8 @@ if ('serviceWorker' in navigator) {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <ToastProvider>
+      <App />
+    </ToastProvider>
   </StrictMode>,
 );

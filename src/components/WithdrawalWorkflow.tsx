@@ -2,20 +2,33 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { collection, addDoc, getDoc, getDocs, doc, updateDoc, runTransaction, serverTimestamp, query, where } from 'firebase/firestore';
 import { CryptoNetwork, P2PMerchant, UserAccount, Transaction } from '../types';
+import { DEFAULT_MERCHANTS } from '../seedData';
 import { 
   ArrowLeft, Send, Users, ShieldAlert, ChevronRight, Check, 
-  HelpCircle, AlertCircle, RefreshCw, Star, ArrowUpRight, DollarSign, Lock
+  HelpCircle, AlertCircle, RefreshCw, Star, ArrowUpRight, DollarSign, Lock,
+  Key, ArrowRight, X
 } from 'lucide-react';
 import { CoinIcon } from './StandardUserDashboard';
+import { useToast } from '../context/ToastContext';
 
 interface WithdrawalWorkflowProps {
   user: any;
   onBack: () => void;
   onSuccess: () => void;
+  onGoToProfile?: () => void;
 }
 
-export default function WithdrawalWorkflow({ user, onBack, onSuccess }: WithdrawalWorkflowProps) {
+export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProfile }: WithdrawalWorkflowProps) {
   const [method, setMethod] = useState<'selection' | 'crypto_coin_select' | 'crypto' | 'p2p' | 'p2p_calc' | 'p2p_instructions' | 'p2p_pin_confirm' | 'crypto_pin_confirm'>('selection');
+
+  const handleGoToPinSettings = () => {
+    localStorage.setItem('profile_subpage', 'pin');
+    if (onGoToProfile) {
+      onGoToProfile();
+    } else {
+      onBack();
+    }
+  };
 
   const formatCoinName = (tokenName: string) => {
     if (!tokenName) return '';
@@ -45,10 +58,24 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess }: Withdraw
   const [p2pUSDAmount, setP2pUSDAmount] = useState<string>('');
   const [p2pTxId] = useState<string>(() => 'ARBITRAGE-SELL-' + Math.floor(1000000 + Math.random() * 9000000));
 
+  const toast = useToast();
   const [loading, setLoading] = useState<boolean>(false);
   const [submitting, setSubmitting] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
+  const [errorState, setErrorState] = useState<string | null>(null);
+
+  const setError = (msg: string | null) => {
+    setErrorState(msg);
+    if (msg) {
+      toast.error(msg, 'Withdrawal Error');
+    }
+  };
+  const error = errorState;
   const [twoFactorCode, setTwoFactorCode] = useState<string>('');
+
+  // Auto-clear error when user switches navigation step, merchant, coin, or input amounts
+  useEffect(() => {
+    setErrorState(null);
+  }, [method, selectedMerchant?.id, selectedCoin?.id, p2pUSDAmount, amountUSD]);
 
   // Fetch latest balance, networks & merchants
   useEffect(() => {
@@ -87,7 +114,21 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess }: Withdraw
 
         const merchCol = collection(db, 'p2p_merchants');
         const merchSnap = await getDocs(merchCol);
-        const merchList = merchSnap.docs.map(doc => doc.data() as P2PMerchant);
+        let merchList = merchSnap.docs.map(doc => doc.data() as P2PMerchant);
+        if (merchList.length === 0) {
+          merchList = DEFAULT_MERCHANTS;
+        }
+        if (typeof navigator !== 'undefined' && !navigator.onLine) {
+          merchList = merchList.map(m => ({
+            ...m,
+            rate: 0,
+            completionRate: 0,
+            completedOrders: 0,
+            minLimit: 0,
+            maxLimit: 0,
+            rating: 0,
+          }));
+        }
         setMerchants(merchList);
       } catch (err) {
         console.error('Error fetching details:', err);
@@ -98,6 +139,40 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess }: Withdraw
     }
     fetchData();
   }, [user]);
+
+  // Handle offline mode for P2P merchants
+  useEffect(() => {
+    const applyOfflineMerchants = () => {
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        setMerchants(prev => prev.map(m => ({
+          ...m,
+          rate: 0,
+          completionRate: 0,
+          completedOrders: 0,
+          minLimit: 0,
+          maxLimit: 0,
+          rating: 0,
+        })));
+        setSelectedMerchant(prev => prev ? {
+          ...prev,
+          rate: 0,
+          completionRate: 0,
+          completedOrders: 0,
+          minLimit: 0,
+          maxLimit: 0,
+          rating: 0,
+        } : null);
+      }
+    };
+
+    window.addEventListener('offline', applyOfflineMerchants);
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      applyOfflineMerchants();
+    }
+    return () => {
+      window.removeEventListener('offline', applyOfflineMerchants);
+    };
+  }, []);
 
   // Submit Crypto Withdrawal (Locks request into Pending Queue, does not deduct balance yet as instructed)
   const handleCryptoWithdrawSubmit = async () => {
@@ -248,8 +323,8 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess }: Withdraw
             {method === 'crypto_coin_select' && 'Select Coin'}
             {method === 'crypto' && 'Crypto Withdrawal Details'}
             {method === 'crypto_pin_confirm' && 'Verify Security PIN'}
-            {method === 'p2p' && 'P2P Sell Board'}
-            {method === 'p2p_calc' && 'P2P Conversion'}
+            {method === 'p2p' && 'P2P withdrawal verified Merchants'}
+            {method === 'p2p_calc' && 'P2P Withdrawal'}
             {method === 'p2p_instructions' && 'Awaiting P2P Escrow Release'}
             {method === 'p2p_pin_confirm' && 'Verify Security PIN'}
           </h2>
@@ -259,7 +334,7 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess }: Withdraw
             {method === 'crypto' && `Configure network and destination for ${selectedCoin ? formatCoinName(selectedCoin.tokenName) : ''}`}
             {method === 'crypto_pin_confirm' && 'Enter your 4-digit PIN to authorize withdrawal'}
             {method === 'p2p' && 'Sell USD directly for local shillings'}
-            {method === 'p2p_calc' && `Sell parameters with ${selectedMerchant?.name}`}
+            {method === 'p2p_calc' && `Sell details with ${selectedMerchant?.name}`}
             {method === 'p2p_instructions' && 'Verify payment receipt before releasing escrow'}
             {method === 'p2p_pin_confirm' && 'Enter your 4-digit PIN to release funds'}
           </p>
@@ -275,12 +350,81 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess }: Withdraw
         </div>
       )}
 
-      {error && (
-        <div id="withdraw-error-banner" className="p-3 mb-5 bg-red-50 border border-red-200 text-red-800 rounded-xl text-xs flex items-start gap-2.5">
-          <AlertCircle size={16} className="mt-0.5 shrink-0" />
-          <span>{error}</span>
+      {/* Alert banner if user has NOT configured a Wallet Security PIN */}
+      {profile && !profile.walletPassword && (
+        <div id="missing-pin-top-banner" className="p-4 mb-5 bg-amber-50 border border-amber-200 text-zinc-800 rounded-2xl text-xs space-y-3 shadow-sm">
+          <div className="flex items-start gap-3">
+            <div className="p-2 rounded-xl bg-amber-500/20 text-amber-600 shrink-0">
+              <Key size={18} />
+            </div>
+            <div>
+              <h4 className="font-extrabold text-sm text-zinc-900">Security PIN Not Set</h4>
+              <p className="text-xs text-zinc-600 mt-0.5 leading-relaxed">
+                You must set up a 4-digit Wallet Security PIN before you can perform any withdrawals.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            id="setup-pin-top-btn"
+            onClick={handleGoToPinSettings}
+            className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-amber-500/10 hover:from-amber-600 hover:to-orange-600 cursor-pointer"
+          >
+            <Key size={14} />
+            <span>Set Up Security PIN Now</span>
+            <ArrowRight size={14} />
+          </button>
         </div>
       )}
+
+      {/* Inline error callout with direct PIN action buttons */}
+      {error && (
+        <div id="withdrawal-error-banner" className="p-3.5 mb-5 bg-red-50 border border-red-200 text-red-800 rounded-2xl text-xs space-y-2.5 shadow-sm relative">
+          <div className="flex items-start justify-between gap-2.5">
+            <div className="flex items-start gap-2.5 pr-2">
+              <AlertCircle size={16} className="mt-0.5 shrink-0 text-red-600" />
+              <span className="font-semibold text-xs leading-snug">{error}</span>
+            </div>
+            <button
+              type="button"
+              id="dismiss-withdrawal-error-btn"
+              onClick={() => setErrorState(null)}
+              className="p-1 hover:bg-red-100 rounded-lg text-red-600 transition-colors cursor-pointer shrink-0"
+              title="Dismiss notification"
+            >
+              <X size={14} />
+            </button>
+          </div>
+
+          {!profile?.walletPassword && (
+            <button
+              type="button"
+              id="error-setup-pin-redirect-btn"
+              onClick={handleGoToPinSettings}
+              className="w-full flex items-center justify-center gap-2 py-2 px-3 bg-red-600 text-white rounded-xl text-xs font-bold hover:bg-red-700 transition-all cursor-pointer shadow-sm"
+            >
+              <Key size={13} />
+              <span>Set Up Security PIN in Settings</span>
+              <ArrowRight size={13} />
+            </button>
+          )}
+
+          {profile?.walletPassword && (error.toLowerCase().includes('pin') || error.toLowerCase().includes('incorrect')) && (
+            <button
+              type="button"
+              id="error-change-pin-redirect-btn"
+              onClick={handleGoToPinSettings}
+              className="w-full flex items-center justify-center gap-2 py-2 px-3 bg-amber-600 text-white rounded-xl text-xs font-bold hover:bg-amber-700 transition-all cursor-pointer shadow-sm"
+            >
+              <Key size={13} />
+              <span>Change or Reset Your Security PIN</span>
+              <ArrowRight size={13} />
+            </button>
+          )}
+        </div>
+      )}
+
+
 
       {loading && (
         <div className="flex flex-col items-center justify-center min-h-[250px] gap-3">
@@ -305,8 +449,8 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess }: Withdraw
                     <Send size={20} className="rotate-[-45deg]" />
                   </div>
                   <div>
-                    <h3 className="font-bold text-sm text-zinc-800">Withdraw to External Crypto Wallet</h3>
-                    <p className="text-xs text-zinc-500 mt-0.5">Submit to admin queue for direct stablecoin payouts</p>
+                    <h3 className="font-bold text-sm text-zinc-800">Crypto withdrawal</h3>
+                    <p className="text-xs text-zinc-500 mt-0.5">Withdraw Crypto Coins to other exchanges</p>
                   </div>
                 </div>
                 <ChevronRight size={16} className="text-zinc-400" />
@@ -323,8 +467,8 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess }: Withdraw
                     <Users size={20} />
                   </div>
                   <div>
-                    <h3 className="font-bold text-sm text-zinc-800">Sell USD to Local P2P Merchants</h3>
-                    <p className="text-xs text-zinc-500 mt-0.5">Cash out USD directly for local shillings (Instant Release)</p>
+                    <h3 className="font-bold text-sm text-zinc-800">P2P Withdrawal (Mpesa, Airtel Money, Bank)</h3>
+                    <p className="text-xs text-zinc-500 mt-0.5">Receive local currency (Ksh) by selling USD instantly</p>
                   </div>
                 </div>
                 <ChevronRight size={16} className="text-zinc-400" />
@@ -461,7 +605,7 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess }: Withdraw
                   }
                   const availableBalance = Math.max(0, (profile?.balance || 0) - lockedUSDT);
                   if (usdVal > availableBalance) {
-                    setError(`Insufficient available balance. You have $${availableBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })} available ($${lockedUSDT.toLocaleString(undefined, { minimumFractionDigits: 2 })} USDT is locked in MMF).`);
+                    setError('Insufficient funds');
                     return;
                   }
                   if (!destAddress.trim()) {
@@ -536,6 +680,15 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess }: Withdraw
                     onChange={(e) => setWalletPIN(e.target.value.replace(/\D/g, ''))}
                     className="w-32 mx-auto px-4 py-3 bg-zinc-50 border border-zinc-250 rounded-xl text-center text-lg font-mono tracking-widest focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 text-zinc-800 block"
                   />
+                  <button
+                    type="button"
+                    id="crypto-forgot-pin-btn"
+                    onClick={handleGoToPinSettings}
+                    className="mt-2 text-amber-600 hover:text-amber-700 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer mx-auto"
+                  >
+                    <Key size={13} />
+                    <span>Wrong or forgot PIN? Change PIN in Settings</span>
+                  </button>
                 </div>
 
                 <button
@@ -589,7 +742,7 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess }: Withdraw
                           {/* Rating top-left */}
                           <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-600 font-bold text-[10px]">
                             <Star size={10} className="fill-amber-500 text-amber-500" />
-                            <span>{merch.rating.toFixed(2)} Rating</span>
+                            <span>{(merch.rating || 0).toFixed(2)} Rating</span>
                           </div>
                           {/* Merchant Name top-right */}
                           <span className="text-xs font-black text-zinc-700 tracking-tight">{merch.name}</span>
@@ -599,7 +752,10 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess }: Withdraw
                           <div>
                             <div className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">Payout Rate</div>
                             <div className="text-base font-black text-amber-600 font-mono mt-0.5">
-                              {(merch.rate - 1.5).toLocaleString()} Shs <span className="text-xs text-zinc-400 font-normal">/ 1 USD</span>
+                              {(merch.rate > 1.5 ? merch.rate - 1.5 : 0).toLocaleString()} Shs <span className="text-xs text-zinc-400 font-normal">/ 1 USD</span>
+                            </div>
+                            <div className="text-[10px] text-zinc-500 font-medium mt-1">
+                              Limits: <span className="font-mono font-bold text-zinc-700">{(merch.minLimit || 500).toLocaleString()} Shs - {(merch.maxLimit || 500000).toLocaleString()} Shs</span>
                             </div>
                             <div className="flex gap-1.5 mt-1.5">
                               {merch.providers.map(prov => (
@@ -640,9 +796,11 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess }: Withdraw
                     <span>{selectedMerchant.rating}</span>
                   </div>
                 </div>
-                <div className="mt-2 text-xs text-zinc-500">
-                  <span>Merchant Payout Rate: </span>
-                  <span className="font-mono font-bold text-zinc-750">{(selectedMerchant.rate - 1.5).toFixed(2)} Shs = 1.00 USD</span>
+                <div className="mt-2 text-xs text-zinc-500 flex justify-between items-center">
+                  <span>Payout Rate: <strong className="font-mono text-zinc-750">{(selectedMerchant.rate > 1.5 ? selectedMerchant.rate - 1.5 : 0).toFixed(2)} Shs = 1.00 USD</strong></span>
+                  <span className="text-[10px] font-mono text-amber-600 font-bold bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                    Min {(selectedMerchant.minLimit || 500).toLocaleString()} - Max {(selectedMerchant.maxLimit || 500000).toLocaleString()} Shs
+                  </span>
                 </div>
               </div>
 
@@ -682,7 +840,7 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess }: Withdraw
                   <span className="text-xs text-zinc-500 font-semibold">Exact Shillings you will receive</span>
                   <span className="text-lg font-black text-amber-600 font-mono">
                     {p2pUSDAmount && parseFloat(p2pUSDAmount) > 0 
-                      ? (parseFloat(p2pUSDAmount) * (selectedMerchant.rate - 1.5)).toLocaleString(undefined, { maximumFractionDigits: 2 }) 
+                      ? (parseFloat(p2pUSDAmount) * (selectedMerchant.rate > 1.5 ? selectedMerchant.rate - 1.5 : 0)).toLocaleString(undefined, { maximumFractionDigits: 2 }) 
                       : '0.00'
                     } Shs
                   </span>
@@ -692,8 +850,29 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess }: Withdraw
               {/* Proceed to Sell */}
               <button
                 id="p2p-sell-proceed"
-                disabled={!p2pUSDAmount || parseFloat(p2pUSDAmount) <= 0 || parseFloat(p2pUSDAmount) > Math.max(0, (profile?.balance || 0) - lockedUSDT)}
-                onClick={() => setMethod('p2p_instructions')}
+                disabled={!p2pUSDAmount || parseFloat(p2pUSDAmount) <= 0}
+                onClick={() => {
+                  setError(null);
+                  const usdVal = parseFloat(p2pUSDAmount) || 0;
+                  const availableBalance = Math.max(0, (profile?.balance || 0) - lockedUSDT);
+                  if (usdVal > availableBalance) {
+                    setError('Insufficient funds');
+                    return;
+                  }
+                  const rate = selectedMerchant.rate > 1.5 ? selectedMerchant.rate - 1.5 : 0;
+                  const shillings = usdVal * rate;
+                  const min = selectedMerchant.minLimit || 500;
+                  const max = selectedMerchant.maxLimit || 500000;
+                  if (shillings < min) {
+                    setError(`Minimum payout for ${selectedMerchant.name} is ${min.toLocaleString()} Shs (approx. $${(min / (rate || 1)).toFixed(2)} USD).`);
+                    return;
+                  }
+                  if (shillings > max) {
+                    setError(`Maximum payout for ${selectedMerchant.name} is ${max.toLocaleString()} Shs (approx. $${(max / (rate || 1)).toFixed(2)} USD).`);
+                    return;
+                  }
+                  setMethod('p2p_instructions');
+                }}
                 className="w-full flex items-center justify-between py-3 px-5 bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600 disabled:bg-zinc-200 disabled:text-zinc-400 rounded-xl text-sm font-bold transition-all shadow-md mt-6 cursor-pointer"
               >
                 <span>Proceed to Sell</span>
@@ -716,7 +895,7 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess }: Withdraw
                   <div className="flex justify-between items-center text-xs border-b border-zinc-100 pb-2">
                     <span className="text-zinc-500">Expected Local Shillings</span>
                     <span className="font-mono font-bold text-amber-600">
-                      {(parseFloat(p2pUSDAmount) * (selectedMerchant.rate - 1.5)).toLocaleString()} Shs
+                      {(parseFloat(p2pUSDAmount) * (selectedMerchant.rate > 1.5 ? selectedMerchant.rate - 1.5 : 0)).toLocaleString()} Shs
                     </span>
                   </div>
                   <div className="flex justify-between items-center text-xs border-b border-zinc-100 pb-2">
@@ -730,7 +909,7 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess }: Withdraw
                 </div>
  
                 <div className="p-3 bg-amber-50 border border-amber-100 text-amber-800 text-[10px] rounded-xl leading-relaxed">
-                  <strong>P2P Escrow Protection Notice:</strong> The merchant has been pinged. Once you verify that you have successfully received mobile money of <strong>{(parseFloat(p2pUSDAmount) * (selectedMerchant.rate - 1.5)).toLocaleString()} Shs</strong>, click the confirmation button below to proceed to the secure release screen.
+                  <strong>P2P Escrow Protection Notice:</strong> The merchant has been pinged. Once you verify that you have successfully received mobile money of <strong>{(parseFloat(p2pUSDAmount) * (selectedMerchant.rate > 1.5 ? selectedMerchant.rate - 1.5 : 0)).toLocaleString()} Shs</strong>, click the confirmation button below to proceed to the secure release screen.
                 </div>
               </div>
  
@@ -781,7 +960,7 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess }: Withdraw
                   <div className="flex justify-between items-center text-xs pb-1">
                     <span className="text-zinc-500">Amount Received</span>
                     <span className="font-mono font-bold text-amber-600">
-                      {(parseFloat(p2pUSDAmount) * (selectedMerchant.rate - 1.5)).toLocaleString()} Shs
+                      {(parseFloat(p2pUSDAmount) * (selectedMerchant.rate > 1.5 ? selectedMerchant.rate - 1.5 : 0)).toLocaleString()} Shs
                     </span>
                   </div>
                 </div>
@@ -807,6 +986,15 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess }: Withdraw
                     onChange={(e) => setWalletPIN(e.target.value.replace(/\D/g, ''))}
                     className="w-32 mx-auto px-4 py-3 bg-zinc-50 border border-zinc-250 rounded-xl text-center text-lg font-mono tracking-widest focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 text-zinc-800 block"
                   />
+                  <button
+                    type="button"
+                    id="p2p-forgot-pin-btn"
+                    onClick={handleGoToPinSettings}
+                    className="mt-2 text-amber-600 hover:text-amber-700 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer mx-auto"
+                  >
+                    <Key size={13} />
+                    <span>Wrong or forgot PIN? Change PIN in Settings</span>
+                  </button>
                 </div>
 
                 <button

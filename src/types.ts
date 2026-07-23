@@ -49,6 +49,8 @@ export interface P2PMerchant {
   providers: string[]; // e.g. ["M-Pesa", "Airtel Money"]
   rate: number; // exchange rate (e.g. 130 shillings per USD)
   type: 'buy' | 'sell' | 'both';
+  minLimit?: number; // Minimum transaction limit in Shillings
+  maxLimit?: number; // Maximum transaction limit in Shillings
 }
 
 export interface CryptoPrice {

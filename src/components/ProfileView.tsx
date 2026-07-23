@@ -3,6 +3,7 @@ import { UserAccount } from '../types';
 import { db, auth } from '../firebase';
 import { doc, getDoc, updateDoc, collection, query, where, getDocs, setDoc } from 'firebase/firestore';
 import { updateProfile } from 'firebase/auth';
+import { useToast } from '../context/ToastContext';
 import { 
   Shield, Key, Sparkles, User, Gift, Check, ArrowLeft, AlertCircle, 
   Smartphone, Copy, CheckCircle2, QrCode, Power, Lock, ShieldAlert,
@@ -17,11 +18,21 @@ interface ProfileViewProps {
 }
 
 export default function ProfileView({ user, onBack }: ProfileViewProps) {
+  const toast = useToast();
   const [profile, setProfile] = useState<UserAccount | null>(null);
   const [displayName, setDisplayName] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [messageState, setMessageState] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const setMessage = (msg: { type: 'success' | 'error'; text: string } | null) => {
+    setMessageState(msg);
+    if (msg) {
+      if (msg.type === 'success') toast.success(msg.text, 'Profile');
+      else toast.error(msg.text, 'Profile Error');
+    }
+  };
+  const message = messageState;
 
   // Active sub-page state
   const [activeSubPage, setActiveSubPage] = useState<'menu' | 'personal' | 'referral' | 'pin' | '2fa' | 'support' | 'mobile_app'>(() => {
@@ -37,14 +48,27 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
   const [confirmPin, setConfirmPin] = useState('');
   const [pin2faCode, setPin2faCode] = useState('');
   const [isChangingPin, setIsChangingPin] = useState(false);
-  const [pinMessage, setPinMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [pinMessageState, setPinMessageState] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const setPinMessage = (msg: { type: 'success' | 'error'; text: string } | null) => {
+    setPinMessageState(msg);
+    if (msg) {
+      if (msg.type === 'success') toast.success(msg.text, 'Security PIN');
+      else toast.error(msg.text, 'PIN Error');
+    }
+  };
+  const pinMessage = pinMessageState;
   const [pinSaving, setPinSaving] = useState(false);
 
   // Two-Factor Authentication States
   const [is2faSetupOpen, setIs2faSetupOpen] = useState(false);
   const [temp2faSecret, setTemp2faSecret] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
-  const [verificationError, setVerificationError] = useState<string | null>(null);
+  const [verificationErrorState, setVerificationErrorState] = useState<string | null>(null);
+  const setVerificationError = (msg: string | null) => {
+    setVerificationErrorState(msg);
+    if (msg) toast.error(msg, '2FA Error');
+  };
+  const verificationError = verificationErrorState;
   const [copied, setCopied] = useState(false);
   const [copiedReferral, setCopiedReferral] = useState(false);
 
@@ -629,16 +653,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
             </div>
           </div>
 
-          {message && (
-            <div id="profile-feedback-message" className={`p-3.5 rounded-xl border flex items-center gap-2.5 text-xs text-left ${
-              message.type === 'success' 
-                ? 'bg-emerald-550/10 border-emerald-500/25 text-emerald-650' 
-                : 'bg-red-50 border-red-100 text-red-600'
-            }`}>
-              {message.type === 'success' ? <Check size={16} className="text-emerald-600" /> : <AlertCircle size={16} className="text-red-500" />}
-              <span>{message.text}</span>
-            </div>
-          )}
+
 
           {/* Profile Form */}
           <form onSubmit={handleSave} className="space-y-5">
@@ -1025,16 +1040,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
               The 4-digit security PIN is required to authorize all P2P trades, token deposits, and secure cashouts.
             </p>
 
-            {pinMessage && (
-              <div id="pin-feedback-message" className={`p-3 rounded-xl border flex items-center gap-2.5 text-xs ${
-                pinMessage.type === 'success' 
-                  ? 'bg-emerald-50 border-emerald-100 text-emerald-700' 
-                  : 'bg-red-50 border-red-100 text-red-600'
-              }`}>
-                {pinMessage.type === 'success' ? <Check size={14} className="text-emerald-600" /> : <AlertCircle size={14} className="text-red-500" />}
-                <span>{pinMessage.text}</span>
-              </div>
-            )}
+
 
             {profile?.walletPassword && !isChangingPin ? (
               <div className="bg-[#FFF8E1] border border-zinc-200 shadow-sm rounded-2xl p-4 flex flex-col gap-4 text-left">
