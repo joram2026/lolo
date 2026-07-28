@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { auth } from './firebase';
+import { auth, db } from './firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import AuthPage from './components/AuthPage';
 import AdminPanel from './components/AdminPanel';
@@ -7,7 +7,9 @@ import StandardUserDashboard from './components/StandardUserDashboard';
 import ProfileView from './components/ProfileView';
 import DepositWorkflow from './components/DepositWorkflow';
 import WithdrawalWorkflow from './components/WithdrawalWorkflow';
+import SendWorkflow from './components/SendWorkflow';
 import { seedFirestoreIfNeeded } from './seedData';
+import { syncLiveCryptoPrices } from './utils/cryptoApi';
 import { Sparkles, ArrowLeft, CheckCircle2, ShieldCheck, Heart } from 'lucide-react';
 import { useToast } from './context/ToastContext';
 
@@ -16,6 +18,15 @@ export default function App() {
   const [initializing, setInitializing] = useState(true);
   const [successMessage, setSuccessMessage] = useState('');
   const [depositCoin, setDepositCoin] = useState<string | undefined>(undefined);
+
+  // Background auto-sync of live crypto market prices every 15s (runs regardless of login status)
+  useEffect(() => {
+    syncLiveCryptoPrices(db);
+    const interval = setInterval(() => {
+      syncLiveCryptoPrices(db);
+    }, 15000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Helper to parse clean path from hash
   const getPathFromHash = () => {
@@ -146,6 +157,7 @@ export default function App() {
         '/history',
         '/profile',
         '/deposit',
+        '/send',
         '/withdraw',
         '/tx_success'
       ];
@@ -229,6 +241,7 @@ export default function App() {
           onLogout={handleLogout}
           onOpenProfile={() => navigate('/profile')}
           onOpenDeposit={handleOpenDeposit}
+          onOpenSend={() => navigate('/send')}
           onOpenWithdraw={() => navigate('/withdraw')}
           path={path}
           navigate={navigate}
@@ -257,6 +270,15 @@ export default function App() {
           onBack={() => navigate('/dashboard')}
           onGoToProfile={() => navigate('/profile')}
           onSuccess={() => handleTxSuccess('Your withdrawal request has been placed in the queue or processed successfully.')}
+        />
+      )}
+
+      {path === '/send' && (
+        <SendWorkflow
+          user={user}
+          onBack={() => navigate('/dashboard')}
+          onGoToProfile={() => navigate('/profile')}
+          onSuccess={(msg) => handleTxSuccess(msg)}
         />
       )}
 

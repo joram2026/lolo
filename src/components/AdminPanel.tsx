@@ -7,7 +7,7 @@ import {
   setDoc, query, orderBy, serverTimestamp, writeBatch, getDoc 
 } from 'firebase/firestore';
 import { UserAccount, Transaction, CryptoNetwork, P2PMerchant, CryptoPrice, ArbitrageConfig } from '../types';
-import { fetchLivePriceFromBinance, fetchAllLivePrices } from '../utils/cryptoApi';
+import { fetchLivePriceFromBinance, fetchAllLivePrices, syncLiveCryptoPrices } from '../utils/cryptoApi';
 import { 
   Users, CheckCircle2, XCircle, Settings, ShieldAlert, Key, 
   Trash2, ToggleLeft, ToggleRight, Loader, ZoomIn, Plus, Edit, Check, Eye, Star, Mail, RefreshCw, X, FileText, Coins, TrendingUp
@@ -973,33 +973,9 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
       if (!silent) {
         showFeedback('info', 'Synchronizing all live market prices from world exchanges...');
       }
-      const apiPrices = await fetchAllLivePrices();
-      const batch = writeBatch(db);
-      
-      let syncedCount = 0;
-      const targetList = pricesListRef.current.length > 0 ? pricesListRef.current : cryptoPricesList;
-      
-      targetList.forEach((cp) => {
-        // If coin mode is 'live' (or undefined, which we default to live for btc/eth/sol/bnb)
-        const isStablecoin = cp.symbol === 'USDT' || cp.symbol === 'USDC';
-        const currentMode = cp.mode || (isStablecoin ? 'custom' : 'live');
-        
-        if (currentMode === 'live' && apiPrices[cp.symbol]) {
-          const apiVal = apiPrices[cp.symbol];
-          batch.set(doc(db, 'crypto_prices', cp.symbol), {
-            symbol: cp.symbol,
-            name: cp.name,
-            price: apiVal.price,
-            change24h: apiVal.change24h,
-            mode: 'live',
-            lastSyncedAt: new Date().toISOString()
-          }, { merge: true });
-          syncedCount++;
-        }
-      });
+      const syncedCount = await syncLiveCryptoPrices(db);
 
       if (syncedCount > 0) {
-        await batch.commit();
         if (!silent) {
           showFeedback('success', `Successfully synchronized ${syncedCount} coins to the latest world market prices!`);
         }
@@ -1488,6 +1464,8 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                             {h.type === 'buy_crypto' && 'Buy Crypto'}
                             {h.type === 'sell_crypto' && 'Sell Crypto'}
                             {h.type === 'swap_crypto' && 'Swap/Convert'}
+                            {h.type === 'internal_send' && 'Internal Send'}
+                            {h.type === 'internal_receive' && 'Internal Receive'}
                           </td>
                           <td className="p-3 text-zinc-400 font-mono">{h.userEmail}</td>
                           <td className="p-3 font-bold font-mono text-zinc-100">${h.amount?.toFixed(2)}</td>
@@ -2663,6 +2641,8 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                           {t.type === 'buy_crypto' && 'Buy Crypto'}
                           {t.type === 'sell_crypto' && 'Sell Crypto'}
                           {t.type === 'swap_crypto' && 'Swap/Convert'}
+                          {t.type === 'internal_send' && 'Internal Send'}
+                          {t.type === 'internal_receive' && 'Internal Receive'}
                         </span>
                         <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase ${
                           t.status === 'APPROVED' ? 'bg-emerald-500/10 text-emerald-400' :

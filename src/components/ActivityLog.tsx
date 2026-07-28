@@ -4,7 +4,7 @@ import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { Transaction } from '../types';
 import { 
   ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Clock, CheckCircle2, XCircle, 
-  ChevronDown, ChevronUp, Filter, RefreshCw, Calendar, ListFilter, Gift, TrendingUp
+  ChevronDown, ChevronUp, Filter, RefreshCw, Calendar, ListFilter, Gift, TrendingUp, Send
 } from 'lucide-react';
 
 enum OperationType {
@@ -247,6 +247,22 @@ export default function ActivityLog({ userId, isLightTheme = false }: ActivityLo
           colorClass: isLightTheme ? 'text-emerald-700 font-extrabold' : 'text-emerald-400',
           bgClass: isLightTheme ? 'bg-emerald-50 border border-emerald-200 text-emerald-750' : 'bg-emerald-500/10 border-emerald-500/15 text-emerald-400',
           icon: <TrendingUp size={16} />
+        };
+      case 'internal_send':
+        return {
+          label: 'Internal Send',
+          isCredit: false,
+          colorClass: isLightTheme ? 'text-amber-700 font-extrabold' : 'text-amber-400',
+          bgClass: isLightTheme ? 'bg-amber-50 border border-amber-200 text-amber-800' : 'bg-amber-500/10 border-amber-500/15 text-amber-400',
+          icon: <Send size={16} />
+        };
+      case 'internal_receive':
+        return {
+          label: 'Internal Receive',
+          isCredit: true,
+          colorClass: isLightTheme ? 'text-emerald-700 font-extrabold' : 'text-emerald-400',
+          bgClass: isLightTheme ? 'bg-emerald-50 border border-emerald-200 text-emerald-700' : 'bg-emerald-500/10 border-emerald-500/15 text-emerald-400',
+          icon: <Send size={16} />
         };
       default:
         const isDeposit = type.startsWith('deposit');

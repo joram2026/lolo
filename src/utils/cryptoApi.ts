@@ -1,3 +1,4 @@
+import { collection, getDocs, doc, writeBatch, Firestore } from 'firebase/firestore';
 import { CryptoPrice } from '../types';
 
 export async function fetchLivePriceFromBinance(symbol: string): Promise<{ price: number; change24h: number }> {
@@ -79,3 +80,65 @@ export async function fetchAllLivePrices(): Promise<Record<string, { price: numb
 
   return results;
 }
+
+/**
+ * Synchronizes live prices from public exchange APIs into Firestore crypto_prices collection.
+ * Respects 'custom' vs 'live' mode set by Admin for each coin.
+ */
+export async function syncLiveCryptoPrices(db: Firestore): Promise<number> {
+  try {
+    const apiPrices = await fetchAllLivePrices();
+    const pricesCol = collection(db, 'crypto_prices');
+    const pricesSnap = await getDocs(pricesCol);
+
+    const batch = writeBatch(db);
+    let updatedCount = 0;
+
+    const symbols = ['USDT', 'USDC', 'BTC', 'ETH', 'SOL', 'BNB', 'XRP', 'WLD', 'TRX', 'DOGE'];
+
+    if (pricesSnap.empty) {
+      // Seed initial crypto prices if empty
+      symbols.forEach((sym) => {
+        const isStablecoin = sym === 'USDT' || sym === 'USDC';
+        const defaultMode = isStablecoin ? 'custom' : 'live';
+        const apiVal = apiPrices[sym] || { price: 0, change24h: 0 };
+        batch.set(doc(db, 'crypto_prices', sym), {
+          symbol: sym,
+          name: sym,
+          price: apiVal.price,
+          change24h: apiVal.change24h,
+          mode: defaultMode,
+          lastSyncedAt: new Date().toISOString()
+        });
+        updatedCount++;
+      });
+    } else {
+      pricesSnap.docs.forEach((d) => {
+        const data = d.data() as CryptoPrice;
+        const sym = data.symbol;
+        const isStablecoin = sym === 'USDT' || sym === 'USDC';
+        const mode = data.mode || (isStablecoin ? 'custom' : 'live');
+
+        if (mode === 'live' && apiPrices[sym]) {
+          const apiVal = apiPrices[sym];
+          batch.set(doc(db, 'crypto_prices', sym), {
+            price: apiVal.price,
+            change24h: apiVal.change24h,
+            mode: 'live',
+            lastSyncedAt: new Date().toISOString()
+          }, { merge: true });
+          updatedCount++;
+        }
+      });
+    }
+
+    if (updatedCount > 0) {
+      await batch.commit();
+    }
+    return updatedCount;
+  } catch (err) {
+    console.warn('Error in syncLiveCryptoPrices background auto-sync:', err);
+    return 0;
+  }
+}
+

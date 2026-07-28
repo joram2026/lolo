@@ -10,7 +10,7 @@ import {
   TrendingUp, TrendingDown, ArrowUpRight, ArrowDownLeft, Search, 
   User, LogOut, ArrowRightLeft, ShieldCheck, Activity, Wallet, 
   HelpCircle, RefreshCw, Coins, ArrowRight, MessageSquare, AlertCircle,
-  History, ArrowLeft, X, ChevronDown, Check, Lock, Unlock, Eye, EyeOff, Sparkles, BookOpen, Zap
+  History, ArrowLeft, X, ChevronDown, Check, Lock, Unlock, Eye, EyeOff, Sparkles, BookOpen, Zap, Send
 } from 'lucide-react';
 
 interface StandardUserDashboardProps {
@@ -18,6 +18,7 @@ interface StandardUserDashboardProps {
   onLogout: () => void;
   onOpenProfile: () => void;
   onOpenDeposit: (coinSymbol?: string) => void;
+  onOpenSend: () => void;
   onOpenWithdraw: () => void;
   path: string;
   navigate: (path: string) => void;
@@ -277,6 +278,7 @@ export default function StandardUserDashboard({
   onLogout, 
   onOpenProfile, 
   onOpenDeposit, 
+  onOpenSend,
   onOpenWithdraw,
   path,
   navigate
@@ -716,6 +718,8 @@ export default function StandardUserDashboard({
       case 'buy_crypto': return 'Buy Crypto';
       case 'sell_crypto': return 'Sell Crypto';
       case 'swap_crypto': return 'Swap / Convert';
+      case 'internal_send': return 'Internal Send';
+      case 'internal_receive': return 'Internal Receive';
       default: return type;
     }
   };
@@ -2396,23 +2400,23 @@ export default function StandardUserDashboard({
                 </div>
 
                 {/* Deposit & Withdraw Prominent Buttons */}
-                <div className="grid grid-cols-2 gap-3 mt-6">
+                <div className="grid grid-cols-2 gap-2 sm:gap-3 mt-6">
                   <button
                     id="add-funds-btn"
                     onClick={onOpenDeposit}
-                    className="flex items-center justify-center gap-2 py-3 bg-slate-950 hover:bg-slate-900 border border-slate-800 text-white font-extrabold text-xs rounded-2xl transition-all shadow-md active:scale-95 cursor-pointer"
+                    className="flex items-center justify-center gap-1.5 sm:gap-2 py-2.5 sm:py-3 px-2 sm:px-4 bg-slate-950 hover:bg-slate-900 border border-slate-800 text-white font-extrabold text-[11px] sm:text-xs rounded-2xl transition-all shadow-md active:scale-95 cursor-pointer min-w-0"
                   >
-                    <ArrowDownLeft size={16} strokeWidth={3} className="text-white" />
-                    <span>Add Funds</span>
+                    <ArrowDownLeft size={15} strokeWidth={3} className="text-white shrink-0 w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                    <span className="whitespace-nowrap truncate">Add Funds</span>
                   </button>
 
                   <button
                     id="withdraw-funds-btn"
                     onClick={onOpenWithdraw}
-                    className="flex items-center justify-center gap-2 py-3 bg-white hover:bg-zinc-100 border border-white/20 text-slate-950 font-extrabold text-xs rounded-2xl transition-all shadow-sm active:scale-95 cursor-pointer"
+                    className="flex items-center justify-center gap-1.5 sm:gap-2 py-2.5 sm:py-3 px-2 sm:px-4 bg-white hover:bg-zinc-100 border border-white/20 text-slate-950 font-extrabold text-[11px] sm:text-xs rounded-2xl transition-all shadow-sm active:scale-95 cursor-pointer min-w-0"
                   >
-                    <ArrowUpRight size={16} strokeWidth={3} className="text-slate-950" />
-                    <span>Withdraw</span>
+                    <ArrowUpRight size={15} strokeWidth={3} className="text-slate-950 shrink-0 w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                    <span className="whitespace-nowrap truncate">Withdraw</span>
                   </button>
                 </div>
               </div>
@@ -2541,24 +2545,33 @@ export default function StandardUserDashboard({
                   </div>
                 </div>
 
-                {/* Deposit & Withdraw Prominent Buttons */}
-                <div className="grid grid-cols-2 gap-3 mt-6">
+                {/* Deposit, SEND & Withdraw Prominent Buttons */}
+                <div className="grid grid-cols-3 gap-1.5 sm:gap-3 mt-6">
                   <button
                     id="add-funds-btn-wallet-tab"
                     onClick={onOpenDeposit}
-                    className="flex items-center justify-center gap-2 py-3 bg-slate-950 hover:bg-slate-900 border border-slate-800 text-white font-extrabold text-xs rounded-2xl transition-all shadow-md active:scale-95 cursor-pointer"
+                    className="flex items-center justify-center gap-1 sm:gap-2 py-2.5 sm:py-3 px-1.5 sm:px-3 bg-slate-950 hover:bg-slate-900 border border-slate-800 text-white font-extrabold text-[10.5px] sm:text-xs rounded-2xl transition-all shadow-md active:scale-95 cursor-pointer min-w-0 tracking-tight"
                   >
-                    <ArrowDownLeft size={16} strokeWidth={3} className="text-white" />
-                    <span>Add Funds</span>
+                    <ArrowDownLeft strokeWidth={3} className="text-white shrink-0 w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                    <span className="whitespace-nowrap truncate">Add Funds</span>
+                  </button>
+
+                  <button
+                    id="send-funds-btn-wallet-tab"
+                    onClick={onOpenSend}
+                    className="flex items-center justify-center gap-1 sm:gap-2 py-2.5 sm:py-3 px-1.5 sm:px-3 bg-amber-500 hover:bg-amber-600 border border-amber-400 text-white font-extrabold text-[10.5px] sm:text-xs rounded-2xl transition-all shadow-md active:scale-95 cursor-pointer min-w-0 tracking-tight"
+                  >
+                    <Send strokeWidth={2.5} className="text-white shrink-0 w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                    <span className="whitespace-nowrap truncate">SEND</span>
                   </button>
 
                   <button
                     id="withdraw-funds-btn-wallet-tab"
                     onClick={onOpenWithdraw}
-                    className="flex items-center justify-center gap-2 py-3 bg-white hover:bg-zinc-100 border border-white/20 text-slate-950 font-extrabold text-xs rounded-2xl transition-all shadow-sm active:scale-95 cursor-pointer"
+                    className="flex items-center justify-center gap-1 sm:gap-2 py-2.5 sm:py-3 px-1.5 sm:px-3 bg-white hover:bg-zinc-100 border border-white/20 text-slate-950 font-extrabold text-[10.5px] sm:text-xs rounded-2xl transition-all shadow-sm active:scale-95 cursor-pointer min-w-0 tracking-tight"
                   >
-                    <ArrowUpRight size={16} strokeWidth={3} className="text-slate-950" />
-                    <span>Withdraw</span>
+                    <ArrowUpRight strokeWidth={3} className="text-slate-950 shrink-0 w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                    <span className="whitespace-nowrap truncate">Withdraw</span>
                   </button>
                 </div>
               </div>

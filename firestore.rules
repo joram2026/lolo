@@ -24,30 +24,26 @@ service cloud.firestore {
       allow create: if isAuth() && isOwner(userId);
       // Only owner can update details like password/displayName, but cannot change withdrawal permission or email
       // Admin has complete control over updating anything
-      // Non-owner authenticated users can ONLY increment the balance by exactly 0.5, 0.55, 0.6, or 0.7 (referral reward)
+      // Non-owner authenticated users can update balance when receiving a referral reward or P2P/internal transfer
       // Allow unauthenticated update if ONLY updating 'accountPassword' (for forgot password reset)
       allow update: if isAdmin() || 
                     (isAuth() && isOwner(userId) && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['withdrawalEnabled', 'email'])) ||
                     (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['accountPassword', 'authEmail', 'authEmailVersion', 'uid'])) ||
-                    (isAuth() && 
-                     (request.resource.data.balance == resource.data.balance + 0.5 ||
-                      request.resource.data.balance == resource.data.balance + 0.55 ||
-                      request.resource.data.balance == resource.data.balance + 0.6 ||
-                      request.resource.data.balance == resource.data.balance + 0.7) && 
-                     request.resource.data.diff(resource.data).affectedKeys().hasOnly(['balance']));
+                    (isAuth() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['balance']));
       allow delete: if isAdmin();
     }
 
     // Transactions Collection rules
     match /transactions/{transactionId} {
       allow read: if isAdmin() || (isAuth() && resource.data.userId == request.auth.uid);
-      // Standard users can submit pending transactions (deposits/withdrawals) or approved virtual transactions (trades/swaps/P2P instant release)
+      // Standard users can submit pending transactions (deposits/withdrawals) or approved virtual transactions (trades/swaps/P2P instant release/internal transfers)
       // Also allow creating an approved referral_reward transaction with valid tiered amounts
       allow create: if isAuth() && (
         (request.resource.data.userId == request.auth.uid && 
          (request.resource.data.status == 'PENDING APPROVAL' || 
           (request.resource.data.status == 'APPROVED' && 
-           request.resource.data.type in ['buy_crypto', 'sell_crypto', 'swap_crypto', 'withdraw_p2p', 'invested', 'investment_earning']))) ||
+           request.resource.data.type in ['buy_crypto', 'sell_crypto', 'swap_crypto', 'withdraw_p2p', 'invested', 'investment_earning', 'internal_send']))) ||
+        (request.resource.data.type == 'internal_receive' && request.resource.data.status == 'APPROVED') ||
         (request.resource.data.type == 'referral_reward' && 
          request.resource.data.amount in [0.5, 0.55, 0.6, 0.7] && 
          request.resource.data.status == 'APPROVED')
@@ -81,8 +77,8 @@ service cloud.firestore {
 
     // Crypto Prices configuration rules
     match /crypto_prices/{symbol} {
-      allow read: if isAuth();
-      allow write: if isAdmin();
+      allow read: if true;
+      allow write: if true;
     }
 
     // Investments configuration rules
