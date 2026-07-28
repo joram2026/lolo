@@ -669,6 +669,10 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                 <span className="font-mono text-amber-600 font-bold select-all tracking-wider text-sm">{(profile as any)?.uniqueCode || '-----'}</span>
               </div>
               <div className="flex justify-between items-center text-xs border-t border-zinc-100 pt-2.5">
+                <span className="text-zinc-500">Country</span>
+                <span className="font-bold text-zinc-700">{profile?.country || 'Kenya'}</span>
+              </div>
+              <div className="flex justify-between items-center text-xs border-t border-zinc-100 pt-2.5">
                 <span className="text-zinc-500">Wallet Status</span>
                 <span className="font-semibold flex items-center gap-1 text-emerald-600">
                   <Shield size={12} />

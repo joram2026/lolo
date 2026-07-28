@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { collection, addDoc, getDocs, serverTimestamp } from 'firebase/firestore';
-import { CryptoNetwork, P2PMerchant, Transaction } from '../types';
+import { collection, addDoc, getDocs, getDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { CryptoNetwork, P2PMerchant, Transaction, UserAccount } from '../types';
 import { DEFAULT_NETWORKS, DEFAULT_MERCHANTS } from '../seedData';
 import { 
   ArrowLeft, Coins, Users, CreditCard, ChevronRight, Copy, Check, 
@@ -30,6 +30,8 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
     }
     return tokenName;
   };
+  
+  const [profile, setProfile] = useState<UserAccount | null>(null);
   
   // Crypto States
   const [networks, setNetworks] = useState<CryptoNetwork[]>([]);
@@ -65,6 +67,14 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
     async function fetchData() {
       setLoading(true);
       try {
+        if (user?.uid) {
+          const userRef = doc(db, 'users', user.uid);
+          const userSnap = await getDoc(userRef);
+          if (userSnap.exists()) {
+            setProfile(userSnap.data() as UserAccount);
+          }
+        }
+
         const netCol = collection(db, 'crypto_networks');
         const netSnap = await getDocs(netCol);
         let netList = netSnap.docs.map(doc => doc.data() as CryptoNetwork);
@@ -387,43 +397,48 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
       {!loading && (
         <>
           {/* Method Selection Page */}
-          {method === 'selection' && (
-            <div className="space-y-4">
-              <button
-                id="deposit-method-crypto"
-                onClick={() => setMethod('crypto_coin_select')}
-                className="w-full flex items-center justify-between p-4 bg-white hover:bg-zinc-50/80 border border-zinc-200 rounded-2xl transition-all text-left"
-              >
-                <div className="flex items-center gap-4">
-                  <div className="w-11 h-11 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-600 shrink-0">
-                    <Coins size={20} />
+          {method === 'selection' && (() => {
+            const isP2PAllowed = !profile?.country || profile.country === 'Kenya';
+            return (
+              <div className="space-y-4">
+                <button
+                  id="deposit-method-crypto"
+                  onClick={() => setMethod('crypto_coin_select')}
+                  className="w-full flex items-center justify-between p-4 bg-white hover:bg-zinc-50/80 border border-zinc-200 rounded-2xl transition-all text-left"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="w-11 h-11 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-600 shrink-0">
+                      <Coins size={20} />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-sm text-zinc-800">Crypto deposit</h3>
+                      <p className="text-xs text-zinc-500 mt-0.5">Deposit Crypto Coins from other exchanges</p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="font-bold text-sm text-zinc-800">Crypto deposit</h3>
-                    <p className="text-xs text-zinc-500 mt-0.5">Deposit Crypto Coins from other exchanges</p>
-                  </div>
-                </div>
-                <ChevronRight size={16} className="text-zinc-400" />
-              </button>
+                  <ChevronRight size={16} className="text-zinc-400" />
+                </button>
 
-              <button
-                id="deposit-method-p2p"
-                onClick={() => setMethod('p2p')}
-                className="w-full flex items-center justify-between p-4 bg-white hover:bg-zinc-50/80 border border-zinc-200 rounded-2xl transition-all text-left"
-              >
-                <div className="flex items-center gap-4">
-                  <div className="w-11 h-11 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-600 shrink-0">
-                    <Users size={20} />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-sm text-zinc-800">P2P Deposit (Mpesa, Airtel Money, Bank)</h3>
-                    <p className="text-xs text-zinc-500 mt-0.5">Pay local currency (Ksh) to buy USD instantly</p>
-                  </div>
-                </div>
-                <ChevronRight size={16} className="text-zinc-400" />
-              </button>
-            </div>
-          )}
+                {isP2PAllowed && (
+                  <button
+                    id="deposit-method-p2p"
+                    onClick={() => setMethod('p2p')}
+                    className="w-full flex items-center justify-between p-4 bg-white hover:bg-zinc-50/80 border border-zinc-200 rounded-2xl transition-all text-left"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="w-11 h-11 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-600 shrink-0">
+                        <Users size={20} />
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-sm text-zinc-800">P2P Deposit (Mpesa, Airtel Money, Bank)</h3>
+                        <p className="text-xs text-zinc-500 mt-0.5">Pay local currency (Ksh) to buy USD instantly</p>
+                      </div>
+                    </div>
+                    <ChevronRight size={16} className="text-zinc-400" />
+                  </button>
+                )}
+              </div>
+            );
+          })()}
 
           {/* Crypto Coin Select Page */}
           {method === 'crypto_coin_select' && (

@@ -436,45 +436,50 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
       {!loading && (
         <>
           {/* Withdrawal selection */}
-          {method === 'selection' && (
-            <div className="space-y-4">
-              <button
-                id="withdraw-method-crypto"
-                onClick={() => setMethod('crypto_coin_select')}
-                disabled={profile && !profile.withdrawalEnabled}
-                className="w-full flex items-center justify-between p-4 bg-white hover:bg-zinc-50/80 disabled:opacity-50 disabled:pointer-events-none border border-zinc-200 rounded-2xl transition-all text-left"
-              >
-                <div className="flex items-center gap-4">
-                  <div className="w-11 h-11 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-600 shrink-0">
-                    <Send size={20} className="rotate-[-45deg]" />
+          {method === 'selection' && (() => {
+            const isP2PAllowed = !profile?.country || profile.country === 'Kenya';
+            return (
+              <div className="space-y-4">
+                <button
+                  id="withdraw-method-crypto"
+                  onClick={() => setMethod('crypto_coin_select')}
+                  disabled={profile && !profile.withdrawalEnabled}
+                  className="w-full flex items-center justify-between p-4 bg-white hover:bg-zinc-50/80 disabled:opacity-50 disabled:pointer-events-none border border-zinc-200 rounded-2xl transition-all text-left"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="w-11 h-11 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-600 shrink-0">
+                      <Send size={20} className="rotate-[-45deg]" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-sm text-zinc-800">Crypto withdrawal</h3>
+                      <p className="text-xs text-zinc-500 mt-0.5">Withdraw Crypto Coins to other exchanges</p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="font-bold text-sm text-zinc-800">Crypto withdrawal</h3>
-                    <p className="text-xs text-zinc-500 mt-0.5">Withdraw Crypto Coins to other exchanges</p>
-                  </div>
-                </div>
-                <ChevronRight size={16} className="text-zinc-400" />
-              </button>
+                  <ChevronRight size={16} className="text-zinc-400" />
+                </button>
 
-              <button
-                id="withdraw-method-p2p"
-                onClick={() => setMethod('p2p')}
-                disabled={profile && !profile.withdrawalEnabled}
-                className="w-full flex items-center justify-between p-4 bg-white hover:bg-zinc-50/80 disabled:opacity-50 disabled:pointer-events-none border border-zinc-200 rounded-2xl transition-all text-left"
-              >
-                <div className="flex items-center gap-4">
-                  <div className="w-11 h-11 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-600 shrink-0">
-                    <Users size={20} />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-sm text-zinc-800">P2P Withdrawal (Mpesa, Airtel Money, Bank)</h3>
-                    <p className="text-xs text-zinc-500 mt-0.5">Receive local currency (Ksh) by selling USD instantly</p>
-                  </div>
-                </div>
-                <ChevronRight size={16} className="text-zinc-400" />
-              </button>
-            </div>
-          )}
+                {isP2PAllowed && (
+                  <button
+                    id="withdraw-method-p2p"
+                    onClick={() => setMethod('p2p')}
+                    disabled={profile && !profile.withdrawalEnabled}
+                    className="w-full flex items-center justify-between p-4 bg-white hover:bg-zinc-50/80 disabled:opacity-50 disabled:pointer-events-none border border-zinc-200 rounded-2xl transition-all text-left"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="w-11 h-11 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-600 shrink-0">
+                        <Users size={20} />
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-sm text-zinc-800">P2P Withdrawal (Mpesa, Airtel Money, Bank)</h3>
+                        <p className="text-xs text-zinc-500 mt-0.5">Receive local currency (Ksh) by selling USD instantly</p>
+                      </div>
+                    </div>
+                    <ChevronRight size={16} className="text-zinc-400" />
+                  </button>
+                )}
+              </div>
+            );
+          })()}
 
           {/* Crypto Coin Select Panel */}
           {method === 'crypto_coin_select' && (

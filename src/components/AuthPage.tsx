@@ -9,7 +9,7 @@ import {
   updatePassword
 } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp, getDoc, collection, query, where, getDocs, updateDoc, increment, addDoc, deleteDoc } from 'firebase/firestore';
-import { Shield, Mail, Lock, User, Sparkles, AlertCircle, RefreshCw, Eye, EyeOff } from 'lucide-react';
+import { Shield, Mail, Lock, User, Sparkles, AlertCircle, RefreshCw, Eye, EyeOff, Globe, ChevronDown, Check } from 'lucide-react';
 
 interface AuthPageProps {
   onSuccess: () => void;
@@ -33,6 +33,17 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
   const [resetConfirmPassword, setResetConfirmPassword] = useState('');
   const [showResetPassword, setShowResetPassword] = useState(false);
   const [displayName, setDisplayName] = useState('');
+  const [country, setCountry] = useState('Kenya');
+  const [isCountryOpen, setIsCountryOpen] = useState(false);
+
+  const COUNTRIES = [
+    { code: 'Kenya', name: 'Kenya', flag: '🇰🇪', p2p: true },
+    { code: 'Tanzania', name: 'Tanzania', flag: '🇹🇿', p2p: false },
+    { code: 'Rwanda', name: 'Rwanda', flag: '🇷🇼', p2p: false },
+    { code: 'UAE', name: 'UAE', flag: '🇦🇪', p2p: false },
+    { code: 'USA', name: 'USA', flag: '🇺🇸', p2p: false },
+    { code: 'CHINA', name: 'CHINA', flag: '🇨🇳', p2p: false },
+  ];
   const [referral, setReferral] = useState('');
   const toast = useToast();
   const [loading, setLoading] = useState(false);
@@ -228,6 +239,7 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
           uid: user.uid,
           email: formattedEmail,
           displayName: displayName.trim() || formattedEmail.split('@')[0],
+          country: country,
           balance: 0.0, // Initial wallet balance starts at $0
           referralSource: trimmedReferral,
           uniqueCode: generatedCode,
@@ -572,6 +584,74 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
                         className="w-full pl-9 pr-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 placeholder-zinc-400 text-zinc-800"
                       />
                     </div>
+                  </div>
+                )}
+
+                {/* Country Dropdown - Sign Up Only */}
+                {isSignUp && !isReset && (
+                  <div className="space-y-1 relative">
+                    <label className="text-xs font-semibold text-zinc-600">Country of Residence</label>
+                    
+                    <button
+                      id="auth-country-trigger"
+                      type="button"
+                      onClick={() => setIsCountryOpen(!isCountryOpen)}
+                      className="w-full px-3 py-2.5 bg-zinc-50 hover:bg-zinc-100/90 border border-zinc-200 rounded-xl text-xs flex items-center justify-between transition-all focus:outline-none focus:ring-1 focus:ring-amber-500 text-zinc-800 font-medium cursor-pointer shadow-sm active:scale-[0.99]"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <span className="text-base leading-none shrink-0">{COUNTRIES.find(c => c.code === country)?.flag || '🇰🇪'}</span>
+                        <span className="font-semibold text-zinc-800 truncate">{COUNTRIES.find(c => c.code === country)?.name || country}</span>
+                        {country === 'Kenya' && (
+                          <span className="text-[10px] bg-emerald-100 text-emerald-800 font-extrabold px-1.5 py-0.5 rounded-md border border-emerald-200 shrink-0">
+                            P2P Deposit & Withdraw
+                          </span>
+                        )}
+                      </div>
+                      <ChevronDown size={15} className={`text-zinc-400 shrink-0 transition-transform duration-200 ${isCountryOpen ? 'rotate-180 text-amber-500' : ''}`} />
+                    </button>
+
+                    {/* Custom Modern Dropdown Menu */}
+                    {isCountryOpen && (
+                      <>
+                        <div 
+                          className="fixed inset-0 z-40" 
+                          onClick={() => setIsCountryOpen(false)} 
+                        />
+                        
+                        <div className="absolute left-0 right-0 top-full mt-1.5 z-50 bg-white border border-amber-200/80 rounded-2xl shadow-xl p-1.5 space-y-1 animate-in fade-in zoom-in-95 duration-150">
+                          {COUNTRIES.map((c) => {
+                            const isSelected = country === c.code;
+                            return (
+                              <button
+                                key={c.code}
+                                id={`auth-country-opt-${c.code.toLowerCase()}`}
+                                type="button"
+                                onClick={() => {
+                                  setCountry(c.code);
+                                  setIsCountryOpen(false);
+                                }}
+                                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs transition-all cursor-pointer ${
+                                  isSelected 
+                                    ? 'bg-amber-500/10 border border-amber-500/30 text-amber-950 font-bold shadow-xs' 
+                                    : 'hover:bg-amber-50/60 text-zinc-700 font-medium border border-transparent'
+                                }`}
+                              >
+                                <div className="flex items-center gap-2.5">
+                                  <span className="text-base leading-none">{c.flag}</span>
+                                  <span>{c.name}</span>
+                                  {c.code === 'Kenya' && (
+                                    <span className="text-[9px] bg-emerald-100 text-emerald-800 font-extrabold px-1.5 py-0.5 rounded border border-emerald-200">
+                                      P2P Available
+                                    </span>
+                                  )}
+                                </div>
+                                {isSelected && <Check size={14} className="text-amber-600 shrink-0 stroke-[3]" />}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </>
+                    )}
                   </div>
                 )}
 

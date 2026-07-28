@@ -1121,6 +1121,7 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 text-[11px] text-zinc-400 font-mono">
                           <div><span className="text-zinc-500 font-sans font-medium">Email:</span> {u.email}</div>
                           <div><span className="text-zinc-500 font-sans font-medium">UID:</span> <span className="select-all">{u.uid}</span></div>
+                          <div><span className="text-zinc-500 font-sans font-medium">Country:</span> <span className="text-amber-400 font-bold font-sans">{u.country || 'Kenya'}</span></div>
                           <div><span className="text-zinc-500 font-sans font-medium">Referred By:</span> {u.referralSource || 'None/Direct'}</div>
                           <div><span className="text-zinc-500 font-sans font-medium">Joined:</span> {formatDate(u.createdAt)}</div>
                         </div>
