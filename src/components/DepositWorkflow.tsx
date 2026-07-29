@@ -1,8 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { collection, addDoc, getDocs, getDoc, doc, serverTimestamp } from 'firebase/firestore';
-import { CryptoNetwork, P2PMerchant, Transaction, UserAccount } from '../types';
+import { collection, addDoc, getDocs, getDoc, doc, serverTimestamp, onSnapshot } from 'firebase/firestore';
+import { CryptoNetwork, P2PMerchant, Transaction, UserAccount, CryptoPrice } from '../types';
 import { DEFAULT_NETWORKS, DEFAULT_MERCHANTS } from '../seedData';
+
+const FALLBACK_PRICES: Record<string, number> = {
+  USDT: 1.00,
+  USDC: 1.00,
+  BTC: 94250.30,
+  ETH: 3480.12,
+  SOL: 184.45,
+  BNB: 592.20,
+  XRP: 2.54,
+  WLD: 2.80,
+  TRX: 0.22,
+  DOGE: 0.38
+};
 import { 
   ArrowLeft, Coins, Users, CreditCard, ChevronRight, Copy, Check, 
   Upload, Sparkles, MessageSquare, AlertCircle, RefreshCw, Star 
@@ -18,7 +31,7 @@ interface DepositWorkflowProps {
 }
 
 export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSymbol }: DepositWorkflowProps) {
-  const [method, setMethod] = useState<'selection' | 'crypto_coin_select' | 'crypto' | 'crypto_confirm' | 'p2p' | 'p2p_calc' | 'p2p_instructions' | 'p2p_confirm'>('selection');
+  const [method, setMethod] = useState<'selection' | 'crypto_coin_select' | 'crypto' | 'crypto_address' | 'crypto_confirm' | 'p2p' | 'p2p_calc' | 'p2p_instructions' | 'p2p_confirm'>('selection');
 
   const formatCoinName = (tokenName: string) => {
     if (!tokenName) return '';
@@ -37,9 +50,35 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
   const [networks, setNetworks] = useState<CryptoNetwork[]>([]);
   const [selectedCoin, setSelectedCoin] = useState<CryptoNetwork | null>(null);
   const [selectedNetwork, setSelectedNetwork] = useState<string>('');
-  const [amountUSD, setAmountUSD] = useState<string>('');
+  const [amountCoin, setAmountCoin] = useState<string>('');
   const [evidence, setEvidence] = useState<string>('');
   const [copied, setCopied] = useState<boolean>(false);
+  const [cryptoPrices, setCryptoPrices] = useState<CryptoPrice[]>([]);
+
+  // Subscribe to crypto prices for live conversion
+  useEffect(() => {
+    const pricesCol = collection(db, 'crypto_prices');
+    const unsubscribe = onSnapshot(pricesCol, (snap) => {
+      if (!snap.empty) {
+        setCryptoPrices(snap.docs.map(d => d.data() as CryptoPrice));
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const currentSymbol = selectedCoin ? selectedCoin.id.toUpperCase() : 'USDT';
+
+  const getCoinUnitPrice = (symbol: string): number => {
+    const sym = symbol.toUpperCase();
+    if (sym === 'USDT' || sym === 'USDC') return 1.00;
+    const found = cryptoPrices.find(p => p.symbol.toUpperCase() === sym);
+    if (found && found.price > 0) return found.price;
+    return FALLBACK_PRICES[sym] || 1.00;
+  };
+
+  const unitPrice = getCoinUnitPrice(currentSymbol);
+  const coinVal = parseFloat(amountCoin) || 0;
+  const calculatedUSDVal = parseFloat((coinVal * unitPrice).toFixed(2));
   
   // P2P States
   const [merchants, setMerchants] = useState<P2PMerchant[]>([]);
@@ -268,8 +307,9 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
 
   // Submit Crypto Deposit
   const handleCryptoSubmit = async () => {
-    if (!amountUSD || parseFloat(amountUSD) <= 0) {
-      setError('Please input a valid deposit amount.');
+    const numCoinAmount = parseFloat(amountCoin);
+    if (!amountCoin || isNaN(numCoinAmount) || numCoinAmount <= 0) {
+      setError(`Please input a valid deposit amount in ${currentSymbol}.`);
       return;
     }
     if (!evidence) {
@@ -282,13 +322,16 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
 
     try {
       const txId = 'ARBITRAGE-CRYPTO-' + Math.floor(1000000 + Math.random() * 9000000);
-      const usdVal = parseFloat(amountUSD);
+      const symbol = currentSymbol;
+      const usdVal = calculatedUSDVal;
       
       const newTx: Omit<Transaction, 'id'> = {
         userId: user.uid,
         userEmail: user.email,
         type: 'deposit_crypto',
         amount: usdVal,
+        coinSymbol: symbol,
+        coinAmount: numCoinAmount,
         status: 'PENDING APPROVAL',
         createdAt: serverTimestamp(),
         evidence: evidence,
@@ -351,7 +394,8 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
             if (method === 'selection') onBack();
             else if (method === 'crypto_coin_select') setMethod('selection');
             else if (method === 'crypto') setMethod('crypto_coin_select');
-            else if (method === 'crypto_confirm') setMethod('crypto');
+            else if (method === 'crypto_address') setMethod('crypto');
+            else if (method === 'crypto_confirm') setMethod('crypto_address');
             else if (method === 'p2p') setMethod('selection');
             else if (method === 'p2p_calc') setMethod('p2p');
             else if (method === 'p2p_instructions') setMethod('p2p_calc');
@@ -366,6 +410,7 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
             {method === 'selection' && 'Add Funds'}
             {method === 'crypto_coin_select' && 'Select Coin'}
             {method === 'crypto' && 'Crypto Deposit Details'}
+            {method === 'crypto_address' && 'Receiver Address'}
             {method === 'crypto_confirm' && 'Upload Deposit Proof'}
             {method === 'p2p' && 'P2P deposit verified Merchants'}
             {method === 'p2p_calc' && 'P2P Deposit'}
@@ -375,7 +420,8 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
           <p className="text-xs text-zinc-500">
             {method === 'selection' && 'Select deposit network'}
             {method === 'crypto_coin_select' && 'Choose a crypto asset to deposit'}
-            {method === 'crypto' && `Configure network and transfer details for ${selectedCoin ? formatCoinName(selectedCoin.tokenName) : ''}`}
+            {method === 'crypto' && `Select network and enter deposit amount for ${selectedCoin ? formatCoinName(selectedCoin.tokenName) : ''}`}
+            {method === 'crypto_address' && `Send funds to the generated ${selectedNetwork} address`}
             {method === 'crypto_confirm' && 'Provide screenshot evidence of asset transfer'}
             {method === 'p2p' && 'Buy USD from active verified agents'}
             {method === 'p2p_calc' && `Conversion buying rates with ${selectedMerchant?.name}`}
@@ -451,6 +497,7 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
                     id={`crypto-select-asset-${net.id}`}
                     onClick={() => {
                       setSelectedCoin(net);
+                      setAmountCoin('');
                       if (net.networks.length > 0) {
                         setSelectedNetwork(net.networks[0]);
                       } else {
@@ -482,17 +529,19 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
           {method === 'crypto' && selectedCoin && (
             <div className="space-y-5">
               {/* Selected Coin Banner */}
-              <div className="bg-white border border-zinc-200 rounded-2xl p-4 flex items-center gap-3.5">
-                <CoinIcon symbol={selectedCoin.id.toUpperCase()} className="w-11 h-11 rounded-xl" />
-                <div>
-                  <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block">Selected Asset</span>
-                  <span className="text-sm font-black text-zinc-800">{formatCoinName(selectedCoin.tokenName)}</span>
+              <div className="bg-white border border-zinc-200 rounded-2xl p-4 flex items-center justify-between shadow-xs">
+                <div className="flex items-center gap-3.5">
+                  <CoinIcon symbol={selectedCoin.id.toUpperCase()} className="w-11 h-11 rounded-xl" />
+                  <div>
+                    <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block">Selected Asset</span>
+                    <span className="text-sm font-black text-zinc-800">{formatCoinName(selectedCoin.tokenName)}</span>
+                  </div>
                 </div>
               </div>
 
               {/* Network Picker */}
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-zinc-500">Select Network</label>
+                <label className="text-xs font-semibold text-zinc-600">Select Network</label>
                 <div className="grid grid-cols-3 gap-2">
                   {selectedCoin.networks.map(net => (
                     <button
@@ -500,10 +549,10 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
                       id={`crypto-network-btn-${net}`}
                       type="button"
                       onClick={() => setSelectedNetwork(net)}
-                      className={`py-2 px-3 rounded-xl border text-xs font-semibold transition-all text-center ${
+                      className={`py-2 px-3 rounded-xl border text-xs font-semibold transition-all text-center cursor-pointer ${
                         selectedNetwork === net
-                          ? 'bg-amber-500/10 border-amber-500 text-amber-600'
-                          : 'bg-white border-zinc-200 text-zinc-500 hover:text-zinc-800'
+                          ? 'bg-amber-500/10 border-amber-500 text-amber-700 shadow-xs'
+                          : 'bg-white border-zinc-200 text-zinc-600 hover:text-zinc-900 hover:bg-zinc-50'
                       }`}
                     >
                       {net}
@@ -515,66 +564,129 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
               {/* Amount Input */}
               <div className="space-y-1.5">
                 <div className="flex justify-between items-center">
-                  <label className="text-xs font-semibold text-zinc-500">Amount (USD)</label>
-                  <span className="text-[10px] text-zinc-500 font-semibold">Max: $10,000.00</span>
+                  <label className="text-xs font-semibold text-zinc-600">Deposit Amount ({currentSymbol})</label>
                 </div>
                 <div className="relative">
-                  <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 text-zinc-500 font-bold text-sm">$</span>
                   <input
                     id="crypto-deposit-amount"
                     type="number"
+                    step="any"
                     required
-                    placeholder="100.00"
-                    value={amountUSD}
-                    onChange={(e) => setAmountUSD(e.target.value)}
-                    className="w-full pl-8 pr-16 py-3 bg-white border border-zinc-200 rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 text-zinc-800 font-mono"
+                    placeholder={
+                      currentSymbol === 'BTC' ? '0.005' :
+                      currentSymbol === 'ETH' ? '0.05' :
+                      currentSymbol === 'SOL' ? '1.0' :
+                      currentSymbol === 'USDT' || currentSymbol === 'USDC' ? '100.00' : '10'
+                    }
+                    value={amountCoin}
+                    onChange={(e) => setAmountCoin(e.target.value)}
+                    className="w-full pl-3.5 pr-28 py-3 bg-white border border-zinc-200 rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 text-zinc-800 font-mono shadow-xs"
                   />
-                  <button
-                    type="button"
-                    onClick={() => setAmountUSD('10000')}
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center"
-                  >
-                    <span className="bg-amber-500/15 hover:bg-amber-500/25 text-amber-600 font-black text-[10px] px-2.5 py-1 rounded-md border border-amber-500/30 transition-all cursor-pointer">
+                  <div className="absolute inset-y-0 right-0 pr-3 flex items-center gap-2">
+                    <span className="font-bold text-xs text-zinc-500 font-mono uppercase">{currentSymbol}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (currentSymbol === 'BTC') setAmountCoin('0.1');
+                        else if (currentSymbol === 'ETH') setAmountCoin('1.5');
+                        else if (currentSymbol === 'SOL') setAmountCoin('10');
+                        else if (currentSymbol === 'USDT' || currentSymbol === 'USDC') setAmountCoin('1000');
+                        else setAmountCoin('100');
+                      }}
+                      className="bg-amber-500/15 hover:bg-amber-500/25 text-amber-700 font-black text-[10px] px-2 py-1 rounded-md border border-amber-500/30 transition-all cursor-pointer"
+                    >
                       MAX
-                    </span>
-                  </button>
+                    </button>
+                  </div>
                 </div>
               </div>
 
-              {/* Wallet Address Display Card */}
-              <div className="bg-white border border-zinc-200 rounded-2xl p-4 space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-[10px] text-zinc-500 font-semibold uppercase tracking-wider">Receiver Address ({selectedNetwork})</span>
-                  <button
-                    id="crypto-copy-address"
-                    onClick={() => handleCopy(selectedCoin.addresses[selectedNetwork] || '')}
-                    className="p-1.5 rounded-lg bg-zinc-50 hover:bg-zinc-100 border border-zinc-200 text-zinc-600 hover:text-zinc-800 transition-colors flex items-center gap-1 text-[10px]"
-                  >
-                    {copied ? <Check size={11} className="text-amber-600" /> : <Copy size={11} />}
-                    <span>{copied ? 'Copied' : 'Copy'}</span>
-                  </button>
-                </div>
-                <div className="bg-zinc-50 border border-zinc-200 p-3 rounded-xl font-mono text-[11px] text-amber-700 break-all select-all font-semibold leading-relaxed">
-                  {selectedCoin.addresses[selectedNetwork] || 'No Address configured'}
-                </div>
-                <p className="text-[10px] text-zinc-500 text-center">Transfer strictly using the {selectedNetwork} network to avoid assets loss.</p>
-              </div>
-
-              {/* Proceed Action */}
+              {/* Generate Receiver Address Action */}
               <button
                 id="crypto-deposit-proceed"
                 onClick={() => {
                   setError(null);
-                  const usdVal = parseFloat(amountUSD);
-                  if (!amountUSD || isNaN(usdVal) || usdVal <= 0) {
-                    setError('Please enter a valid deposit amount.');
+                  const numVal = parseFloat(amountCoin);
+                  if (!amountCoin || isNaN(numVal) || numVal <= 0) {
+                    setError(`Please enter a valid deposit amount in ${currentSymbol}.`);
                     return;
                   }
-                  setMethod('crypto_confirm');
+                  if (!selectedNetwork) {
+                    setError('Please select a network.');
+                    return;
+                  }
+                  setMethod('crypto_address');
                 }}
-                className="w-full flex items-center justify-center gap-2 py-3.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600 disabled:bg-zinc-200 disabled:text-zinc-400 rounded-xl text-sm font-bold transition-all shadow-md mt-6 cursor-pointer uppercase tracking-wider"
+                className="w-full flex items-center justify-center gap-2 py-3.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600 disabled:bg-zinc-200 disabled:text-zinc-400 rounded-xl text-sm font-black transition-all shadow-md mt-6 cursor-pointer uppercase tracking-wider"
               >
-                <span>Proceed to Evidence Upload</span>
+                <span>Generate Receiver Address</span>
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          )}
+
+          {/* Crypto Step 2: Receiver Address & Instructions */}
+          {method === 'crypto_address' && selectedCoin && (
+            <div className="space-y-5">
+              {/* Transfer Summary Card */}
+              <div className="bg-white border border-zinc-200 rounded-2xl p-4 space-y-3 shadow-xs">
+                <div className="flex justify-between items-center pb-2 border-b border-zinc-100">
+                  <span className="text-xs text-zinc-500 font-medium">Selected Asset</span>
+                  <div className="flex items-center gap-1.5">
+                    <CoinIcon symbol={selectedCoin.id.toUpperCase()} className="w-5 h-5 rounded" />
+                    <span className="font-bold text-xs text-zinc-800">{formatCoinName(selectedCoin.tokenName)}</span>
+                  </div>
+                </div>
+                <div className="flex justify-between items-center pb-2 border-b border-zinc-100">
+                  <span className="text-xs text-zinc-500 font-medium">Network</span>
+                  <span className="font-mono font-bold text-xs text-amber-600 px-2 py-0.5 bg-amber-50 rounded-md border border-amber-200">{selectedNetwork}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-zinc-500 font-medium">Exact Deposit Amount</span>
+                  <span className="font-mono font-extrabold text-sm text-amber-700">{amountCoin} {currentSymbol}</span>
+                </div>
+              </div>
+
+              {/* Wallet Address Card */}
+              <div className="bg-white border border-zinc-200 rounded-2xl p-4 space-y-3 shadow-sm">
+                <div className="flex justify-between items-center">
+                  <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Receiver Address ({selectedNetwork})</span>
+                  <button
+                    id="crypto-copy-address"
+                    type="button"
+                    onClick={() => handleCopy(selectedCoin.addresses[selectedNetwork] || '')}
+                    className="p-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-700 transition-colors flex items-center gap-1 text-[11px] font-bold cursor-pointer"
+                  >
+                    {copied ? <Check size={12} className="text-amber-600" /> : <Copy size={12} />}
+                    <span>{copied ? 'Copied' : 'Copy Address'}</span>
+                  </button>
+                </div>
+                <div className="bg-zinc-50 border border-zinc-200 p-3 rounded-xl font-mono text-xs text-amber-800 break-all select-all font-bold leading-relaxed tracking-wide">
+                  {selectedCoin.addresses[selectedNetwork] || 'No Address configured'}
+                </div>
+              </div>
+
+              {/* Instruction Banner */}
+              <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 text-xs space-y-1.5 text-zinc-800">
+                <div className="flex items-center gap-1.5 font-black text-amber-800 text-xs">
+                  <AlertCircle size={15} className="text-amber-600 shrink-0" />
+                  <span>Deposit Instructions</span>
+                </div>
+                <p className="text-[11px] leading-relaxed text-zinc-700">
+                  Please transfer exactly <strong className="font-mono text-amber-900">{amountCoin} {currentSymbol}</strong> to the address above.
+                </p>
+                <p className="text-[10px] text-amber-800 font-semibold">
+                  ⚠️ Transfer strictly using the <strong className="underline">{selectedNetwork}</strong> network. Sending via any other network will result in permanent loss of funds.
+                </p>
+              </div>
+
+              {/* I Have Made Payment Action */}
+              <button
+                id="crypto-payment-made-btn"
+                onClick={() => setMethod('crypto_confirm')}
+                className="w-full flex items-center justify-center gap-2 py-3.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600 rounded-xl text-sm font-black transition-all shadow-md cursor-pointer uppercase tracking-wider"
+              >
+                <span>I HAVE MADE PAYMENT</span>
                 <ChevronRight size={16} />
               </button>
             </div>
@@ -590,7 +702,7 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
                   </div>
                   <div>
                     <h3 className="text-sm font-black text-zinc-800">Upload Deposit Proof</h3>
-                    <p className="text-[11px] text-zinc-500">Provide evidence of stablecoin transfer</p>
+                    <p className="text-[11px] text-zinc-500">Provide evidence of transfer</p>
                   </div>
                 </div>
 
@@ -609,7 +721,7 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-zinc-500">Amount Sent</span>
-                    <span className="font-mono font-bold text-amber-600">${parseFloat(amountUSD).toLocaleString(undefined, { minimumFractionDigits: 2 })} USD</span>
+                    <span className="font-mono font-bold text-amber-600">{amountCoin} {currentSymbol}</span>
                   </div>
                 </div>
               </div>
@@ -657,7 +769,7 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
                 ) : (
                   <>
                     <Sparkles size={15} />
-                    <span>CONFIRM & SUBMIT DEPOSIT</span>
+                    <span>DONE</span>
                   </>
                 )}
               </button>
@@ -930,7 +1042,7 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
                     <span>Submitting P2P request...</span>
                   </>
                 ) : (
-                  <span>CONFIRM & SUBMIT DEPOSIT</span>
+                  <span>DONE</span>
                 )}
               </button>
 

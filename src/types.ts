@@ -2,6 +2,7 @@ export interface UserAccount {
   uid: string;
   email: string;
   displayName?: string;
+  phone?: string;
   country?: string;
   balance: number; // in USD
   referralSource?: string;

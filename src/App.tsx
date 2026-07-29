@@ -260,7 +260,7 @@ export default function App() {
           user={user}
           initialCoinSymbol={depositCoin}
           onBack={() => navigate('/dashboard')}
-          onSuccess={() => handleTxSuccess('Your deposit request has been submitted to the Admin Escrow Queue for verification.')}
+          onSuccess={() => handleTxSuccess('Deposit submitted successfully')}
         />
       )}
 

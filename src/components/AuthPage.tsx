@@ -9,7 +9,7 @@ import {
   updatePassword
 } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp, getDoc, collection, query, where, getDocs, updateDoc, increment, addDoc, deleteDoc } from 'firebase/firestore';
-import { Shield, Mail, Lock, User, Sparkles, AlertCircle, RefreshCw, Eye, EyeOff, Globe, ChevronDown, Check } from 'lucide-react';
+import { Shield, Mail, Lock, User, Phone, Sparkles, AlertCircle, RefreshCw, Eye, EyeOff, Globe, ChevronDown, Check } from 'lucide-react';
 
 interface AuthPageProps {
   onSuccess: () => void;
@@ -29,6 +29,7 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [phone, setPhone] = useState('');
   const [resetNewPassword, setResetNewPassword] = useState('');
   const [resetConfirmPassword, setResetConfirmPassword] = useState('');
   const [showResetPassword, setShowResetPassword] = useState(false);
@@ -38,11 +39,11 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
 
   const COUNTRIES = [
     { code: 'Kenya', name: 'Kenya', flag: '🇰🇪', p2p: true },
-    { code: 'Tanzania', name: 'Tanzania', flag: '🇹🇿', p2p: false },
-    { code: 'Rwanda', name: 'Rwanda', flag: '🇷🇼', p2p: false },
+    { code: 'Nigeria', name: 'Nigeria', flag: '🇳🇬', p2p: false },
+    { code: 'Ghana', name: 'Ghana', flag: '🇬🇭', p2p: false },
     { code: 'UAE', name: 'UAE', flag: '🇦🇪', p2p: false },
     { code: 'USA', name: 'USA', flag: '🇺🇸', p2p: false },
-    { code: 'CHINA', name: 'CHINA', flag: '🇨🇳', p2p: false },
+    { code: 'South Africa', name: 'South Africa', flag: '🇿🇦', p2p: false },
   ];
   const [referral, setReferral] = useState('');
   const toast = useToast();
@@ -239,6 +240,7 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
           uid: user.uid,
           email: formattedEmail,
           displayName: displayName.trim() || formattedEmail.split('@')[0],
+          phone: phone.trim(),
           country: country,
           balance: 0.0, // Initial wallet balance starts at $0
           referralSource: trimmedReferral,
@@ -587,6 +589,8 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
                   </div>
                 )}
 
+
+
                 {/* Country Dropdown - Sign Up Only */}
                 {isSignUp && !isReset && (
                   <div className="space-y-1 relative">
@@ -673,6 +677,27 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
                     />
                   </div>
                 </div>
+
+                {/* Phone Number - Sign Up Only */}
+                {isSignUp && !isReset && (
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-zinc-600">Phone Number</label>
+                    <div className="relative">
+                      <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-zinc-400">
+                        <Phone size={15} />
+                      </span>
+                      <input
+                        id="auth-phone"
+                        type="tel"
+                        required
+                        placeholder="+254 700 000000"
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                        className="w-full pl-9 pr-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 placeholder-zinc-400 text-zinc-800"
+                      />
+                    </div>
+                  </div>
+                )}
 
                 {/* Custom Reset Fields (New Password, Confirm Password) - Reset Only */}
                 {isReset && (

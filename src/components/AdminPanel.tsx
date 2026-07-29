@@ -560,13 +560,31 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
           throw new Error('User account does not exist in our systems.');
         }
 
-        const currentBalance = userSnap.data().balance || 0;
-        const depositAmount = tx.amount;
+        const userData = userSnap.data();
+        const currentBalance = userData.balance || 0;
+        const currentHoldings: Record<string, number> = userData.holdings || {};
 
-        // 1. Permanently credit the user's wallet balance
-        transaction.update(userRef, {
-          balance: parseFloat((currentBalance + depositAmount).toFixed(2))
-        });
+        const coinSymbol = tx.coinSymbol ? tx.coinSymbol.toUpperCase() : 'USDT';
+        const coinAmount = tx.coinAmount !== undefined && tx.coinAmount !== null && tx.coinAmount > 0 
+          ? tx.coinAmount 
+          : tx.amount;
+
+        if (coinSymbol === 'USDT' || tx.type === 'deposit_p2p' || !tx.coinSymbol) {
+          // Permanently credit the user's USDT wallet balance
+          transaction.update(userRef, {
+            balance: parseFloat((currentBalance + coinAmount).toFixed(2))
+          });
+        } else {
+          // Permanently credit the specific coin into user's holdings
+          const currentCoinBalance = currentHoldings[coinSymbol] || 0;
+          const newCoinBalance = parseFloat((currentCoinBalance + coinAmount).toFixed(8));
+          transaction.update(userRef, {
+            holdings: {
+              ...currentHoldings,
+              [coinSymbol]: newCoinBalance
+            }
+          });
+        }
 
         // 2. Update transaction status to APPROVED
         transaction.update(txRef, {
@@ -574,7 +592,11 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
         });
       });
 
-      showFeedback('success', `Transaction ${tx.id} approved successfully. Credited $${tx.amount} to ${tx.userEmail}.`);
+      const displayAmountStr = tx.coinSymbol && tx.coinSymbol.toUpperCase() !== 'USDT' && tx.coinAmount
+        ? `${tx.coinAmount} ${tx.coinSymbol}`
+        : `$${tx.amount?.toFixed(2)}`;
+
+      showFeedback('success', `Transaction ${tx.id} approved successfully. Credited ${displayAmountStr} to ${tx.userEmail}.`);
       await loadAllData(true);
     } catch (err: any) {
       console.error("Error approving deposit: ", err);
@@ -1317,7 +1339,11 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                         <div className="bg-zinc-950 p-3 rounded-xl border border-zinc-900/80 flex items-center justify-between">
                           <div>
                             <p className="text-[10px] text-zinc-500 uppercase font-black">Amount Claimed</p>
-                            <p className="text-lg font-black text-zinc-100 font-mono">${tx.amount?.toFixed(2)}</p>
+                            <p className="text-lg font-black text-zinc-100 font-mono">
+                              {tx.coinAmount && tx.coinSymbol && tx.coinSymbol.toUpperCase() !== 'USDT'
+                                ? `${tx.coinAmount} ${tx.coinSymbol}`
+                                : `$${tx.amount?.toFixed(2)}`}
+                            </p>
                           </div>
 
                           {/* Evidence Block */}
@@ -1469,7 +1495,11 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                             {h.type === 'internal_receive' && 'Internal Receive'}
                           </td>
                           <td className="p-3 text-zinc-400 font-mono">{h.userEmail}</td>
-                          <td className="p-3 font-bold font-mono text-zinc-100">${h.amount?.toFixed(2)}</td>
+                          <td className="p-3 font-bold font-mono text-zinc-100">
+                            {h.coinAmount && h.coinSymbol && h.coinSymbol.toUpperCase() !== 'USDT'
+                              ? `${h.coinAmount} ${h.coinSymbol}`
+                              : `$${h.amount?.toFixed(2)}`}
+                          </td>
                           <td className="p-3 text-zinc-500 font-mono">{formatDate(h.createdAt)}</td>
                           <td className="p-3">
                             <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${
@@ -2659,7 +2689,11 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                       </div>
                     </div>
                     <div className="text-right shrink-0">
-                      <span className="text-sm font-black font-mono text-emerald-400">${t.amount?.toFixed(2)}</span>
+                      <span className="text-sm font-black font-mono text-emerald-400">
+                        {t.coinAmount && t.coinSymbol && t.coinSymbol.toUpperCase() !== 'USDT'
+                          ? `${t.coinAmount} ${t.coinSymbol}`
+                          : `$${t.amount?.toFixed(2)}`}
+                      </span>
                     </div>
                   </div>
                 ))
