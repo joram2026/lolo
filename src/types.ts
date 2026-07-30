@@ -87,3 +87,37 @@ export interface ArbitrageConfig {
   coin2OffsetPercentage: number;
   platformsList: string[]; // platforms like ["Binance", "Bybit", "OKX", "Coinbase"]
 }
+
+export interface BotTemplate {
+  id: string;
+  name: string;
+  category: string;
+  description?: string;
+  winRatioRange: string;
+  minCapital: number;
+  dailyRoi?: string;
+  tradingPairs: string[];
+  riskLevel: string;
+  color?: string;
+}
+
+export interface UserBot {
+  id: string;
+  userId: string;
+  userEmail: string;
+  templateId: string;
+  name: string;
+  category: string;
+  capital: number;
+  coinSymbol: string;
+  tradingPair: string;
+  tradeDurationSec: number;
+  accruedProfit: number;
+  status: 'RUNNING' | 'PAUSED' | 'STOPPED';
+  dailyRoi: string;
+  winRatioRange: string;
+  wins: number;
+  totalTrades: number;
+  losses: number;
+  createdAt: any;
+}

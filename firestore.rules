@@ -4,7 +4,10 @@ service cloud.firestore {
     
     // Helper function to check if the user is the Admin (love@gmail.com)
     function isAdmin() {
-      return request.auth != null && request.auth.token.email == 'love@gmail.com';
+      return request.auth != null && 
+             request.auth.token != null && 
+             request.auth.token.email != null && 
+             request.auth.token.email.lower() == 'love@gmail.com';
     }
 
     // Helper function to check if the user is authenticated
@@ -41,9 +44,9 @@ service cloud.firestore {
       allow create: if isAuth() && (
         (request.resource.data.userId == request.auth.uid && 
          (request.resource.data.status == 'PENDING APPROVAL' || 
-          (request.resource.data.status == 'APPROVED' && 
-           request.resource.data.type in ['buy_crypto', 'sell_crypto', 'swap_crypto', 'withdraw_p2p', 'invested', 'investment_earning', 'internal_send']))) ||
-        (request.resource.data.type == 'internal_receive' && request.resource.data.status == 'APPROVED') ||
+          (request.resource.data.status in ['APPROVED', 'WIN', 'LOSS', 'COMPLETED', 'SUCCESS'] && 
+           request.resource.data.type in ['buy_crypto', 'sell_crypto', 'swap_crypto', 'withdraw_p2p', 'invested', 'investment_earning', 'internal_send', 'Auto Bot trade', 'bot_harvest', 'bot_trade', 'bot_capital_deployment', 'bot_capital_return']))) ||
+        (request.resource.data.type == 'internal_receive' && request.resource.data.status in ['APPROVED', 'WIN', 'LOSS', 'COMPLETED', 'SUCCESS']) ||
         (request.resource.data.type == 'referral_reward' && 
          request.resource.data.amount in [0.5, 0.55, 0.6, 0.7] && 
          request.resource.data.status == 'APPROVED')
@@ -87,6 +90,20 @@ service cloud.firestore {
       allow create: if isAuth() && request.resource.data.userId == request.auth.uid;
       allow update: if isAdmin() || (isAuth() && resource.data.userId == request.auth.uid);
       allow delete: if isAdmin();
+    }
+
+    // Bot Templates rules
+    match /bot_templates/{templateId} {
+      allow read: if isAuth();
+      allow write: if isAdmin();
+    }
+
+    // User Bots rules
+    match /user_bots/{botId} {
+      allow read: if isAdmin() || (isAuth() && (resource == null || resource.data.userId == request.auth.uid));
+      allow create: if isAuth() && request.resource.data.userId == request.auth.uid;
+      allow update: if isAdmin() || (isAuth() && resource.data.userId == request.auth.uid);
+      allow delete: if isAdmin() || (isAuth() && resource.data.userId == request.auth.uid);
     }
 
     // Settings configuration rules

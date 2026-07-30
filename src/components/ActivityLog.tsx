@@ -4,7 +4,7 @@ import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { Transaction } from '../types';
 import { 
   ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Clock, CheckCircle2, XCircle, 
-  ChevronDown, ChevronUp, Filter, RefreshCw, Calendar, ListFilter, Gift, TrendingUp, Send
+  ChevronDown, ChevronUp, Filter, RefreshCw, Calendar, ListFilter, Gift, TrendingUp, Send, Bot
 } from 'lucide-react';
 
 enum OperationType {
@@ -53,6 +53,7 @@ interface ActivityLogProps {
 
 const FILTER_OPTIONS = [
   { value: 'all', label: 'All Transactions' },
+  { value: 'bot', label: 'Auto Bot Trade' },
   { value: 'deposits', label: 'Deposits' },
   { value: 'withdrawals', label: 'Withdrawals' },
   { value: 'buy', label: 'Buy Crypto' },
@@ -66,7 +67,7 @@ export default function ActivityLog({ userId, isLightTheme = false }: ActivityLo
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<'all' | 'deposits' | 'withdrawals' | 'buy' | 'sell' | 'swap' | 'referral' | 'investments'>('all');
+  const [filter, setFilter] = useState<'all' | 'deposits' | 'withdrawals' | 'buy' | 'sell' | 'swap' | 'referral' | 'investments' | 'bot'>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState(false);
 
@@ -125,14 +126,16 @@ export default function ActivityLog({ userId, isLightTheme = false }: ActivityLo
     const isSwap = tx.type === 'swap_crypto';
     const isReferral = tx.type === 'referral_reward';
     const isInvestment = tx.type === 'invested' || tx.type === 'investment_earning';
+    const isBot = tx.type === 'Auto Bot trade' || tx.type === 'bot_harvest' || tx.type === 'bot_trade' || tx.type === 'bot' || tx.type?.toLowerCase?.().includes('bot') || (tx.title && tx.title.toLowerCase().includes('bot'));
 
+    if (filter === 'bot') return isBot;
     if (filter === 'deposits') return isDeposit;
-    if (filter === 'withdrawals') return isWithdrawal;
+    if (filter === 'withdrawals') return isWithdrawal && !isBot;
     if (filter === 'buy') return isBuy;
     if (filter === 'sell') return isSell;
     if (filter === 'swap') return isSwap;
     if (filter === 'referral') return isReferral;
-    if (filter === 'investments') return isInvestment;
+    if (filter === 'investments') return isInvestment || isBot;
     
     // For 'all' filter, show everything
     return true;
@@ -166,8 +169,35 @@ export default function ActivityLog({ userId, isLightTheme = false }: ActivityLo
     }
   };
 
-  const getTxTypeInfo = (type: string) => {
+  const getTxTypeInfo = (type: string, tx?: any) => {
     switch (type) {
+      case 'Auto Bot trade':
+      case 'bot_harvest':
+      case 'bot_trade':
+      case 'bot': {
+        const isBotCredit = tx?.isCredit !== undefined 
+          ? tx.isCredit 
+          : (tx?.isWin !== undefined 
+              ? tx.isWin 
+              : (tx?.status === 'WIN') ||
+                (tx?.paymentMessage && (
+                  tx.paymentMessage.toLowerCase().includes('stopped') || 
+                  tx.paymentMessage.toLowerCase().includes('returned') || 
+                  tx.paymentMessage.toLowerCase().includes('profit') ||
+                  tx.paymentMessage.toLowerCase().includes('harvest')
+                )));
+        return {
+          label: tx?.title || 'Auto Bot Trade',
+          isCredit: isBotCredit ? true : false,
+          colorClass: isBotCredit 
+            ? (isLightTheme ? 'text-emerald-700 font-extrabold' : 'text-emerald-400')
+            : (isLightTheme ? 'text-amber-700 font-extrabold' : 'text-amber-400'),
+          bgClass: isBotCredit
+            ? (isLightTheme ? 'bg-emerald-50 border border-emerald-200 text-emerald-700' : 'bg-emerald-500/10 border-emerald-500/15 text-emerald-400')
+            : (isLightTheme ? 'bg-amber-50 border border-amber-200 text-amber-700' : 'bg-amber-500/10 border-amber-500/15 text-amber-400'),
+          icon: <Bot size={16} />
+        };
+      }
       case 'referral_reward':
         return {
           label: 'Referral Reward',
@@ -264,7 +294,32 @@ export default function ActivityLog({ userId, isLightTheme = false }: ActivityLo
           bgClass: isLightTheme ? 'bg-emerald-50 border border-emerald-200 text-emerald-700' : 'bg-emerald-500/10 border-emerald-500/15 text-emerald-400',
           icon: <Send size={16} />
         };
-      default:
+      default: {
+        const isBotType = (type && type.toLowerCase().includes('bot')) || (tx?.title && tx.title.toLowerCase().includes('bot'));
+        if (isBotType) {
+          const isBotCredit = tx?.isCredit !== undefined 
+            ? tx.isCredit 
+            : (tx?.isWin !== undefined 
+                ? tx.isWin 
+                : (tx?.status === 'WIN') ||
+                  (tx?.paymentMessage && (
+                    tx.paymentMessage.toLowerCase().includes('stopped') || 
+                    tx.paymentMessage.toLowerCase().includes('returned') || 
+                    tx.paymentMessage.toLowerCase().includes('profit') ||
+                    tx.paymentMessage.toLowerCase().includes('harvest')
+                  )));
+          return {
+            label: tx?.title || 'Auto Bot Trade',
+            isCredit: isBotCredit ? true : false,
+            colorClass: isBotCredit 
+              ? (isLightTheme ? 'text-emerald-700 font-extrabold' : 'text-emerald-400')
+              : (isLightTheme ? 'text-amber-700 font-extrabold' : 'text-amber-400'),
+            bgClass: isBotCredit
+              ? (isLightTheme ? 'bg-emerald-50 border border-emerald-200 text-emerald-700' : 'bg-emerald-500/10 border-emerald-500/15 text-emerald-400')
+              : (isLightTheme ? 'bg-amber-50 border border-amber-200 text-amber-700' : 'bg-amber-500/10 border-amber-500/15 text-amber-400'),
+            icon: <Bot size={16} />
+          };
+        }
         const isDeposit = type.startsWith('deposit');
         return {
           label: isDeposit ? 'Deposit' : 'Withdrawal',
@@ -277,6 +332,7 @@ export default function ActivityLog({ userId, isLightTheme = false }: ActivityLo
             : (isLightTheme ? 'bg-red-50 border-red-200 text-red-700' : 'bg-red-500/10 border-red-500/15 text-red-400'),
           icon: isDeposit ? <ArrowDownLeft size={16} /> : <ArrowUpRight size={16} />
         };
+      }
     }
   };
 
@@ -385,7 +441,7 @@ export default function ActivityLog({ userId, isLightTheme = false }: ActivityLo
           </div>
         ) : (
           filteredTransactions.map(tx => {
-            const info = getTxTypeInfo(tx.type);
+            const info = getTxTypeInfo(tx.type, tx);
             const isExpanded = expandedId === tx.id;
 
             return (

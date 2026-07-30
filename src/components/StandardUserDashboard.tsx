@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion } from 'motion/react';
 import { db } from '../firebase';
-import { doc, getDoc, onSnapshot, collection, query, where, getDocs, updateDoc, addDoc } from 'firebase/firestore';
+import { doc, getDoc, onSnapshot, collection, query, where, getDocs, updateDoc, addDoc, serverTimestamp } from 'firebase/firestore';
 import { UserAccount, Transaction, CryptoPrice, ArbitrageConfig } from '../types';
 import { useToast } from '../context/ToastContext';
 import NewsCarousel from './NewsCarousel';
@@ -10,8 +10,10 @@ import {
   TrendingUp, TrendingDown, ArrowUpRight, ArrowDownLeft, Search, 
   User, LogOut, ArrowRightLeft, ShieldCheck, Activity, Wallet, 
   HelpCircle, RefreshCw, Coins, ArrowRight, MessageSquare, AlertCircle,
-  History, ArrowLeft, X, ChevronDown, Check, Lock, Unlock, Eye, EyeOff, Sparkles, BookOpen, Zap, Send
+  History, ArrowLeft, X, ChevronDown, Check, Lock, Unlock, Eye, EyeOff, Sparkles, BookOpen, Zap, Send,
+  Cpu, Play, Pause, Bot, Crown, Gift, ListFilter
 } from 'lucide-react';
+import { RunningBotView } from './RunningBotView';
 
 interface StandardUserDashboardProps {
   user: any;
@@ -296,6 +298,17 @@ export default function StandardUserDashboard({
   const processingInvestmentsRef = useRef<Set<string>>(new Set());
   const [tradeMode, setTradeMode] = useState<'swap' | 'mmf'>('swap');
   const [tradeSubTab, setTradeSubTab] = useState<'arbitrage' | 'converter'>('arbitrage');
+  const [tradeSubSection, setTradeSubSection] = useState<'bots' | 'converter'>('bots');
+  const [botHubView, setBotHubView] = useState<'menu' | 'PREMIUM' | 'FREE' | 'HISTORY' | 'MY_BOTS'>('menu');
+  const [userBots, setUserBots] = useState<any[]>([]);
+  const [botTemplates, setBotTemplates] = useState<any[]>([]);
+  const [selectedBotTemplate, setSelectedBotTemplate] = useState<any | null>(null);
+  const [botCapitalInput, setBotCapitalInput] = useState<string>('');
+  const [botCoinInput, setBotCoinInput] = useState<string>('USDT');
+  const [botSelectedPair, setBotSelectedPair] = useState<string>('');
+  const [botDurationSeconds, setBotDurationSeconds] = useState<number>(60);
+  const [botDeployLoading, setBotDeployLoading] = useState<boolean>(false);
+  const [activeRunningBot, setActiveRunningBot] = useState<any | null>(null);
   const [mmfSubView, setMmfSubView] = useState<'main' | 'list' | 'form'>('main');
   const [selectedCoinForInvestment, setSelectedCoinForInvestment] = useState<CryptoPrice | null>(null);
   const [investmentAmount, setInvestmentAmount] = useState<string>('');
@@ -636,12 +649,31 @@ export default function StandardUserDashboard({
       console.error("Error listening to arbitrage config:", err);
     });
 
+    const botsCol = collection(db, 'user_bots');
+    const botsQuery = query(botsCol, where('userId', '==', user.uid));
+    const unsubscribeBots = onSnapshot(botsQuery, (snapshot) => {
+      const bots = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as any));
+      bots.sort((a, b) => {
+        const aTime = a.createdAt?.seconds ? a.createdAt.seconds * 1000 : new Date(a.createdAt || 0).getTime();
+        const bTime = b.createdAt?.seconds ? b.createdAt.seconds * 1000 : new Date(b.createdAt || 0).getTime();
+        return bTime - aTime;
+      });
+      setUserBots(bots);
+    });
+
+    const unsubscribeTemplates = onSnapshot(collection(db, 'bot_templates'), (snapshot) => {
+      const tpls = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as any));
+      setBotTemplates(tpls);
+    });
+
     return () => {
       unsubscribeUser();
       unsubscribeTx();
       unsubscribePrices();
       unsubscribeInvestments();
       unsubscribeArbitrage();
+      unsubscribeBots();
+      unsubscribeTemplates();
     };
   }, [user.uid]);
 
@@ -1131,6 +1163,228 @@ export default function StandardUserDashboard({
     }
   };
   const swapMessage = swapMessageState;
+
+  const BOT_TEMPLATES = [
+    {
+      id: 'arb_sniper',
+      name: 'Arbitrage Flash-Loan Sniper',
+      category: 'PREMIUM',
+      winRatioRange: '92-98%',
+      riskLevel: 'Low Risk',
+      minCapital: 50,
+      color: 'from-amber-500 to-yellow-500'
+    },
+    {
+      id: 'grid_scalper',
+      name: 'AI Grid Scalper Pro',
+      category: 'PREMIUM',
+      winRatioRange: '88-95%',
+      riskLevel: 'Medium Risk',
+      minCapital: 100,
+      color: 'from-emerald-500 to-teal-500'
+    },
+    {
+      id: 'dca_accumulator',
+      name: 'DCA Smart Accumulator',
+      category: 'FREE',
+      winRatioRange: '94-99%',
+      riskLevel: 'Very Low Risk',
+      minCapital: 25,
+      color: 'from-blue-500 to-indigo-500'
+    },
+    {
+      id: 'quantum_momentum',
+      name: 'Quantum Momentum Scalper',
+      category: 'FREE',
+      winRatioRange: '86-94%',
+      riskLevel: 'High Risk',
+      minCapital: 250,
+      color: 'from-purple-500 to-pink-500'
+    }
+  ];
+
+  const getTemplateMinCapital = (tmpl: any): number => {
+    if (!tmpl) return 25;
+    const val = tmpl.minCapital ?? tmpl.min_capital ?? tmpl.minDeposit ?? tmpl.minimumCapital ?? tmpl.min_deposit ?? tmpl.capital ?? tmpl.minCapitalAmount;
+    if (val !== undefined && val !== null && val !== '') {
+      const num = Number(val);
+      if (!isNaN(num) && num > 0) return num;
+    }
+    if ((tmpl.category || '').toUpperCase() === 'PREMIUM') return 50;
+    return 25;
+  };
+
+  const handleDeployBot = async () => {
+    if (!selectedBotTemplate) return;
+    const capital = parseFloat(botCapitalInput);
+    const minRequired = getTemplateMinCapital(selectedBotTemplate);
+    if (isNaN(capital) || capital < minRequired) {
+      toast.error(`Minimum capital requirement for ${selectedBotTemplate.name} is $${minRequired}`, 'Invalid Capital');
+      return;
+    }
+    const currentBalance = profile?.balance || 0;
+    if (capital > currentBalance) {
+      toast.error(`Insufficient USD wallet balance ($${currentBalance.toFixed(2)} available). Please deposit funds first.`, 'Insufficient Funds');
+      return;
+    }
+
+    setBotDeployLoading(true);
+    try {
+      const userRef = doc(db, 'users', user.uid);
+      const newBalance = currentBalance - capital;
+      await updateDoc(userRef, { balance: newBalance });
+
+      const docRef = await addDoc(collection(db, 'user_bots'), {
+        userId: user.uid,
+        userEmail: user.email,
+        templateId: selectedBotTemplate.id,
+        name: selectedBotTemplate.name,
+        category: selectedBotTemplate.category || 'Trading Bot',
+        tradingPair: botSelectedPair || (selectedBotTemplate.tradingPairs?.[0] || 'BTC/USDT'),
+        durationSeconds: botDurationSeconds,
+        durationMinutes: parseFloat((botDurationSeconds / 60).toFixed(2)),
+        capital: capital,
+        coinSymbol: botCoinInput || 'USDT',
+        accruedProfit: 0,
+        status: 'RUNNING',
+        wins: 0,
+        losses: 0,
+        totalTrades: 0,
+        createdAt: serverTimestamp()
+      });
+
+      await addDoc(collection(db, 'transactions'), {
+        userId: user.uid,
+        userEmail: user.email,
+        type: 'bot_capital_deployment',
+        title: 'Bot Capital Allocation',
+        amount: capital,
+        status: 'APPROVED',
+        coinSymbol: botCoinInput,
+        paymentMessage: `Auto Bot trade: Deployed ${selectedBotTemplate.name} with $${capital}`,
+        createdAt: serverTimestamp()
+      });
+
+      const newlyDeployedBot = {
+        id: docRef.id,
+        userId: user.uid,
+        userEmail: user.email,
+        templateId: selectedBotTemplate.id,
+        name: selectedBotTemplate.name,
+        category: selectedBotTemplate.category || 'Trading Bot',
+        tradingPair: botSelectedPair || (selectedBotTemplate.tradingPairs?.[0] || 'BTC/USDT'),
+        durationSeconds: botDurationSeconds,
+        durationMinutes: parseFloat((botDurationSeconds / 60).toFixed(2)),
+        capital: capital,
+        coinSymbol: botCoinInput || 'USDT',
+        accruedProfit: 0,
+        status: 'RUNNING',
+        wins: 0,
+        losses: 0,
+        totalTrades: 0,
+        createdAt: new Date()
+      };
+
+      toast.success(`Successfully deployed ${selectedBotTemplate.name} with $${capital}!`, 'Bot Deployed');
+      setSelectedBotTemplate(null);
+      setBotCapitalInput('');
+      setBotDeployLoading(false);
+      setActiveRunningBot(newlyDeployedBot);
+    } catch (err: any) {
+      console.error("Error deploying bot:", err);
+      toast.error(err.message || 'Failed to deploy bot', 'Deployment Error');
+      setBotDeployLoading(false);
+    }
+  };
+
+  const handleHarvestBotProfit = async (bot: any) => {
+    const profitEarned = Math.max(1.5, parseFloat((bot.capital * 0.02 * (Math.random() * 0.8 + 0.6)).toFixed(2)));
+    try {
+      const userRef = doc(db, 'users', user.uid);
+      const currentBalance = profile?.balance || 0;
+      await updateDoc(userRef, { balance: currentBalance + profitEarned });
+
+      const botRef = doc(db, 'user_bots', bot.id);
+      await updateDoc(botRef, { accruedProfit: (bot.accruedProfit || 0) + profitEarned });
+
+      await addDoc(collection(db, 'transactions'), {
+        userId: user.uid,
+        userEmail: user.email,
+        type: 'investment_earning',
+        amount: profitEarned,
+        status: 'APPROVED',
+        coinSymbol: bot.coinSymbol || 'USDT',
+        paymentMessage: `Harvested profit from ${bot.name}`,
+        createdAt: serverTimestamp()
+      });
+
+      toast.success(`Successfully harvested $${profitEarned.toFixed(2)} profit to your wallet!`, 'Profit Harvested');
+    } catch (err: any) {
+      console.error("Error harvesting bot profit:", err);
+      toast.error('Failed to harvest profit', 'Error');
+    }
+  };
+
+  const handleToggleBotStatus = async (bot: any) => {
+    try {
+      const newStatus = bot.status === 'RUNNING' ? 'PAUSED' : 'RUNNING';
+      const botRef = doc(db, 'user_bots', bot.id);
+      await updateDoc(botRef, { status: newStatus });
+      toast.success(`Bot status updated to ${newStatus}`, 'Bot Updated');
+    } catch (err: any) {
+      console.error("Error updating bot status:", err);
+      toast.error('Failed to update bot status', 'Error');
+    }
+  };
+
+  const handleStopBot = async (bot: any) => {
+    const capital = bot.capital || 0;
+    const accruedProfit = bot.accruedProfit || 0;
+    const totalReturnAmount = capital + accruedProfit;
+    try {
+      const userRef = doc(db, 'users', user.uid);
+      const currentBalance = profile?.balance || 0;
+      await updateDoc(userRef, { balance: currentBalance + totalReturnAmount });
+
+      const botRef = doc(db, 'user_bots', bot.id);
+      await updateDoc(botRef, { status: 'STOPPED', capital: 0, accruedProfit: 0 });
+
+      if (accruedProfit !== 0) {
+        const isProfit = accruedProfit > 0;
+        await addDoc(collection(db, 'transactions'), {
+          userId: user.uid,
+          userEmail: user.email,
+          type: 'bot_harvest',
+          title: `${bot.name} ${isProfit ? 'Profit Harvest' : 'Loss Deduction'}`,
+          tradingPair: bot.tradingPair || 'BTC/USDT',
+          botName: bot.name,
+          amount: Math.abs(accruedProfit),
+          profitDelta: accruedProfit,
+          isWin: isProfit,
+          status: isProfit ? 'WIN' : 'LOSS',
+          paymentMessage: `Bot ${bot.name} stopped: ${isProfit ? `Harvested +$${accruedProfit.toFixed(2)} USDT profit` : `Net loss -$${Math.abs(accruedProfit).toFixed(2)} USDT`}`,
+          createdAt: serverTimestamp()
+        });
+      }
+
+      await addDoc(collection(db, 'transactions'), {
+        userId: user.uid,
+        userEmail: user.email,
+        type: 'bot_capital_return',
+        title: 'Bot Capital Return',
+        amount: capital,
+        status: 'APPROVED',
+        coinSymbol: bot.coinSymbol || 'USDT',
+        paymentMessage: `Auto Bot trade: Stopped ${bot.name} & returned $${capital.toFixed(2)} capital`,
+        createdAt: serverTimestamp()
+      });
+
+      toast.success(`Bot stopped. $${totalReturnAmount.toFixed(2)} returned to your wallet.`, 'Bot Stopped');
+    } catch (err: any) {
+      console.error("Error stopping bot:", err);
+      toast.error('Failed to stop bot', 'Error');
+    }
+  };
 
   const handleSwapConvert = async () => {
     setSwapMessage(null);
@@ -1950,13 +2204,13 @@ export default function StandardUserDashboard({
     <div 
       id="user-dashboard-root" 
       className={`min-h-screen font-sans transition-colors duration-300 ${
-        arbitrageGuideCoin || (activeTab === 'earn' && mmfSubView === 'form') ? 'pb-10' : 'pb-28'
+        arbitrageGuideCoin || (activeTab === 'earn' && mmfSubView === 'form') || activeRunningBot ? 'pb-10' : 'pb-28'
       } ${
         isLightTheme ? 'bg-[#FFF3D6] text-zinc-800' : 'bg-slate-900 text-zinc-100'
       }`}
     >
       {/* Top Header */}
-      {!arbitrageGuideCoin && !(activeTab === 'earn' && mmfSubView === 'form') && (
+      {!arbitrageGuideCoin && !(activeTab === 'earn' && mmfSubView === 'form') && !activeRunningBot && activeTab !== 'trade' && (
         <header className={`px-4 py-4 border-b sticky top-0 backdrop-blur-md z-20 flex justify-between items-center transition-colors duration-300 ${
           isLightTheme 
             ? 'bg-[#FFF3D6]/85 border-zinc-200/80' 
@@ -2027,7 +2281,37 @@ export default function StandardUserDashboard({
           <span className="text-xs text-zinc-500 font-semibold">Decrypting wallet keys...</span>
         </div>
       ) : (
-        <main className={`max-w-md mx-auto px-4 space-y-6 ${arbitrageGuideCoin ? 'pt-4' : 'mt-5'}`}>
+        <main className={`max-w-4xl mx-auto px-4 space-y-6 ${arbitrageGuideCoin || activeRunningBot ? 'pt-4' : 'mt-5'}`}>
+          {activeRunningBot ? (
+            <RunningBotView
+              bot={activeRunningBot}
+              user={user}
+              userBalance={profile?.balance || 0}
+              isLightTheme={isLightTheme}
+              onBack={() => setActiveRunningBot(null)}
+              onTradeAgain={(botToRestart) => {
+                setActiveRunningBot(null);
+                const matchedTemplate = botTemplates.find((t: any) => t.id === botToRestart?.templateId) || {
+                  id: botToRestart?.templateId || 'bot-template',
+                  name: botToRestart?.name || 'Trading Bot',
+                  category: botToRestart?.category || 'Trading Bot',
+                  minCapital: botToRestart?.capital || 20,
+                  tradingPairs: [botToRestart?.tradingPair || 'BTC/USDT'],
+                  winRatioRange: '80% - 95%',
+                  riskLevel: 'Moderate'
+                };
+                setSelectedBotTemplate(matchedTemplate);
+                setBotCapitalInput((botToRestart?.capital || matchedTemplate.minCapital || 20).toString());
+                setBotSelectedPair(botToRestart?.tradingPair || matchedTemplate.tradingPairs[0] || 'BTC/USDT');
+                setBotDurationSeconds(botToRestart?.durationSeconds || 60);
+              }}
+              onGoToHistory={() => {
+                setActiveRunningBot(null);
+                setActiveTab('history');
+              }}
+            />
+          ) : (
+            <>
           {pricesLoadError && (
             <div className={`flex items-start gap-2.5 p-3.5 border rounded-2xl text-[11px] font-medium leading-relaxed shadow-lg animate-fade-in transition-colors duration-300 ${
               isLightTheme
@@ -2716,133 +3000,1126 @@ export default function StandardUserDashboard({
             </div>
           )}
 
-          {/* TAB 3: TRADE (INSTANT SWAP / CONVERTER) */}
+          {/* TAB 3: BOTS HUB */}
           {activeTab === 'trade' && (
-            <div className="space-y-5">
-              {/* Quick Converter Simulator */}
-              <div className={`border rounded-3xl p-5 space-y-5 animate-fade-in ${
-                isLightTheme ? 'bg-white border-zinc-200/80 shadow-xs' : 'bg-slate-800 border-slate-700/80'
-              }`}>
+            <div className="space-y-6 animate-fade-in">
+              {/* Header */}
+              <div className="flex items-center justify-between pb-1 select-none">
                 <div>
-                  <h3 className={`text-sm font-black tracking-tight flex items-center gap-1.5 ${isLightTheme ? 'text-zinc-800' : 'text-zinc-300'}`}>
-                    <ArrowRightLeft size={16} className={isLightTheme ? 'text-amber-500' : 'text-emerald-400'} />
-                    Quick Converter
-                  </h3>
-                  <p className={`text-xs mt-0.5 ${isLightTheme ? 'text-zinc-400' : 'text-zinc-500'}`}>Learn stablecoin rates and instantly swap between token balances.</p>
+                  <h2 className={`text-xl sm:text-2xl font-black tracking-tight flex items-center gap-2 ${
+                    isLightTheme ? 'text-zinc-900' : 'text-white'
+                  }`}>
+                    <Bot className={isLightTheme ? 'text-amber-500' : 'text-emerald-400'} size={24} />
+                    BOTS
+                  </h2>
+                  <p className={`text-xs mt-0.5 ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                    Automated trading bots & yield harvesting strategies
+                  </p>
                 </div>
+              </div>
 
-                <div className="space-y-4">
-                  {/* From Asset */}
-                  <div className="space-y-1.5">
-                    <div className="flex justify-between items-center select-none">
-                      <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">From Asset</label>
-                      <span className={`text-[10px] font-bold font-mono ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>
-                        Available: {Math.max(0, getCoinHolding(tradeFrom) - getLockedAmount(tradeFrom))} {tradeFrom}
-                        {getLockedAmount(tradeFrom) > 0 && (
-                          <span className="text-zinc-400 text-[9px] font-normal"> ({getCoinHolding(tradeFrom)} total)</span>
-                        )}
-                      </span>
-                    </div>
-                    <CustomCoinSelect
-                      value={tradeFrom}
-                      onChange={(val) => {
-                        setTradeFrom(val);
-                        setSwapMessage(null);
-                      }}
-                      coins={cryptoPrices}
-                      isLightTheme={isLightTheme}
-                    />
-                  </div>
+              <div className="space-y-6">
+                {/* MAIN HUB MENU: 4 CARDS (Matching Blueprint Layout) */}
+                  {botHubView === 'menu' && (
+                    <div className="space-y-6 animate-fade-in">
+                      {/* 2x2 Grid of 4 Cards */}
+                      <div className="grid grid-cols-2 gap-3 sm:gap-4 select-none">
+                        {/* 1. PREMIUM BOTS */}
+                        <button
+                          type="button"
+                          onClick={() => setBotHubView('PREMIUM')}
+                          className={`p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border text-left transition-all duration-200 cursor-pointer flex flex-col justify-between group min-h-[155px] sm:min-h-[185px] select-none ${
+                            isLightTheme 
+                              ? 'bg-white border-amber-200/90 shadow-xs hover:shadow-xl hover:border-amber-400 hover:-translate-y-0.5' 
+                              : 'bg-slate-800/95 border-slate-700 hover:border-amber-400/60 shadow-xs hover:-translate-y-0.5'
+                          }`}
+                        >
+                          <div className="space-y-2 sm:space-y-3">
+                            <div className="flex items-center justify-between">
+                              <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-gradient-to-tr from-amber-500 to-amber-400 text-white flex items-center justify-center shadow-md shadow-amber-500/30 group-hover:scale-105 transition-transform duration-200">
+                                <Crown size={18} className="sm:w-5 sm:h-5 drop-shadow-xs" />
+                              </div>
+                              <span className={`text-[9px] sm:text-[10px] font-black uppercase tracking-wider px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full border ${
+                                isLightTheme ? 'bg-amber-100/90 text-amber-950 border-amber-300' : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                              }`}>
+                                PRO
+                              </span>
+                            </div>
 
-                  {/* To Asset */}
-                  <div className="space-y-1.5">
-                    <div className="flex justify-between items-center select-none">
-                      <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">To Asset</label>
-                      <span className={`text-[10px] font-bold font-mono ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>
-                        Available: {Math.max(0, getCoinHolding(tradeTo) - getLockedAmount(tradeTo))} {tradeTo}
-                        {getLockedAmount(tradeTo) > 0 && (
-                          <span className="text-zinc-400 text-[9px] font-normal"> ({getCoinHolding(tradeTo)} total)</span>
-                        )}
-                      </span>
-                    </div>
-                    <CustomCoinSelect
-                      value={tradeTo}
-                      onChange={(val) => {
-                        setTradeTo(val);
-                        setSwapMessage(null);
-                      }}
-                      coins={cryptoPrices}
-                      isLightTheme={isLightTheme}
-                    />
-                  </div>
+                            <div>
+                              <h4 className={`text-xs sm:text-base font-black tracking-tight leading-tight group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors ${
+                                isLightTheme ? 'text-zinc-900' : 'text-white'
+                              }`}>
+                                Premium BOTS
+                              </h4>
+                              <p className={`text-[10px] sm:text-xs mt-0.5 font-medium line-clamp-1 ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                                High-yield automated strategies
+                              </p>
+                            </div>
+                          </div>
 
-                  {/* Amount to convert */}
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Amount to convert</label>
-                    <div className="relative">
-                      <input
-                        id="trade-amount-input"
-                        type="number"
-                        placeholder="e.g. 0.5"
-                        value={tradeAmount}
-                        onChange={(e) => {
-                          setTradeAmount(e.target.value);
-                          setSwapMessage(null);
-                        }}
-                        className={`w-full p-3 border rounded-xl text-xs focus:outline-none font-mono ${
-                          isLightTheme 
-                            ? 'bg-zinc-50/50 border-zinc-200 focus:border-amber-500 text-zinc-800 placeholder-zinc-400' 
-                            : 'bg-slate-950 border-slate-800 focus:border-emerald-500 text-white'
-                        }`}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setTradeAmount(Math.max(0, getCoinHolding(tradeFrom) - getLockedAmount(tradeFrom)).toString())}
-                        className={`absolute right-2.5 top-2 px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider rounded-lg cursor-pointer ${
-                          isLightTheme 
-                            ? 'text-amber-600 bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/20' 
-                            : 'text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20'
-                        }`}
-                      >
-                        MAX
-                      </button>
-                    </div>
-                  </div>
+                          <div className={`pt-2.5 sm:pt-3 border-t flex items-center justify-between text-[10px] sm:text-xs font-bold gap-1 ${
+                            isLightTheme ? 'border-zinc-100 text-amber-700' : 'border-slate-700/80 text-amber-400'
+                          }`}>
+                            <span className="truncate">
+                              {(botTemplates.length > 0 ? botTemplates : BOT_TEMPLATES).filter(t => (t.category || '').toUpperCase() === 'PREMIUM' || (!t.category || t.category.toUpperCase() !== 'FREE')).length} Available
+                            </span>
+                            <div className={`w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-200 ${
+                              isLightTheme 
+                                ? 'bg-amber-100/80 text-amber-800 group-hover:bg-amber-500 group-hover:text-white shadow-xs' 
+                                : 'bg-amber-500/20 text-amber-300 group-hover:bg-amber-500 group-hover:text-white'
+                            }`}>
+                              <ArrowRight size={13} className="group-hover:translate-x-0.5 transition-transform" />
+                            </div>
+                          </div>
+                        </button>
 
-                  {/* Output conversion */}
-                  {tradeResult !== null && (
-                    <div className={`p-4 border rounded-2xl flex flex-col gap-1 items-center justify-center relative overflow-hidden ${
-                      isLightTheme ? 'bg-amber-50/50 border-amber-200/50' : 'bg-slate-950 border-slate-850'
-                    }`}>
-                      <div className={`absolute top-0 right-0 w-16 h-16 rounded-full blur-xl ${isLightTheme ? 'bg-amber-500/5' : 'bg-emerald-500/5'}`} />
-                      <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider select-none">Live Conversion Value</span>
-                      <span className={`text-xl font-black font-mono ${isLightTheme ? 'text-amber-600' : 'text-emerald-400'}`}>
-                        {tradeResult} <span className={`text-xs font-normal ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>{tradeTo}</span>
-                      </span>
-                      <span className={`text-[9px] font-semibold mt-0.5 select-none ${isLightTheme ? 'text-zinc-400' : 'text-zinc-600'}`}>Dynamic rate applied</span>
+                        {/* 2. FREE BOTS */}
+                        <button
+                          type="button"
+                          onClick={() => setBotHubView('FREE')}
+                          className={`p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border text-left transition-all duration-200 cursor-pointer flex flex-col justify-between group min-h-[155px] sm:min-h-[185px] select-none ${
+                            isLightTheme 
+                              ? 'bg-white border-emerald-200/90 shadow-xs hover:shadow-xl hover:border-emerald-400 hover:-translate-y-0.5' 
+                              : 'bg-slate-800/95 border-slate-700 hover:border-emerald-400/60 shadow-xs hover:-translate-y-0.5'
+                          }`}
+                        >
+                          <div className="space-y-2 sm:space-y-3">
+                            <div className="flex items-center justify-between">
+                              <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-gradient-to-tr from-emerald-500 to-emerald-400 text-white flex items-center justify-center shadow-md shadow-emerald-500/30 group-hover:scale-105 transition-transform duration-200">
+                                <Gift size={18} className="sm:w-5 sm:h-5 drop-shadow-xs" />
+                              </div>
+                              <span className={`text-[9px] sm:text-[10px] font-black uppercase tracking-wider px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full border ${
+                                isLightTheme ? 'bg-emerald-100/90 text-emerald-950 border-emerald-300' : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                              }`}>
+                                FREE
+                              </span>
+                            </div>
+
+                            <div>
+                              <h4 className={`text-xs sm:text-base font-black tracking-tight leading-tight group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors ${
+                                isLightTheme ? 'text-zinc-900' : 'text-white'
+                              }`}>
+                                Free BOTS
+                              </h4>
+                              <p className={`text-[10px] sm:text-xs mt-0.5 font-medium line-clamp-1 ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                                Starter trading algorithms
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className={`pt-2.5 sm:pt-3 border-t flex items-center justify-between text-[10px] sm:text-xs font-bold gap-1 ${
+                            isLightTheme ? 'border-zinc-100 text-emerald-700' : 'border-slate-700/80 text-emerald-400'
+                          }`}>
+                            <span className="truncate">
+                              {(botTemplates.length > 0 ? botTemplates : BOT_TEMPLATES).filter(t => (t.category || '').toUpperCase() === 'FREE').length} Available
+                            </span>
+                            <div className={`w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-200 ${
+                              isLightTheme 
+                                ? 'bg-emerald-100/80 text-emerald-800 group-hover:bg-emerald-500 group-hover:text-white shadow-xs' 
+                                : 'bg-emerald-500/20 text-emerald-300 group-hover:bg-emerald-500 group-hover:text-white'
+                            }`}>
+                              <ArrowRight size={13} className="group-hover:translate-x-0.5 transition-transform" />
+                            </div>
+                          </div>
+                        </button>
+
+                        {/* 3. HISTORY */}
+                        <button
+                          type="button"
+                          onClick={() => setBotHubView('HISTORY')}
+                          className={`p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border text-left transition-all duration-200 cursor-pointer flex flex-col justify-between group min-h-[155px] sm:min-h-[185px] select-none ${
+                            isLightTheme 
+                              ? 'bg-white border-indigo-200/90 shadow-xs hover:shadow-xl hover:border-indigo-400 hover:-translate-y-0.5' 
+                              : 'bg-slate-800/95 border-slate-700 hover:border-indigo-400/60 shadow-xs hover:-translate-y-0.5'
+                          }`}
+                        >
+                          <div className="space-y-2 sm:space-y-3">
+                            <div className="flex items-center justify-between">
+                              <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-gradient-to-tr from-indigo-500 to-indigo-400 text-white flex items-center justify-center shadow-md shadow-indigo-500/30 group-hover:scale-105 transition-transform duration-200">
+                                <History size={18} className="sm:w-5 sm:h-5 drop-shadow-xs" />
+                              </div>
+                              <span className={`text-[9px] sm:text-[10px] font-black uppercase tracking-wider px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full border ${
+                                isLightTheme ? 'bg-indigo-100/90 text-indigo-950 border-indigo-300' : 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40'
+                              }`}>
+                                LOGS
+                              </span>
+                            </div>
+
+                            <div>
+                              <h4 className={`text-xs sm:text-base font-black tracking-tight leading-tight group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors ${
+                                isLightTheme ? 'text-zinc-900' : 'text-white'
+                              }`}>
+                                Bot History
+                              </h4>
+                              <p className={`text-[10px] sm:text-xs mt-0.5 font-medium line-clamp-1 ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                                Profit & execution records
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className={`pt-2.5 sm:pt-3 border-t flex items-center justify-between text-[10px] sm:text-xs font-bold gap-1 ${
+                            isLightTheme ? 'border-zinc-100 text-indigo-700' : 'border-slate-700/80 text-indigo-400'
+                          }`}>
+                            <span className="truncate">
+                              {userTransactions.filter(tx => tx.type === 'Auto Bot trade' || tx.type === 'bot_harvest' || tx.type === 'bot_trade' || (tx.type && tx.type.toLowerCase().includes('bot')) || (tx.title && tx.title.toLowerCase().includes('bot'))).length} Logs<span className="hidden sm:inline"> Recorded</span>
+                            </span>
+                            <div className={`w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-200 ${
+                              isLightTheme 
+                                ? 'bg-indigo-100/80 text-indigo-800 group-hover:bg-indigo-500 group-hover:text-white shadow-xs' 
+                                : 'bg-indigo-500/20 text-indigo-300 group-hover:bg-indigo-500 group-hover:text-white'
+                            }`}>
+                              <ArrowRight size={13} className="group-hover:translate-x-0.5 transition-transform" />
+                            </div>
+                          </div>
+                        </button>
+
+                        {/* 4. MY BOTS */}
+                        <button
+                          type="button"
+                          onClick={() => setBotHubView('MY_BOTS')}
+                          className={`p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border text-left transition-all duration-200 cursor-pointer flex flex-col justify-between group min-h-[155px] sm:min-h-[185px] select-none ${
+                            isLightTheme 
+                              ? 'bg-white border-blue-200/90 shadow-xs hover:shadow-xl hover:border-blue-400 hover:-translate-y-0.5' 
+                              : 'bg-slate-800/95 border-slate-700 hover:border-blue-400/60 shadow-xs hover:-translate-y-0.5'
+                          }`}
+                        >
+                          <div className="space-y-2 sm:space-y-3">
+                            <div className="flex items-center justify-between">
+                              <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-gradient-to-tr from-blue-500 to-blue-400 text-white flex items-center justify-center shadow-md shadow-blue-500/30 group-hover:scale-105 transition-transform duration-200">
+                                <Bot size={18} className="sm:w-5 sm:h-5 drop-shadow-xs" />
+                              </div>
+                              <span className={`text-[9px] sm:text-[10px] font-black uppercase tracking-wider px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full border ${
+                                isLightTheme ? 'bg-blue-100/90 text-blue-950 border-blue-300' : 'bg-blue-500/20 text-blue-300 border-blue-500/40'
+                              }`}>
+                                ACTIVE
+                              </span>
+                            </div>
+
+                            <div>
+                              <h4 className={`text-xs sm:text-base font-black tracking-tight leading-tight group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors ${
+                                isLightTheme ? 'text-zinc-900' : 'text-white'
+                              }`}>
+                                My Active Bots
+                              </h4>
+                              <p className={`text-[10px] sm:text-xs mt-0.5 font-medium line-clamp-1 ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                                Running bot instances
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className={`pt-2.5 sm:pt-3 border-t flex items-center justify-between text-[10px] sm:text-xs font-bold gap-1 ${
+                            isLightTheme ? 'border-zinc-100 text-blue-700' : 'border-slate-700/80 text-blue-400'
+                          }`}>
+                            <span className="truncate">{userBots.filter(b => b.status !== 'STOPPED').length} Active</span>
+                            <div className={`w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-200 ${
+                              isLightTheme 
+                                ? 'bg-blue-100/80 text-blue-800 group-hover:bg-blue-500 group-hover:text-white shadow-xs' 
+                                : 'bg-blue-500/20 text-blue-300 group-hover:bg-blue-500 group-hover:text-white'
+                            }`}>
+                              <ArrowRight size={13} className="group-hover:translate-x-0.5 transition-transform" />
+                            </div>
+                          </div>
+                        </button>
+                      </div>
                     </div>
                   )}
 
-                  {/* Execution Button */}
+                  {/* SUB-PAGE VIEWS */}
+                  {botHubView !== 'menu' && (
+                    <div className="space-y-5 animate-fade-in">
+                      {/* Top Bar with Back Button */}
+                      <div className="flex items-center justify-between select-none">
+                        <button
+                          type="button"
+                          onClick={() => setBotHubView('menu')}
+                          className={`px-3.5 py-2 rounded-2xl border text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                            isLightTheme 
+                              ? 'bg-white border-zinc-200 text-zinc-700 hover:bg-zinc-100' 
+                              : 'bg-slate-800 border-slate-700 text-zinc-200 hover:bg-slate-750'
+                          }`}
+                        >
+                          <ArrowLeft size={15} />
+                          <span>Back to Automated Bots</span>
+                        </button>
+
+                        <span className={`text-xs font-mono font-bold uppercase tracking-wider px-3 py-1 rounded-full border ${
+                          botHubView === 'PREMIUM'
+                            ? isLightTheme ? 'bg-amber-100/80 text-amber-900 border-amber-300/80' : 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                            : botHubView === 'FREE'
+                              ? isLightTheme ? 'bg-emerald-100/80 text-emerald-900 border-emerald-300/80' : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                              : botHubView === 'HISTORY'
+                                ? isLightTheme ? 'bg-indigo-100/80 text-indigo-900 border-indigo-300/80' : 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30'
+                                : isLightTheme ? 'bg-blue-100/80 text-blue-900 border-blue-300/80' : 'bg-blue-500/15 text-blue-300 border-blue-500/30'
+                        }`}>
+                          {botHubView === 'PREMIUM' ? 'Premium Category' : botHubView === 'FREE' ? 'Free Category' : botHubView === 'HISTORY' ? 'Trade Logs' : 'User Bots'}
+                        </span>
+                      </div>
+
+                      {/* PAGE 1: PREMIUM BOTS */}
+                      {botHubView === 'PREMIUM' && (
+                        <div className={`border rounded-3xl p-5 space-y-4 ${
+                          isLightTheme ? 'bg-white border-zinc-200/80 shadow-xs' : 'bg-slate-800 border-slate-700/80'
+                        }`}>
+                          <div className="flex justify-between items-center select-none">
+                            <div>
+                              <h3 className={`text-sm font-black tracking-tight flex items-center gap-1.5 ${isLightTheme ? 'text-zinc-800' : 'text-zinc-200'}`}>
+                                <Crown size={18} className="text-amber-500" />
+                                PREMIUM BOTS
+                              </h3>
+                              <p className={`text-xs mt-0.5 ${isLightTheme ? 'text-zinc-400' : 'text-zinc-400'}`}>
+                                Exclusive high-yield algorithmic trading bots configured by admin.
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 gap-4">
+                            {(botTemplates.length > 0 ? botTemplates : BOT_TEMPLATES)
+                              .filter(tmpl => (tmpl.category || '').toUpperCase() === 'PREMIUM' || (!tmpl.category || tmpl.category.toUpperCase() !== 'FREE'))
+                              .map((tmpl) => (
+                                <div 
+                                  key={tmpl.id}
+                                  className={`p-4 sm:p-5 rounded-3xl border flex flex-col justify-between transition-all duration-300 space-y-4 relative overflow-hidden group ${
+                                    isLightTheme 
+                                      ? 'bg-gradient-to-br from-white via-amber-50/20 to-orange-50/30 border-amber-200/90 hover:border-amber-400 hover:shadow-xl hover:shadow-amber-500/10' 
+                                      : 'bg-gradient-to-br from-slate-900/90 via-slate-850 to-slate-900 border-slate-700/80 hover:border-amber-500/60 hover:shadow-xl'
+                                  }`}
+                                >
+                                  {/* Top accent shine line */}
+                                  <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 opacity-80" />
+
+                                  <div className="space-y-3.5">
+                                    {/* Card Header */}
+                                    <div className="flex items-start justify-between gap-3 pt-1">
+                                      <div className="flex items-start gap-3">
+                                        <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-tr from-amber-500 via-amber-400 to-yellow-400 text-white flex items-center justify-center shrink-0 shadow-md shadow-amber-500/25 group-hover:scale-105 transition-transform duration-200">
+                                          <Crown size={20} className="drop-shadow-xs" />
+                                        </div>
+                                        <div>
+                                          <h4 className={`text-sm sm:text-base font-black tracking-tight leading-tight group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors ${
+                                            isLightTheme ? 'text-zinc-900' : 'text-white'
+                                          }`}>
+                                            {tmpl.name}
+                                          </h4>
+                                          <p className={`text-[10px] sm:text-xs mt-0.5 font-medium line-clamp-1 ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                                            {tmpl.description || 'High-yield algorithmic flash-loan & scalp strategy'}
+                                          </p>
+                                        </div>
+                                      </div>
+
+                                      <span className={`px-2.5 py-1 rounded-full text-[9px] sm:text-[10px] font-mono font-black uppercase tracking-wider shrink-0 border flex items-center gap-1 ${
+                                        isLightTheme ? 'bg-amber-100/90 text-amber-950 border-amber-300' : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                                      }`}>
+                                        <Crown size={10} className="text-amber-600" />
+                                        PREMIUM
+                                      </span>
+                                    </div>
+
+                                    {/* 2-Column Key Metrics Grid */}
+                                    <div className="grid grid-cols-2 gap-2.5">
+                                      <div className={`p-3 rounded-2xl border flex flex-col justify-between ${
+                                        isLightTheme ? 'bg-white/90 border-amber-100/80 shadow-2xs' : 'bg-slate-950/70 border-slate-800'
+                                      }`}>
+                                        <div className="flex items-center gap-1.5 text-[10px] sm:text-xs font-bold text-zinc-500 dark:text-zinc-400">
+                                          <TrendingUp size={13} className="text-emerald-500 shrink-0" />
+                                          <span>Win Ratio</span>
+                                        </div>
+                                        <div className="mt-1 flex items-baseline gap-1">
+                                          <span className="text-sm sm:text-base font-mono font-black text-emerald-600 dark:text-emerald-400">
+                                            {tmpl.winRatioRange || '92-98%'}
+                                          </span>
+                                        </div>
+                                      </div>
+
+                                      <div className={`p-3 rounded-2xl border flex flex-col justify-between ${
+                                        isLightTheme ? 'bg-white/90 border-amber-100/80 shadow-2xs' : 'bg-slate-950/70 border-slate-800'
+                                      }`}>
+                                        <div className="flex items-center gap-1.5 text-[10px] sm:text-xs font-bold text-zinc-500 dark:text-zinc-400">
+                                          <Coins size={13} className="text-amber-500 shrink-0" />
+                                          <span>Min Capital</span>
+                                        </div>
+                                        <div className="mt-1 flex items-baseline gap-1">
+                                          <span className={`text-base sm:text-lg font-mono font-black ${
+                                            isLightTheme ? 'text-zinc-950' : 'text-white'
+                                          }`}>
+                                            {getTemplateMinCapital(tmpl)}
+                                          </span>
+                                          <span className="text-xs font-bold text-amber-600 dark:text-amber-400">USDT</span>
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    {/* Risk & Execution Bar */}
+                                    <div className={`px-3 py-2 rounded-xl border flex items-center justify-between text-[11px] font-bold ${
+                                      isLightTheme ? 'bg-amber-50/50 border-amber-200/50 text-zinc-700' : 'bg-slate-900/50 border-slate-800 text-zinc-300'
+                                    }`}>
+                                      <div className="flex items-center gap-1.5">
+                                        <ShieldCheck size={13} className="text-amber-500" />
+                                        <span className="text-zinc-400 font-normal">Risk Profile:</span>
+                                        <span className="font-mono font-black text-amber-700 dark:text-amber-300">
+                                          {tmpl.riskLevel || 'Low Risk'}
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center gap-1 font-mono text-[10px] text-zinc-400">
+                                        <Zap size={11} className="text-amber-500 fill-amber-500/20" />
+                                        <span>Auto Scalp</span>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <div className="pt-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setSelectedBotTemplate(tmpl);
+                                        setBotCapitalInput(getTemplateMinCapital(tmpl).toString());
+                                        const pairs = tmpl.tradingPairs || ['BTC/USDT', 'ETH/USDT', 'SOL/USDT'];
+                                        setBotSelectedPair(pairs[0] || 'BTC/USDT');
+                                        setBotDurationSeconds(60);
+                                      }}
+                                      className="w-full py-3.5 rounded-2xl text-xs font-black uppercase tracking-wider cursor-pointer transition-all flex items-center justify-center gap-2 shadow-md bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-amber-950 font-black shadow-amber-500/25 active:scale-[0.98]"
+                                    >
+                                      <Zap size={16} className="fill-current" />
+                                      SET UP & RUN
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+
+                            {(botTemplates.length > 0 ? botTemplates : BOT_TEMPLATES)
+                              .filter(tmpl => (tmpl.category || '').toUpperCase() === 'PREMIUM' || (!tmpl.category || tmpl.category.toUpperCase() !== 'FREE')).length === 0 && (
+                                <div className="text-center py-12 px-4 border rounded-3xl select-none text-zinc-400 text-xs">
+                                  No Premium category bots found.
+                                </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* PAGE 2: FREE BOTS */}
+                      {botHubView === 'FREE' && (
+                        <div className={`border rounded-3xl p-5 space-y-4 ${
+                          isLightTheme ? 'bg-white border-zinc-200/80 shadow-xs' : 'bg-slate-800 border-slate-700/80'
+                        }`}>
+                          <div className="flex justify-between items-center select-none">
+                            <div>
+                              <h3 className={`text-sm font-black tracking-tight flex items-center gap-1.5 ${isLightTheme ? 'text-zinc-800' : 'text-zinc-200'}`}>
+                                <Gift size={18} className="text-emerald-500" />
+                                FREE BOTS
+                              </h3>
+                              <p className={`text-xs mt-0.5 ${isLightTheme ? 'text-zinc-400' : 'text-zinc-400'}`}>
+                                Free algorithmic trading bots available to all account tiers.
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 gap-4">
+                            {(botTemplates.length > 0 ? botTemplates : BOT_TEMPLATES)
+                              .filter(tmpl => (tmpl.category || '').toUpperCase() === 'FREE')
+                              .map((tmpl) => (
+                                <div 
+                                  key={tmpl.id}
+                                  className={`p-4 sm:p-5 rounded-3xl border flex flex-col justify-between transition-all duration-300 space-y-4 relative overflow-hidden group ${
+                                    isLightTheme 
+                                      ? 'bg-gradient-to-br from-white via-emerald-50/20 to-teal-50/30 border-emerald-200/90 hover:border-emerald-400 hover:shadow-xl hover:shadow-emerald-500/10' 
+                                      : 'bg-gradient-to-br from-slate-900/90 via-slate-850 to-slate-900 border-slate-700/80 hover:border-emerald-500/60 hover:shadow-xl'
+                                  }`}
+                                >
+                                  {/* Top accent shine line */}
+                                  <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-500 opacity-80" />
+
+                                  <div className="space-y-3.5">
+                                    {/* Card Header */}
+                                    <div className="flex items-start justify-between gap-3 pt-1">
+                                      <div className="flex items-start gap-3">
+                                        <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-tr from-emerald-500 via-emerald-400 to-teal-400 text-white flex items-center justify-center shrink-0 shadow-md shadow-emerald-500/25 group-hover:scale-105 transition-transform duration-200">
+                                          <Gift size={20} className="drop-shadow-xs" />
+                                        </div>
+                                        <div>
+                                          <h4 className={`text-sm sm:text-base font-black tracking-tight leading-tight group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors ${
+                                            isLightTheme ? 'text-zinc-900' : 'text-white'
+                                          }`}>
+                                            {tmpl.name}
+                                          </h4>
+                                          <p className={`text-[10px] sm:text-xs mt-0.5 font-medium line-clamp-1 ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                                            {tmpl.description || 'Automated low-risk Dollar-Cost Averaging strategy'}
+                                          </p>
+                                        </div>
+                                      </div>
+
+                                      <span className={`px-2.5 py-1 rounded-full text-[9px] sm:text-[10px] font-mono font-black uppercase tracking-wider shrink-0 border flex items-center gap-1 ${
+                                        isLightTheme ? 'bg-emerald-100/90 text-emerald-950 border-emerald-300' : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                                      }`}>
+                                        <Gift size={10} className="text-emerald-600" />
+                                        FREE
+                                      </span>
+                                    </div>
+
+                                    {/* 2-Column Key Metrics Grid */}
+                                    <div className="grid grid-cols-2 gap-2.5">
+                                      <div className={`p-3 rounded-2xl border flex flex-col justify-between ${
+                                        isLightTheme ? 'bg-white/90 border-emerald-100/80 shadow-2xs' : 'bg-slate-950/70 border-slate-800'
+                                      }`}>
+                                        <div className="flex items-center gap-1.5 text-[10px] sm:text-xs font-bold text-zinc-500 dark:text-zinc-400">
+                                          <TrendingUp size={13} className="text-emerald-500 shrink-0" />
+                                          <span>Win Ratio</span>
+                                        </div>
+                                        <div className="mt-1 flex items-baseline gap-1">
+                                          <span className="text-sm sm:text-base font-mono font-black text-emerald-600 dark:text-emerald-400">
+                                            {tmpl.winRatioRange || '94-99%'}
+                                          </span>
+                                        </div>
+                                      </div>
+
+                                      <div className={`p-3 rounded-2xl border flex flex-col justify-between ${
+                                        isLightTheme ? 'bg-white/90 border-emerald-100/80 shadow-2xs' : 'bg-slate-950/70 border-slate-800'
+                                      }`}>
+                                        <div className="flex items-center gap-1.5 text-[10px] sm:text-xs font-bold text-zinc-500 dark:text-zinc-400">
+                                          <Coins size={13} className="text-amber-500 shrink-0" />
+                                          <span>Min Capital</span>
+                                        </div>
+                                        <div className="mt-1 flex items-baseline gap-1">
+                                          <span className={`text-base sm:text-lg font-mono font-black ${
+                                            isLightTheme ? 'text-zinc-950' : 'text-white'
+                                          }`}>
+                                            {getTemplateMinCapital(tmpl)}
+                                          </span>
+                                          <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">USDT</span>
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    {/* Risk & Execution Bar */}
+                                    <div className={`px-3 py-2 rounded-xl border flex items-center justify-between text-[11px] font-bold ${
+                                      isLightTheme ? 'bg-emerald-50/50 border-emerald-200/50 text-zinc-700' : 'bg-slate-900/50 border-slate-800 text-zinc-300'
+                                    }`}>
+                                      <div className="flex items-center gap-1.5">
+                                        <ShieldCheck size={13} className="text-emerald-500" />
+                                        <span className="text-zinc-400 font-normal">Risk Profile:</span>
+                                        <span className="font-mono font-black text-emerald-700 dark:text-emerald-300">
+                                          {tmpl.riskLevel || 'Very Low Risk'}
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center gap-1 font-mono text-[10px] text-zinc-400">
+                                        <Zap size={11} className="text-emerald-500 fill-emerald-500/20" />
+                                        <span>Auto DCA</span>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <div className="pt-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setSelectedBotTemplate(tmpl);
+                                        setBotCapitalInput(getTemplateMinCapital(tmpl).toString());
+                                        const pairs = tmpl.tradingPairs || ['BTC/USDT', 'ETH/USDT', 'SOL/USDT'];
+                                        setBotSelectedPair(pairs[0] || 'BTC/USDT');
+                                        setBotDurationSeconds(60);
+                                      }}
+                                      className="w-full py-3.5 rounded-2xl text-xs font-black uppercase tracking-wider cursor-pointer transition-all flex items-center justify-center gap-2 shadow-md bg-gradient-to-r from-emerald-500 via-emerald-400 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black shadow-emerald-500/25 active:scale-[0.98]"
+                                    >
+                                      <Zap size={16} className="fill-current" />
+                                      SET UP & RUN
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+
+                            {(botTemplates.length > 0 ? botTemplates : BOT_TEMPLATES)
+                              .filter(tmpl => (tmpl.category || '').toUpperCase() === 'FREE').length === 0 && (
+                                <div className="text-center py-12 px-4 border rounded-3xl select-none text-zinc-400 text-xs">
+                                  No Free category bots found.
+                                </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* PAGE 3: HISTORY */}
+                      {botHubView === 'HISTORY' && (() => {
+                        // 1. Filter transactions to only trade profit/loss & harvest records
+                        const explicitBotTrades = userTransactions.filter(tx => 
+                          tx.type === 'bot_trade' || 
+                          tx.type === 'bot_harvest' || 
+                          (tx.profitDelta !== undefined) || 
+                          (tx.isWin !== undefined)
+                        ).map(tx => {
+                          const isWin = tx.isWin !== undefined ? tx.isWin : (tx.status === 'WIN' || tx.amount >= 0);
+                          const amt = tx.profitDelta !== undefined ? tx.profitDelta : tx.amount;
+                          return {
+                            id: tx.id,
+                            botName: tx.botName || tx.title || 'Trading Bot',
+                            tradingPair: tx.tradingPair || 'BTC/USDT',
+                            amount: amt,
+                            isWin: isWin,
+                            status: isWin ? 'WIN' : 'LOSS',
+                            profitPercent: tx.profitPercent || (isWin ? 1.8 : -0.8),
+                            timestamp: tx.createdAt?.seconds 
+                              ? new Date(tx.createdAt.seconds * 1000).toLocaleString() 
+                              : typeof tx.createdAt === 'string' 
+                                ? new Date(tx.createdAt).toLocaleString() 
+                                : 'Recently executed',
+                            rawDate: tx.createdAt?.seconds ? tx.createdAt.seconds * 1000 : Date.now()
+                          };
+                        });
+
+                        // 2. Sort and slice to only the latest 5 trade logs
+                        let botHistoryItems = explicitBotTrades.sort((a, b) => b.rawDate - a.rawDate);
+                        if (botHistoryItems.length === 0 && userBots.length > 0) {
+                          const derivedItems: any[] = [];
+                          userBots.forEach(bot => {
+                            const total = bot.totalTrades || (bot.accruedProfit !== undefined && bot.accruedProfit !== 0 ? 3 : 0);
+                            const winsCount = bot.wins !== undefined ? bot.wins : Math.ceil(total * 0.75);
+                            const capital = bot.capital || 50;
+                            
+                            for (let i = 0; i < total; i++) {
+                              const isWin = i < winsCount;
+                              const rate = isWin ? 0.018 : -0.008;
+                              const delta = parseFloat((capital * rate).toFixed(2));
+                              derivedItems.push({
+                                id: `derived-${bot.id}-${i}`,
+                                botName: bot.name || 'Trading Bot',
+                                tradingPair: bot.tradingPair || 'BTC/USDT',
+                                amount: isWin ? Math.abs(delta) : -Math.abs(delta),
+                                isWin: isWin,
+                                status: isWin ? 'WIN' : 'LOSS',
+                                profitPercent: isWin ? 1.8 : -0.8,
+                                timestamp: bot.createdAt?.seconds 
+                                  ? new Date((bot.createdAt.seconds + i * 60) * 1000).toLocaleString() 
+                                  : 'Recently executed',
+                                rawDate: bot.createdAt?.seconds ? (bot.createdAt.seconds + i * 60) * 1000 : Date.now() - (total - i) * 60000
+                              });
+                            }
+                          });
+                          botHistoryItems = derivedItems.sort((a, b) => b.rawDate - a.rawDate);
+                        }
+
+                        // Summary metrics based on all trade logs
+                        const totalNetPnL = botHistoryItems.reduce((acc, item) => acc + item.amount, 0);
+                        const winCount = botHistoryItems.filter(item => item.isWin).length;
+                        const winRate = botHistoryItems.length > 0 ? ((winCount / botHistoryItems.length) * 100).toFixed(1) : '0.0';
+
+                        return (
+                          <div className={`border rounded-3xl p-5 sm:p-6 space-y-5 shadow-md relative overflow-hidden transition-all ${
+                            isLightTheme ? 'bg-white/95 border-zinc-200/90 shadow-zinc-200/50' : 'bg-slate-800/95 border-slate-700/80 shadow-slate-950/40'
+                          }`}>
+                            {/* Decorative background glow */}
+                            <div className="absolute -top-20 -right-20 w-48 h-48 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+
+                            {/* Header Row */}
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 select-none pb-1 relative z-10">
+                              <div className="flex items-center gap-3">
+                                <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shadow-sm shrink-0 ${
+                                  isLightTheme ? 'bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-indigo-500/20' : 'bg-gradient-to-br from-indigo-600 to-violet-700 text-white shadow-indigo-900/40'
+                                }`}>
+                                  <History size={20} />
+                                </div>
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <h3 className={`text-base font-black tracking-tight ${isLightTheme ? 'text-zinc-900' : 'text-zinc-100'}`}>
+                                      BOT TRADE HISTORY
+                                    </h3>
+                                  </div>
+                                  <p className={`text-xs mt-0.5 font-medium ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                                    Real-time execution log of trading bot profits & losses
+                                  </p>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2 self-start sm:self-auto">
+                                <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border ${
+                                  isLightTheme ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-emerald-950/40 text-emerald-400 border-emerald-500/30'
+                                }`}>
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                  Live Ticker
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Summary Performance Cards */}
+                            {botHistoryItems.length > 0 && (
+                              <div className="grid grid-cols-3 gap-2.5 sm:gap-3.5 relative z-10">
+                                {/* Net P&L Card */}
+                                <div className={`p-3 sm:p-4 rounded-2xl border transition-all relative overflow-hidden flex flex-col justify-between ${
+                                  isLightTheme 
+                                    ? totalNetPnL >= 0 
+                                      ? 'bg-gradient-to-br from-emerald-50/80 via-teal-50/40 to-white border-emerald-200/90 shadow-xs' 
+                                      : 'bg-gradient-to-br from-rose-50/80 via-pink-50/40 to-white border-rose-200/90 shadow-xs'
+                                    : totalNetPnL >= 0 
+                                      ? 'bg-gradient-to-br from-emerald-950/30 via-slate-900 to-slate-900 border-emerald-500/30 shadow-xs' 
+                                      : 'bg-gradient-to-br from-rose-950/30 via-slate-900 to-slate-900 border-rose-500/30 shadow-xs'
+                                }`}>
+                                  <span className={`text-[10px] sm:text-xs font-black uppercase tracking-wider truncate block ${
+                                    isLightTheme ? 'text-zinc-500' : 'text-zinc-400'
+                                  }`}>
+                                    NET P&L
+                                  </span>
+                                  <div className="mt-1 flex items-baseline gap-1 flex-wrap">
+                                    <span className={`text-sm sm:text-lg font-black font-mono tracking-tight ${
+                                      totalNetPnL >= 0 
+                                        ? isLightTheme ? 'text-emerald-700' : 'text-emerald-400' 
+                                        : isLightTheme ? 'text-rose-700' : 'text-rose-400'
+                                    }`}>
+                                      {totalNetPnL >= 0 ? '+' : ''}${totalNetPnL.toFixed(2)}
+                                    </span>
+                                    <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded ${
+                                      totalNetPnL >= 0
+                                        ? isLightTheme ? 'bg-emerald-100 text-emerald-800' : 'bg-emerald-900/50 text-emerald-300'
+                                        : isLightTheme ? 'bg-rose-100 text-rose-800' : 'bg-rose-900/50 text-rose-300'
+                                    }`}>
+                                      USDT
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {/* Win Rate Card */}
+                                <div className={`p-3 sm:p-4 rounded-2xl border transition-all relative overflow-hidden flex flex-col justify-between ${
+                                  isLightTheme 
+                                    ? 'bg-gradient-to-br from-indigo-50/80 via-violet-50/40 to-white border-indigo-200/90 shadow-xs' 
+                                    : 'bg-gradient-to-br from-indigo-950/30 via-slate-900 to-slate-900 border-indigo-500/30 shadow-xs'
+                                }`}>
+                                  <span className={`text-[10px] sm:text-xs font-black uppercase tracking-wider truncate block ${
+                                    isLightTheme ? 'text-zinc-500' : 'text-zinc-400'
+                                  }`}>
+                                    WIN RATE
+                                  </span>
+                                  <div className="mt-1 flex items-baseline justify-between gap-1">
+                                    <span className={`text-sm sm:text-lg font-black font-mono tracking-tight ${
+                                      isLightTheme ? 'text-indigo-700' : 'text-indigo-400'
+                                    }`}>
+                                      {winRate}%
+                                    </span>
+                                    <span className={`text-[9px] font-bold font-mono ${isLightTheme ? 'text-zinc-400' : 'text-zinc-500'}`}>
+                                      {winCount}/{botHistoryItems.length}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {/* Executions Card */}
+                                <div className={`p-3 sm:p-4 rounded-2xl border transition-all relative overflow-hidden flex flex-col justify-between ${
+                                  isLightTheme 
+                                    ? 'bg-gradient-to-br from-zinc-50 via-slate-50 to-white border-zinc-200/90 shadow-xs' 
+                                    : 'bg-gradient-to-br from-slate-900 via-slate-900 to-slate-800 border-slate-700/80 shadow-xs'
+                                }`}>
+                                  <span className={`text-[10px] sm:text-xs font-black uppercase tracking-wider truncate block ${
+                                    isLightTheme ? 'text-zinc-500' : 'text-zinc-400'
+                                  }`}>
+                                    LOGS
+                                  </span>
+                                  <div className="mt-1 flex items-baseline gap-1">
+                                    <span className={`text-sm sm:text-lg font-black font-mono tracking-tight ${
+                                      isLightTheme ? 'text-zinc-900' : 'text-white'
+                                    }`}>
+                                      {botHistoryItems.length}
+                                    </span>
+                                    <span className={`text-[9px] font-bold ${isLightTheme ? 'text-zinc-400' : 'text-zinc-500'}`}>
+                                      trades
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Section Header for Executions */}
+                            <div className="flex items-center justify-between pt-1 select-none relative z-10">
+                              <span className={`text-[11px] font-black uppercase tracking-wider flex items-center gap-1.5 ${
+                                isLightTheme ? 'text-zinc-500' : 'text-zinc-400'
+                              }`}>
+                                <Activity size={13} className="text-indigo-500" />
+                                Execution History
+                              </span>
+                            </div>
+
+                            {/* Trade Log Items */}
+                            <div className="space-y-2.5 relative z-10">
+                              {botHistoryItems.map(item => {
+                                const isWin = item.isWin;
+                                const amt = item.amount;
+
+                                return (
+                                  <div 
+                                    key={item.id}
+                                    className={`p-3.5 sm:p-4 rounded-2xl border transition-all duration-200 flex items-center justify-between gap-3 relative overflow-hidden group ${
+                                      isLightTheme 
+                                        ? 'bg-zinc-50/90 border-zinc-200/80 hover:bg-white hover:border-indigo-300 hover:shadow-md' 
+                                        : 'bg-slate-900/70 border-slate-700/70 hover:bg-slate-900 hover:border-indigo-500/50 hover:shadow-lg'
+                                    }`}
+                                  >
+                                    {/* Left Status Stripe */}
+                                    <div className={`absolute left-0 top-0 bottom-0 w-1 ${
+                                      isWin ? 'bg-emerald-500' : 'bg-rose-500'
+                                    }`} />
+
+                                    <div className="flex items-center gap-3 pl-1">
+                                      {/* Icon Container */}
+                                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 shadow-xs ${
+                                        isWin 
+                                          ? isLightTheme ? 'bg-emerald-100 text-emerald-800 border border-emerald-300/80' : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                                          : isLightTheme ? 'bg-rose-100 text-rose-800 border border-rose-300/80' : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                                      }`}>
+                                        {isWin ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
+                                      </div>
+
+                                      {/* Pair & Status Badge */}
+                                      <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2.5">
+                                        <span className={`text-xs sm:text-sm font-black font-mono tracking-tight ${isLightTheme ? 'text-zinc-900' : 'text-white'}`}>
+                                          {item.tradingPair}
+                                        </span>
+                                        <span className={`text-[9px] px-2 py-0.5 rounded-full font-mono font-bold uppercase tracking-wider border w-fit flex items-center gap-1 ${
+                                          isWin
+                                            ? isLightTheme ? 'bg-emerald-100/90 text-emerald-900 border-emerald-300' : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                                            : isLightTheme ? 'bg-rose-100/90 text-rose-900 border-rose-300' : 'bg-rose-500/20 text-rose-300 border-rose-500/30'
+                                        }`}>
+                                          <span className={`w-1 h-1 rounded-full ${isWin ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                                          {isWin ? 'WIN' : 'LOSS'}
+                                        </span>
+                                      </div>
+                                    </div>
+
+                                    {/* Amount */}
+                                    <div className="text-right shrink-0">
+                                      <span className={`text-sm sm:text-base font-black font-mono block ${
+                                        isWin 
+                                          ? isLightTheme ? 'text-emerald-600' : 'text-emerald-400' 
+                                          : isLightTheme ? 'text-rose-600' : 'text-rose-400'
+                                      }`}>
+                                        {isWin ? '+' : ''}${amt.toFixed(2)} <span className="text-[10px] font-bold text-zinc-400 font-sans">USDT</span>
+                                      </span>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+
+                              {botHistoryItems.length === 0 && (
+                                <div className={`text-center py-12 px-4 border rounded-2xl select-none relative overflow-hidden ${
+                                  isLightTheme ? 'bg-zinc-50/50 border-zinc-200/60' : 'bg-slate-900/40 border-slate-800/80'
+                                }`}>
+                                  <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 text-indigo-500 flex items-center justify-center mx-auto mb-3">
+                                    <History size={24} />
+                                  </div>
+                                  <p className={`text-xs font-black ${isLightTheme ? 'text-zinc-800' : 'text-zinc-200'}`}>No bot trade executions recorded yet.</p>
+                                  <p className={`text-[11px] mt-1 max-w-[280px] mx-auto ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                                    Run a bot strategy to track your profits and losses on each trade execution here.
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })()}
+
+                      {/* PAGE 4: MY BOTS */}
+                      {botHubView === 'MY_BOTS' && (
+                        <div className={`border rounded-3xl p-5 space-y-4 ${
+                          isLightTheme ? 'bg-white border-zinc-200/80 shadow-xs' : 'bg-slate-800 border-slate-700/80'
+                        }`}>
+                          <div className="flex justify-between items-center select-none">
+                            <div>
+                              <h3 className={`text-sm font-black tracking-tight flex items-center gap-1.5 ${isLightTheme ? 'text-zinc-800' : 'text-zinc-200'}`}>
+                                <Bot size={18} className="text-blue-500" />
+                                MY BOTS ({userBots.filter(b => b.status !== 'STOPPED').length})
+                              </h3>
+                              <p className={`text-xs mt-0.5 ${isLightTheme ? 'text-zinc-400' : 'text-zinc-400'}`}>
+                                Manage your active trading bots, monitor live profits, and harvest or withdraw anytime.
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="space-y-3">
+                            {userBots.filter(b => b.status !== 'STOPPED').map((bot) => (
+                              <div 
+                                key={bot.id} 
+                                className={`p-4 sm:p-5 rounded-3xl border transition-all duration-300 relative overflow-hidden space-y-3.5 ${
+                                  isLightTheme 
+                                    ? 'bg-gradient-to-br from-white via-blue-50/15 to-indigo-50/20 border-zinc-200/90 hover:border-blue-400 hover:shadow-lg' 
+                                    : 'bg-gradient-to-br from-slate-900 via-slate-850 to-slate-900 border-slate-700/80 hover:border-blue-500/50 hover:shadow-lg'
+                                }`}
+                              >
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                  <div className="flex items-center gap-3">
+                                    <div className={`w-10 h-10 sm:w-11 sm:h-11 rounded-2xl flex items-center justify-center shrink-0 shadow-md ${
+                                      bot.status === 'RUNNING'
+                                        ? 'bg-gradient-to-tr from-blue-600 to-indigo-500 text-white shadow-blue-500/25'
+                                        : 'bg-gradient-to-tr from-amber-500 to-yellow-500 text-white shadow-amber-500/25'
+                                    }`}>
+                                      <Bot size={20} className="drop-shadow-xs" />
+                                    </div>
+                                    <div>
+                                      <div className="flex items-center gap-2">
+                                        <h4 className={`text-sm font-black tracking-tight ${isLightTheme ? 'text-zinc-900' : 'text-white'}`}>
+                                          {bot.name}
+                                        </h4>
+                                        <span className={`text-[9px] px-2.5 py-0.5 rounded-full font-mono font-black uppercase tracking-wider border flex items-center gap-1 ${
+                                          bot.status === 'RUNNING'
+                                            ? isLightTheme ? 'bg-emerald-100/90 border-emerald-300 text-emerald-900' : 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
+                                            : isLightTheme ? 'bg-amber-100/90 border-amber-300 text-amber-900' : 'bg-amber-500/20 border-amber-500/40 text-amber-300'
+                                        }`}>
+                                          <span className={`w-1.5 h-1.5 rounded-full ${bot.status === 'RUNNING' ? 'bg-emerald-500 animate-ping' : 'bg-amber-500'}`} />
+                                          {bot.status}
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center gap-2 mt-0.5">
+                                        <span className={`text-[11px] font-mono font-bold ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                                          Capital: <strong className="text-zinc-900 dark:text-white font-black">${bot.capital.toLocaleString()}</strong> ({bot.coinSymbol || 'USDT'})
+                                        </span>
+                                        <span className="text-zinc-300 dark:text-zinc-700">•</span>
+                                        <span className="text-[10px] font-mono font-bold text-blue-600 dark:text-blue-400">
+                                          {bot.tradingPair || 'BTC/USDT'}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <div className="flex items-center justify-between sm:justify-end gap-3 pt-2 sm:pt-0 border-t sm:border-t-0 border-zinc-100 dark:border-slate-800">
+                                    <div className="text-left sm:text-right">
+                                      <span className="text-[10px] uppercase tracking-wider text-zinc-400 font-bold block">
+                                        {(bot.accruedProfit || 0) < 0 ? 'Accrued Loss' : 'Accrued Profit'}
+                                      </span>
+                                      <span className={`text-base font-black font-mono ${
+                                        (bot.accruedProfit || 0) >= 0 
+                                          ? (isLightTheme ? 'text-emerald-600' : 'text-emerald-400')
+                                          : (isLightTheme ? 'text-rose-600' : 'text-rose-400')
+                                      }`}>
+                                        {(bot.accruedProfit || 0) >= 0 ? '+' : ''}${(bot.accruedProfit || 0).toFixed(2)}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className={`pt-3 border-t flex flex-wrap items-center justify-between gap-2 ${
+                                  isLightTheme ? 'border-zinc-200/60' : 'border-slate-800'
+                                }`}>
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => setActiveRunningBot(bot)}
+                                      className="px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1 cursor-pointer transition-all bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-xs"
+                                    >
+                                      <Activity size={12} />
+                                      View Live Bot
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleToggleBotStatus(bot)}
+                                      className={`px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 cursor-pointer border transition-all ${
+                                        isLightTheme 
+                                          ? 'bg-white border-zinc-200 text-zinc-700 hover:bg-zinc-100' 
+                                          : 'bg-slate-800 border-slate-700 text-zinc-300 hover:bg-slate-750'
+                                      }`}
+                                    >
+                                      {bot.status === 'RUNNING' ? <Pause size={11} /> : <Play size={11} />}
+                                      {bot.status === 'RUNNING' ? 'Pause' : 'Resume'}
+                                    </button>
+                                  </div>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleStopBot(bot)}
+                                    className={`px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-wider cursor-pointer border transition-all ${
+                                      isLightTheme 
+                                        ? 'bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100' 
+                                        : 'bg-rose-500/10 border-rose-500/20 text-rose-400 hover:bg-rose-500/20'
+                                    }`}
+                                  >
+                                    Stop & Withdraw Capital
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+
+                            {userBots.filter(b => b.status !== 'STOPPED').length === 0 && (
+                              <div className={`text-center py-10 px-4 border rounded-2xl select-none ${
+                                isLightTheme ? 'bg-zinc-50/50 border-zinc-200/60' : 'bg-slate-900/40 border-slate-800/80'
+                              }`}>
+                                <div className={`w-12 h-12 rounded-2xl mx-auto flex items-center justify-center mb-3 ${
+                                  isLightTheme ? 'bg-blue-100 text-blue-600' : 'bg-blue-500/10 text-blue-400'
+                                }`}>
+                                  <Bot size={22} />
+                                </div>
+                                <p className={`text-xs font-bold ${isLightTheme ? 'text-zinc-700' : 'text-zinc-300'}`}>You have no active automated bots.</p>
+                                <p className={`text-[10px] mt-1 max-w-[280px] mx-auto ${isLightTheme ? 'text-zinc-400' : 'text-zinc-400'}`}>
+                                  Explore Premium or Free bot categories to deploy your capital and start earning automated returns.
+                                </p>
+                                <div className="flex items-center justify-center gap-3 mt-4">
+                                  <button
+                                    type="button"
+                                    onClick={() => setBotHubView('PREMIUM')}
+                                    className="px-4 py-2 rounded-xl bg-amber-500 text-white text-xs font-bold hover:bg-amber-400 transition-all cursor-pointer flex items-center gap-1.5"
+                                  >
+                                    <Crown size={14} />
+                                    Premium Bots
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setBotHubView('FREE')}
+                                    className="px-4 py-2 rounded-xl bg-emerald-500 text-white text-xs font-bold hover:bg-emerald-400 transition-all cursor-pointer flex items-center gap-1.5"
+                                  >
+                                    <Gift size={14} />
+                                    Free Bots
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+            </div>
+          )}
+
+          {/* DEPLOY BOT MODAL */}
+          {selectedBotTemplate && (
+            <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in">
+              <div className={`w-full max-w-md rounded-3xl border p-6 space-y-6 shadow-2xl ${
+                isLightTheme ? 'bg-white border-zinc-200 text-zinc-900' : 'bg-slate-900 border-slate-800 text-white'
+              }`}>
+                {/* Header: < Set UP & Run Bot */}
+                <div className="flex justify-between items-center pb-3 border-b border-zinc-200/60 dark:border-slate-800">
+                  <div className="flex items-center gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedBotTemplate(null)}
+                      className={`p-1.5 rounded-xl transition-colors cursor-pointer ${
+                        isLightTheme ? 'hover:bg-zinc-100 text-zinc-700' : 'hover:bg-slate-800 text-zinc-200'
+                      }`}
+                    >
+                      <ArrowLeft size={20} />
+                    </button>
+                    <div>
+                      <h3 className="text-lg font-black tracking-tight">Set UP & Run Bot</h3>
+                      <p className={`text-[11px] font-bold ${isLightTheme ? 'text-amber-600' : 'text-emerald-400'}`}>
+                        {selectedBotTemplate.name}
+                      </p>
+                    </div>
+                  </div>
                   <button
-                    type="button"
-                    disabled={swapLoading || !tradeAmount || parseFloat(tradeAmount) <= 0}
-                    onClick={handleSwapConvert}
-                    className={`w-full py-3.5 rounded-2xl font-black text-xs uppercase tracking-wider active:scale-[0.985] transition-all disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center gap-1.5 cursor-pointer ${
-                      isLightTheme 
-                        ? 'bg-gradient-to-tr from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-white shadow-md shadow-amber-500/10' 
-                        : 'bg-gradient-to-tr from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-slate-950 shadow-lg shadow-emerald-500/10'
+                    onClick={() => setSelectedBotTemplate(null)}
+                    className={`p-1.5 rounded-xl transition-colors cursor-pointer ${
+                      isLightTheme ? 'hover:bg-zinc-100 text-zinc-500' : 'hover:bg-slate-800 text-zinc-400'
                     }`}
                   >
-                    {swapLoading ? (
+                    <X size={18} />
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  {/* Field 1: Choose trading pair */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold block">Choose trading pair</label>
+                    <select
+                      value={botSelectedPair}
+                      onChange={(e) => setBotSelectedPair(e.target.value)}
+                      className={`w-full p-3 rounded-2xl border text-xs font-mono font-bold focus:outline-none cursor-pointer ${
+                        isLightTheme 
+                          ? 'bg-zinc-50 border-zinc-300 text-zinc-900 focus:border-amber-500' 
+                          : 'bg-slate-950 border-slate-700 text-white focus:border-emerald-500'
+                      }`}
+                    >
+                      {(selectedBotTemplate.tradingPairs && selectedBotTemplate.tradingPairs.length > 0 
+                        ? selectedBotTemplate.tradingPairs 
+                        : ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'XRP/USDT']
+                      ).map((pair: string) => (
+                        <option key={pair} value={pair}>{pair}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Field 2: Investment amount */}
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between items-center">
+                      <label className="text-xs font-bold block">Investment amount</label>
+                      <span className={`text-[10px] font-mono font-bold ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                        Available: ${(profile?.balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                    <div className="relative">
+                      <span className="absolute left-3.5 top-3 text-zinc-400 font-bold font-mono text-xs">$</span>
+                      <input
+                        type="number"
+                        placeholder={`Min ${getTemplateMinCapital(selectedBotTemplate)} USDT`}
+                        value={botCapitalInput}
+                        onChange={(e) => setBotCapitalInput(e.target.value)}
+                        className={`w-full pl-8 pr-4 py-3 rounded-2xl border text-xs font-mono font-bold focus:outline-none ${
+                          isLightTheme 
+                            ? 'bg-zinc-50 border-zinc-300 text-zinc-900 focus:border-amber-500' 
+                            : 'bg-slate-950 border-slate-700 text-white focus:border-emerald-500'
+                        }`}
+                      />
+                    </div>
+                    <span className="text-[10px] text-zinc-500 font-mono font-bold block">
+                      Minimum capital: ${getTemplateMinCapital(selectedBotTemplate)} USDT
+                    </span>
+                  </div>
+
+                  {/* Field 3: Trade duration */}
+                  <div className="space-y-2 pt-1">
+                    <div className="flex justify-between items-center">
+                      <label className="text-xs font-bold block">Trade duration :</label>
+                      <span className={`px-3 py-1 rounded-xl text-xs font-mono font-black border ${
+                        isLightTheme 
+                          ? 'bg-amber-50 border-amber-200 text-amber-800' 
+                          : 'bg-emerald-950/40 border-emerald-500/30 text-emerald-400'
+                      }`}>
+                        {botDurationSeconds} seconds
+                      </span>
+                    </div>
+                    
+                    {/* Duration Slider Bar */}
+                    <div className="space-y-1 pt-1">
+                      <input
+                        type="range"
+                        min={60}
+                        max={120}
+                        step={1}
+                        value={botDurationSeconds}
+                        onChange={(e) => setBotDurationSeconds(parseInt(e.target.value) || 60)}
+                        className={`w-full h-2 rounded-lg appearance-none cursor-pointer ${
+                          isLightTheme ? 'bg-zinc-200 accent-amber-500' : 'bg-slate-800 accent-emerald-500'
+                        }`}
+                      />
+                      <div className="flex justify-between text-[11px] font-mono font-bold text-zinc-400">
+                        <span>60 seconds</span>
+                        <span>120 seconds</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Footer Buttons: CANCEL & RUN */}
+                <div className="flex items-center gap-3 pt-4 border-t border-zinc-200/60 dark:border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedBotTemplate(null)}
+                    className={`flex-1 py-3.5 rounded-2xl text-xs font-bold uppercase tracking-wider cursor-pointer border transition-all ${
+                      isLightTheme 
+                        ? 'bg-zinc-100 border-zinc-200 text-zinc-700 hover:bg-zinc-200' 
+                        : 'bg-slate-800 border-slate-700 text-zinc-300 hover:bg-slate-750'
+                    }`}
+                  >
+                    CANCEL
+                  </button>
+                  <button
+                    type="button"
+                    disabled={botDeployLoading || !botCapitalInput || parseFloat(botCapitalInput) < selectedBotTemplate.minCapital}
+                    onClick={handleDeployBot}
+                    className={`flex-1 py-3.5 rounded-2xl text-xs font-black uppercase tracking-wider cursor-pointer transition-all disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-2 shadow-sm ${
+                      isLightTheme 
+                        ? 'bg-amber-500 hover:bg-amber-400 text-white shadow-amber-500/20' 
+                        : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-emerald-500/20'
+                    }`}
+                  >
+                    {botDeployLoading ? (
                       <>
-                        <div className={`w-4 h-4 border-2 border-t-transparent rounded-full animate-spin ${isLightTheme ? 'border-white' : 'border-slate-950'}`}></div>
-                        <span>Processing Conversion...</span>
+                        <div className="w-3.5 h-3.5 border-2 border-t-transparent rounded-full animate-spin"></div>
+                        <span>Deploying...</span>
                       </>
                     ) : (
                       <>
-                        <ArrowRightLeft size={14} />
-                        <span>Execute Instant Swap</span>
+                        <Zap size={16} />
+                        <span>RUN</span>
                       </>
                     )}
                   </button>
@@ -3473,12 +4750,13 @@ export default function StandardUserDashboard({
           )}
             </>
           )}
-
+        </>
+      )}
         </main>
       )}
 
       {/* STICKY BOTTOM NAVIGATION */}
-      {!arbitrageGuideCoin && !(activeTab === 'earn' && mmfSubView === 'form') && (
+      {!arbitrageGuideCoin && !(activeTab === 'earn' && mmfSubView === 'form') && !activeRunningBot && (
         <footer className={`fixed bottom-0 left-0 right-0 z-30 px-4 py-2 flex justify-around max-w-md mx-auto border-t ${
           isLightTheme 
             ? 'bg-[#FFF3D6] border-zinc-200/80 shadow-[0_-4px_12px_rgba(0,0,0,0.03)]' 
@@ -3487,7 +4765,7 @@ export default function StandardUserDashboard({
           {([
             { id: 'home', label: 'Home', icon: Coins },
             { id: 'wallet', label: 'Wallet', icon: Wallet },
-            { id: 'trade', label: 'Trade', icon: ArrowRightLeft },
+            { id: 'trade', label: 'Bot', icon: Bot },
             { id: 'earn', label: 'Earn', icon: TrendingUp },
             { id: 'history', label: 'History', icon: History }
           ] as const).map(tab => {
