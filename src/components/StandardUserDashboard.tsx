@@ -11,9 +11,10 @@ import {
   User, LogOut, ArrowRightLeft, ShieldCheck, Activity, Wallet, 
   HelpCircle, RefreshCw, Coins, ArrowRight, MessageSquare, AlertCircle,
   History, ArrowLeft, X, ChevronDown, Check, Lock, Unlock, Eye, EyeOff, Sparkles, BookOpen, Zap, Send,
-  Cpu, Play, Pause, Bot, Crown, Gift, ListFilter
+  Cpu, Play, Pause, Bot, Crown, Gift, ListFilter, CheckCircle2
 } from 'lucide-react';
 import { RunningBotView } from './RunningBotView';
+import { getTradingPairConfig, TradingPairBadge, DEFAULT_BOT_TRADING_PAIRS } from '../utils/pairUtils';
 
 interface StandardUserDashboardProps {
   user: any;
@@ -306,6 +307,7 @@ export default function StandardUserDashboard({
   const [botCapitalInput, setBotCapitalInput] = useState<string>('');
   const [botCoinInput, setBotCoinInput] = useState<string>('USDT');
   const [botSelectedPair, setBotSelectedPair] = useState<string>('');
+  const [isPairDropdownOpen, setIsPairDropdownOpen] = useState<boolean>(false);
   const [botDurationSeconds, setBotDurationSeconds] = useState<number>(60);
   const [botDeployLoading, setBotDeployLoading] = useState<boolean>(false);
   const [activeRunningBot, setActiveRunningBot] = useState<any | null>(null);
@@ -1169,36 +1171,48 @@ export default function StandardUserDashboard({
       id: 'arb_sniper',
       name: 'Arbitrage Flash-Loan Sniper',
       category: 'PREMIUM',
-      winRatioRange: '92-98%',
+      winRatioRange: '95%',
+      winProfitRange: '1.5% - 2.5%',
+      lossPercentRange: '0.4% - 1.4%',
       riskLevel: 'Low Risk',
       minCapital: 50,
+      tradingPairs: DEFAULT_BOT_TRADING_PAIRS,
       color: 'from-amber-500 to-yellow-500'
     },
     {
       id: 'grid_scalper',
       name: 'AI Grid Scalper Pro',
       category: 'PREMIUM',
-      winRatioRange: '88-95%',
+      winRatioRange: '90%',
+      winProfitRange: '1.2% - 2.0%',
+      lossPercentRange: '0.5% - 1.2%',
       riskLevel: 'Medium Risk',
       minCapital: 100,
+      tradingPairs: DEFAULT_BOT_TRADING_PAIRS,
       color: 'from-emerald-500 to-teal-500'
     },
     {
       id: 'dca_accumulator',
       name: 'DCA Smart Accumulator',
       category: 'FREE',
-      winRatioRange: '94-99%',
+      winRatioRange: '98%',
+      winProfitRange: '1.0% - 1.8%',
+      lossPercentRange: '0.3% - 0.8%',
       riskLevel: 'Very Low Risk',
       minCapital: 25,
+      tradingPairs: DEFAULT_BOT_TRADING_PAIRS,
       color: 'from-blue-500 to-indigo-500'
     },
     {
       id: 'quantum_momentum',
       name: 'Quantum Momentum Scalper',
       category: 'FREE',
-      winRatioRange: '86-94%',
+      winRatioRange: '85%',
+      winProfitRange: '2.0% - 4.5%',
+      lossPercentRange: '1.0% - 2.5%',
       riskLevel: 'High Risk',
       minCapital: 250,
+      tradingPairs: DEFAULT_BOT_TRADING_PAIRS,
       color: 'from-purple-500 to-pink-500'
     }
   ];
@@ -1234,6 +1248,10 @@ export default function StandardUserDashboard({
       const newBalance = currentBalance - capital;
       await updateDoc(userRef, { balance: newBalance });
 
+      const winRatioRange = selectedBotTemplate.winRatioRange || '95%';
+      const winProfitRange = selectedBotTemplate.winProfitRange || '1.5% - 2.5%';
+      const lossPercentRange = selectedBotTemplate.lossPercentRange || '0.4% - 1.4%';
+
       const docRef = await addDoc(collection(db, 'user_bots'), {
         userId: user.uid,
         userEmail: user.email,
@@ -1247,6 +1265,9 @@ export default function StandardUserDashboard({
         coinSymbol: botCoinInput || 'USDT',
         accruedProfit: 0,
         status: 'RUNNING',
+        winRatioRange,
+        winProfitRange,
+        lossPercentRange,
         wins: 0,
         losses: 0,
         totalTrades: 0,
@@ -1279,6 +1300,9 @@ export default function StandardUserDashboard({
         coinSymbol: botCoinInput || 'USDT',
         accruedProfit: 0,
         status: 'RUNNING',
+        winRatioRange,
+        winProfitRange,
+        lossPercentRange,
         wins: 0,
         losses: 0,
         totalTrades: 0,
@@ -2200,17 +2224,23 @@ export default function StandardUserDashboard({
     return sum + dailyEarningCoin * (liveCoin ? liveCoin.price : 0);
   }, 0);
 
+  const isHideHeaderFooter = 
+    Boolean(arbitrageGuideCoin) || 
+    (activeTab === 'earn' && mmfSubView === 'form') || 
+    Boolean(activeRunningBot) || 
+    (activeTab === 'trade' && botHubView !== 'menu');
+
   return (
     <div 
       id="user-dashboard-root" 
       className={`min-h-screen font-sans transition-colors duration-300 ${
-        arbitrageGuideCoin || (activeTab === 'earn' && mmfSubView === 'form') || activeRunningBot ? 'pb-10' : 'pb-28'
+        isHideHeaderFooter ? 'pb-10' : 'pb-28'
       } ${
         isLightTheme ? 'bg-[#FFF3D6] text-zinc-800' : 'bg-slate-900 text-zinc-100'
       }`}
     >
       {/* Top Header */}
-      {!arbitrageGuideCoin && !(activeTab === 'earn' && mmfSubView === 'form') && !activeRunningBot && activeTab !== 'trade' && (
+      {!isHideHeaderFooter && (
         <header className={`px-4 py-4 border-b sticky top-0 backdrop-blur-md z-20 flex justify-between items-center transition-colors duration-300 ${
           isLightTheme 
             ? 'bg-[#FFF3D6]/85 border-zinc-200/80' 
@@ -2288,6 +2318,7 @@ export default function StandardUserDashboard({
               user={user}
               userBalance={profile?.balance || 0}
               isLightTheme={isLightTheme}
+              isOffline={isUsingFallbackPrices || Boolean(pricesLoadError) || (typeof navigator !== 'undefined' && !navigator.onLine)}
               onBack={() => setActiveRunningBot(null)}
               onTradeAgain={(botToRestart) => {
                 setActiveRunningBot(null);
@@ -3228,32 +3259,68 @@ export default function StandardUserDashboard({
                   {/* SUB-PAGE VIEWS */}
                   {botHubView !== 'menu' && (
                     <div className="space-y-5 animate-fade-in">
-                      {/* Top Bar with Back Button */}
+                      {/* Top Bar with Back Button & Category Badge */}
                       <div className="flex items-center justify-between select-none">
                         <button
                           type="button"
                           onClick={() => setBotHubView('menu')}
-                          className={`px-3.5 py-2 rounded-2xl border text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                          className={`group px-3.5 py-2 rounded-full border text-xs font-bold transition-all duration-200 flex items-center gap-2 cursor-pointer shadow-2xs hover:shadow-xs active:scale-95 ${
                             isLightTheme 
-                              ? 'bg-white border-zinc-200 text-zinc-700 hover:bg-zinc-100' 
-                              : 'bg-slate-800 border-slate-700 text-zinc-200 hover:bg-slate-750'
+                              ? 'bg-white border-zinc-200/90 text-zinc-800 hover:bg-zinc-50 hover:border-amber-400/50' 
+                              : 'bg-slate-900 border-slate-700/80 text-zinc-100 hover:bg-slate-850 hover:border-slate-600'
                           }`}
                         >
-                          <ArrowLeft size={15} />
-                          <span>Back to Automated Bots</span>
+                          <div className={`w-5 h-5 rounded-full flex items-center justify-center transition-transform group-hover:-translate-x-0.5 ${
+                            isLightTheme ? 'bg-amber-500/10 text-amber-600' : 'bg-emerald-500/15 text-emerald-400'
+                          }`}>
+                            <ArrowLeft size={12} strokeWidth={2.5} />
+                          </div>
+                          <span>Back to Bots</span>
                         </button>
 
-                        <span className={`text-xs font-mono font-bold uppercase tracking-wider px-3 py-1 rounded-full border ${
-                          botHubView === 'PREMIUM'
-                            ? isLightTheme ? 'bg-amber-100/80 text-amber-900 border-amber-300/80' : 'bg-amber-500/15 text-amber-300 border-amber-500/30'
-                            : botHubView === 'FREE'
-                              ? isLightTheme ? 'bg-emerald-100/80 text-emerald-900 border-emerald-300/80' : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
-                              : botHubView === 'HISTORY'
-                                ? isLightTheme ? 'bg-indigo-100/80 text-indigo-900 border-indigo-300/80' : 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30'
-                                : isLightTheme ? 'bg-blue-100/80 text-blue-900 border-blue-300/80' : 'bg-blue-500/15 text-blue-300 border-blue-500/30'
-                        }`}>
-                          {botHubView === 'PREMIUM' ? 'Premium Category' : botHubView === 'FREE' ? 'Free Category' : botHubView === 'HISTORY' ? 'Trade Logs' : 'User Bots'}
-                        </span>
+                        {botHubView === 'PREMIUM' && (
+                          <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-black uppercase tracking-wider border shadow-2xs transition-all ${
+                            isLightTheme 
+                              ? 'bg-gradient-to-r from-amber-500/10 via-amber-400/15 to-amber-500/10 text-amber-900 border-amber-300/80' 
+                              : 'bg-gradient-to-r from-amber-500/20 to-amber-600/10 text-amber-300 border-amber-500/30'
+                          }`}>
+                            <Crown size={13} className={isLightTheme ? 'text-amber-600' : 'text-amber-400'} />
+                            <span>Premium Category</span>
+                          </div>
+                        )}
+
+                        {botHubView === 'FREE' && (
+                          <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-black uppercase tracking-wider border shadow-2xs transition-all ${
+                            isLightTheme 
+                              ? 'bg-gradient-to-r from-emerald-50 to-emerald-100/80 text-emerald-900 border-emerald-300/80' 
+                              : 'bg-gradient-to-r from-emerald-500/20 to-teal-600/10 text-emerald-300 border-emerald-500/30'
+                          }`}>
+                            <Gift size={13} className={isLightTheme ? 'text-emerald-600' : 'text-emerald-400'} />
+                            <span>Free Category</span>
+                          </div>
+                        )}
+
+                        {botHubView === 'HISTORY' && (
+                          <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-black uppercase tracking-wider border shadow-2xs transition-all ${
+                            isLightTheme 
+                              ? 'bg-gradient-to-r from-indigo-50 to-indigo-100/80 text-indigo-900 border-indigo-300/80' 
+                              : 'bg-gradient-to-r from-indigo-500/20 to-violet-600/10 text-indigo-300 border-indigo-500/30'
+                          }`}>
+                            <History size={13} className={isLightTheme ? 'text-indigo-600' : 'text-indigo-400'} />
+                            <span>Trade Logs</span>
+                          </div>
+                        )}
+
+                        {botHubView === 'MY_BOTS' && (
+                          <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-black uppercase tracking-wider border shadow-2xs transition-all ${
+                            isLightTheme 
+                              ? 'bg-gradient-to-r from-blue-50 to-blue-100/80 text-blue-900 border-blue-300/80' 
+                              : 'bg-gradient-to-r from-blue-500/20 to-cyan-600/10 text-blue-300 border-blue-500/30'
+                          }`}>
+                            <Bot size={13} className={isLightTheme ? 'text-blue-600' : 'text-blue-400'} />
+                            <span>User Bots</span>
+                          </div>
+                        )}
                       </div>
 
                       {/* PAGE 1: PREMIUM BOTS */}
@@ -3365,6 +3432,18 @@ export default function StandardUserDashboard({
                                         <span>Auto Scalp</span>
                                       </div>
                                     </div>
+
+                                    {/* Supported Trading Pairs Badges */}
+                                    <div className="space-y-1.5 pt-1">
+                                      <span className={`text-[10px] font-bold uppercase tracking-wider block ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                                        Trading Pairs
+                                      </span>
+                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                        {(tmpl.tradingPairs && tmpl.tradingPairs.length > 0 ? tmpl.tradingPairs : DEFAULT_BOT_TRADING_PAIRS).map((pairKey: string) => (
+                                          <TradingPairBadge key={pairKey} pair={pairKey} isLightTheme={isLightTheme} size="sm" />
+                                        ))}
+                                      </div>
+                                    </div>
                                   </div>
 
                                   <div className="pt-1">
@@ -3373,8 +3452,9 @@ export default function StandardUserDashboard({
                                       onClick={() => {
                                         setSelectedBotTemplate(tmpl);
                                         setBotCapitalInput(getTemplateMinCapital(tmpl).toString());
-                                        const pairs = tmpl.tradingPairs || ['BTC/USDT', 'ETH/USDT', 'SOL/USDT'];
-                                        setBotSelectedPair(pairs[0] || 'BTC/USDT');
+                                        const pairs = tmpl.tradingPairs || DEFAULT_BOT_TRADING_PAIRS;
+                                        const defaultPair = pairs.find((p: string) => p.includes('XAU') || p.includes('Gold')) || 'XAU/USD';
+                                        setBotSelectedPair(defaultPair);
                                         setBotDurationSeconds(60);
                                       }}
                                       className="w-full py-3.5 rounded-2xl text-xs font-black uppercase tracking-wider cursor-pointer transition-all flex items-center justify-center gap-2 shadow-md bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-amber-950 font-black shadow-amber-500/25 active:scale-[0.98]"
@@ -3505,6 +3585,18 @@ export default function StandardUserDashboard({
                                         <span>Auto DCA</span>
                                       </div>
                                     </div>
+
+                                    {/* Supported Trading Pairs Badges */}
+                                    <div className="space-y-1.5 pt-1">
+                                      <span className={`text-[10px] font-bold uppercase tracking-wider block ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                                        Trading Pairs
+                                      </span>
+                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                        {(tmpl.tradingPairs && tmpl.tradingPairs.length > 0 ? tmpl.tradingPairs : DEFAULT_BOT_TRADING_PAIRS).map((pairKey: string) => (
+                                          <TradingPairBadge key={pairKey} pair={pairKey} isLightTheme={isLightTheme} size="sm" />
+                                        ))}
+                                      </div>
+                                    </div>
                                   </div>
 
                                   <div className="pt-1">
@@ -3513,8 +3605,9 @@ export default function StandardUserDashboard({
                                       onClick={() => {
                                         setSelectedBotTemplate(tmpl);
                                         setBotCapitalInput(getTemplateMinCapital(tmpl).toString());
-                                        const pairs = tmpl.tradingPairs || ['BTC/USDT', 'ETH/USDT', 'SOL/USDT'];
-                                        setBotSelectedPair(pairs[0] || 'BTC/USDT');
+                                        const pairs = tmpl.tradingPairs || DEFAULT_BOT_TRADING_PAIRS;
+                                        const defaultPair = pairs.find((p: string) => p.includes('XAU') || p.includes('Gold')) || 'XAU/USD';
+                                        setBotSelectedPair(defaultPair);
                                         setBotDurationSeconds(60);
                                       }}
                                       className="w-full py-3.5 rounded-2xl text-xs font-black uppercase tracking-wider cursor-pointer transition-all flex items-center justify-center gap-2 shadow-md bg-gradient-to-r from-emerald-500 via-emerald-400 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black shadow-emerald-500/25 active:scale-[0.98]"
@@ -3763,9 +3856,7 @@ export default function StandardUserDashboard({
 
                                       {/* Pair & Status Badge */}
                                       <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2.5">
-                                        <span className={`text-xs sm:text-sm font-black font-mono tracking-tight ${isLightTheme ? 'text-zinc-900' : 'text-white'}`}>
-                                          {item.tradingPair}
-                                        </span>
+                                        <TradingPairBadge pair={item.tradingPair} isLightTheme={isLightTheme} size="sm" showName />
                                         <span className={`text-[9px] px-2 py-0.5 rounded-full font-mono font-bold uppercase tracking-wider border w-fit flex items-center gap-1 ${
                                           isWin
                                             ? isLightTheme ? 'bg-emerald-100/90 text-emerald-900 border-emerald-300' : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
@@ -3827,7 +3918,9 @@ export default function StandardUserDashboard({
                           </div>
 
                           <div className="space-y-3">
-                            {userBots.filter(b => b.status !== 'STOPPED').map((bot) => (
+                            {userBots.filter(b => b.status !== 'STOPPED').map((bot) => {
+                              const isOfflineActive = isUsingFallbackPrices || Boolean(pricesLoadError) || (typeof navigator !== 'undefined' && !navigator.onLine);
+                              return (
                               <div 
                                 key={bot.id} 
                                 className={`p-4 sm:p-5 rounded-3xl border transition-all duration-300 relative overflow-hidden space-y-3.5 ${
@@ -3839,9 +3932,11 @@ export default function StandardUserDashboard({
                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                                   <div className="flex items-center gap-3">
                                     <div className={`w-10 h-10 sm:w-11 sm:h-11 rounded-2xl flex items-center justify-center shrink-0 shadow-md ${
-                                      bot.status === 'RUNNING'
-                                        ? 'bg-gradient-to-tr from-blue-600 to-indigo-500 text-white shadow-blue-500/25'
-                                        : 'bg-gradient-to-tr from-amber-500 to-yellow-500 text-white shadow-amber-500/25'
+                                      isOfflineActive
+                                        ? 'bg-gradient-to-tr from-rose-600 to-pink-600 text-white shadow-rose-500/25'
+                                        : bot.status === 'RUNNING'
+                                          ? 'bg-gradient-to-tr from-blue-600 to-indigo-500 text-white shadow-blue-500/25'
+                                          : 'bg-gradient-to-tr from-amber-500 to-yellow-500 text-white shadow-amber-500/25'
                                     }`}>
                                       <Bot size={20} className="drop-shadow-xs" />
                                     </div>
@@ -3851,22 +3946,22 @@ export default function StandardUserDashboard({
                                           {bot.name}
                                         </h4>
                                         <span className={`text-[9px] px-2.5 py-0.5 rounded-full font-mono font-black uppercase tracking-wider border flex items-center gap-1 ${
-                                          bot.status === 'RUNNING'
-                                            ? isLightTheme ? 'bg-emerald-100/90 border-emerald-300 text-emerald-900' : 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
-                                            : isLightTheme ? 'bg-amber-100/90 border-amber-300 text-amber-900' : 'bg-amber-500/20 border-amber-500/40 text-amber-300'
+                                          isOfflineActive
+                                            ? isLightTheme ? 'bg-rose-100/90 border-rose-300 text-rose-900' : 'bg-rose-500/20 border-rose-500/40 text-rose-300'
+                                            : bot.status === 'RUNNING'
+                                              ? isLightTheme ? 'bg-emerald-100/90 border-emerald-300 text-emerald-900' : 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
+                                              : isLightTheme ? 'bg-amber-100/90 border-amber-300 text-amber-900' : 'bg-amber-500/20 border-amber-500/40 text-amber-300'
                                         }`}>
-                                          <span className={`w-1.5 h-1.5 rounded-full ${bot.status === 'RUNNING' ? 'bg-emerald-500 animate-ping' : 'bg-amber-500'}`} />
-                                          {bot.status}
+                                          <span className={`w-1.5 h-1.5 rounded-full ${isOfflineActive ? 'bg-rose-500' : bot.status === 'RUNNING' ? 'bg-emerald-500 animate-ping' : 'bg-amber-500'}`} />
+                                          {isOfflineActive ? 'OFFLINE' : bot.status}
                                         </span>
                                       </div>
                                       <div className="flex items-center gap-2 mt-0.5">
                                         <span className={`text-[11px] font-mono font-bold ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>
-                                          Capital: <strong className="text-zinc-900 dark:text-white font-black">${bot.capital.toLocaleString()}</strong> ({bot.coinSymbol || 'USDT'})
+                                          Capital: <strong className="text-zinc-900 dark:text-white font-black">${isOfflineActive ? 0 : bot.capital.toLocaleString()}</strong> ({bot.coinSymbol || 'USDT'})
                                         </span>
                                         <span className="text-zinc-300 dark:text-zinc-700">•</span>
-                                        <span className="text-[10px] font-mono font-bold text-blue-600 dark:text-blue-400">
-                                          {bot.tradingPair || 'BTC/USDT'}
-                                        </span>
+                                        <TradingPairBadge pair={bot.tradingPair || 'XAUUSD'} isLightTheme={isLightTheme} size="sm" />
                                       </div>
                                     </div>
                                   </div>
@@ -3874,14 +3969,14 @@ export default function StandardUserDashboard({
                                   <div className="flex items-center justify-between sm:justify-end gap-3 pt-2 sm:pt-0 border-t sm:border-t-0 border-zinc-100 dark:border-slate-800">
                                     <div className="text-left sm:text-right">
                                       <span className="text-[10px] uppercase tracking-wider text-zinc-400 font-bold block">
-                                        {(bot.accruedProfit || 0) < 0 ? 'Accrued Loss' : 'Accrued Profit'}
+                                        {(isOfflineActive ? 0 : (bot.accruedProfit || 0)) < 0 ? 'Accrued Loss' : 'Accrued Profit'}
                                       </span>
                                       <span className={`text-base font-black font-mono ${
-                                        (bot.accruedProfit || 0) >= 0 
+                                        (isOfflineActive ? 0 : (bot.accruedProfit || 0)) >= 0 
                                           ? (isLightTheme ? 'text-emerald-600' : 'text-emerald-400')
                                           : (isLightTheme ? 'text-rose-600' : 'text-rose-400')
                                       }`}>
-                                        {(bot.accruedProfit || 0) >= 0 ? '+' : ''}${(bot.accruedProfit || 0).toFixed(2)}
+                                        {isOfflineActive ? '+$0.00' : `${(bot.accruedProfit || 0) >= 0 ? '+' : ''}$${(bot.accruedProfit || 0).toFixed(2)}`}
                                       </span>
                                     </div>
                                   </div>
@@ -3926,7 +4021,8 @@ export default function StandardUserDashboard({
                                   </button>
                                 </div>
                               </div>
-                            ))}
+                            );
+                          })}
 
                             {userBots.filter(b => b.status !== 'STOPPED').length === 0 && (
                               <div className={`text-center py-10 px-4 border rounded-2xl select-none ${
@@ -4007,24 +4103,138 @@ export default function StandardUserDashboard({
 
                 <div className="space-y-4">
                   {/* Field 1: Choose trading pair */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold block">Choose trading pair</label>
-                    <select
-                      value={botSelectedPair}
-                      onChange={(e) => setBotSelectedPair(e.target.value)}
-                      className={`w-full p-3 rounded-2xl border text-xs font-mono font-bold focus:outline-none cursor-pointer ${
-                        isLightTheme 
-                          ? 'bg-zinc-50 border-zinc-300 text-zinc-900 focus:border-amber-500' 
-                          : 'bg-slate-950 border-slate-700 text-white focus:border-emerald-500'
-                      }`}
-                    >
-                      {(selectedBotTemplate.tradingPairs && selectedBotTemplate.tradingPairs.length > 0 
-                        ? selectedBotTemplate.tradingPairs 
-                        : ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'XRP/USDT']
-                      ).map((pair: string) => (
-                        <option key={pair} value={pair}>{pair}</option>
-                      ))}
-                    </select>
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <label className="text-xs font-bold block">Choose Trading Pair</label>
+                      <span className={`text-[10px] font-mono font-bold ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                        Selected: <strong className={isLightTheme ? 'text-amber-600 font-extrabold' : 'text-emerald-400 font-extrabold'}>{getTradingPairConfig(botSelectedPair).displayCode}</strong>
+                      </span>
+                    </div>
+
+                    <div className="relative">
+                      {/* Backdrop overlay to close dropdown on click outside */}
+                      {isPairDropdownOpen && (
+                        <div 
+                          className="fixed inset-0 z-30" 
+                          onClick={() => setIsPairDropdownOpen(false)} 
+                        />
+                      )}
+
+                      {/* Dropdown Trigger Button */}
+                      <button
+                        type="button"
+                        onClick={() => setIsPairDropdownOpen(!isPairDropdownOpen)}
+                        className={`w-full p-3 rounded-2xl border text-left transition-all duration-200 cursor-pointer flex items-center justify-between relative z-30 select-none shadow-xs ${
+                          isPairDropdownOpen
+                            ? isLightTheme
+                              ? 'bg-white border-amber-500 ring-2 ring-amber-500/30 shadow-md'
+                              : 'bg-slate-900 border-emerald-500 ring-2 ring-emerald-500/30 shadow-md'
+                            : isLightTheme
+                              ? 'bg-zinc-50 border-zinc-200 hover:bg-zinc-100 hover:border-zinc-300'
+                              : 'bg-slate-950 border-slate-800 hover:bg-slate-900 hover:border-slate-700'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-lg shrink-0 ${
+                            isLightTheme ? 'bg-amber-500/10 border border-amber-500/20' : 'bg-emerald-500/10 border border-emerald-500/20'
+                          }`}>
+                            {getTradingPairConfig(botSelectedPair).symbol}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-mono font-black tracking-tight">
+                                {getTradingPairConfig(botSelectedPair).displayCode}
+                              </span>
+                              <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded-md border uppercase ${
+                                isLightTheme ? 'bg-zinc-100 text-zinc-600 border-zinc-200' : 'bg-slate-900 text-zinc-400 border-slate-800'
+                              }`}>
+                                {getTradingPairConfig(botSelectedPair).assetType}
+                              </span>
+                            </div>
+                            <span className={`text-[11px] font-medium block ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                              {getTradingPairConfig(botSelectedPair).name}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className={`p-1.5 rounded-lg transition-transform duration-200 ${
+                          isPairDropdownOpen ? 'rotate-180 ' + (isLightTheme ? 'text-amber-600' : 'text-emerald-400') : 'text-zinc-400'
+                        }`}>
+                          <ChevronDown size={18} />
+                        </div>
+                      </button>
+
+                      {/* Custom Floating Popover Menu */}
+                      {isPairDropdownOpen && (
+                        <div className={`absolute left-0 right-0 top-full mt-2 z-50 p-1.5 rounded-2xl border shadow-2xl space-y-1 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-150 ${
+                          isLightTheme 
+                            ? 'bg-white/95 border-zinc-200 text-zinc-900 shadow-amber-500/10' 
+                            : 'bg-slate-900/95 border-slate-700 text-white shadow-black/60'
+                        }`}>
+                          {(selectedBotTemplate.tradingPairs && selectedBotTemplate.tradingPairs.length > 0 
+                            ? selectedBotTemplate.tradingPairs 
+                            : DEFAULT_BOT_TRADING_PAIRS
+                          ).map((pairKey: string) => {
+                            const cfg = getTradingPairConfig(pairKey);
+                            const selectedClean = (botSelectedPair || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+                            const pairClean = pairKey.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+                            const cfgClean = cfg.code.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+                            const isSelected = selectedClean === pairClean || selectedClean === cfgClean || botSelectedPair === pairKey || botSelectedPair === cfg.code;
+
+                            return (
+                              <button
+                                key={pairKey}
+                                type="button"
+                                onClick={() => {
+                                  setBotSelectedPair(pairKey);
+                                  setIsPairDropdownOpen(false);
+                                }}
+                                className={`w-full p-2.5 rounded-xl text-left transition-all duration-150 cursor-pointer flex items-center justify-between border ${
+                                  isSelected
+                                    ? isLightTheme
+                                      ? 'bg-amber-500/10 border-amber-500/40 text-amber-950 font-bold'
+                                      : 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300 font-bold'
+                                    : isLightTheme
+                                      ? 'border-transparent hover:bg-zinc-100/80 text-zinc-800'
+                                      : 'border-transparent hover:bg-slate-800/80 text-zinc-200'
+                                }`}
+                              >
+                                <div className="flex items-center gap-2.5">
+                                  <span className="text-lg w-6 text-center">{cfg.symbol}</span>
+                                  <div>
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs font-mono font-extrabold tracking-tight">
+                                        {cfg.displayCode}
+                                      </span>
+                                    </div>
+                                    <span className={`text-[10px] font-medium block ${
+                                      isSelected
+                                        ? isLightTheme ? 'text-amber-800' : 'text-emerald-400'
+                                        : isLightTheme ? 'text-zinc-500' : 'text-zinc-400'
+                                    }`}>
+                                      {cfg.name}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                  <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded-md border uppercase ${
+                                    isLightTheme ? 'bg-zinc-100 text-zinc-600 border-zinc-200' : 'bg-slate-950 text-zinc-400 border-slate-800'
+                                  }`}>
+                                    {cfg.assetType}
+                                  </span>
+                                  {isSelected && (
+                                    <div className={`p-0.5 rounded-full ${isLightTheme ? 'bg-amber-500 text-amber-950' : 'bg-emerald-500 text-slate-950'}`}>
+                                      <CheckCircle2 size={13} className="stroke-[3]" />
+                                    </div>
+                                  )}
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   {/* Field 2: Investment amount */}
@@ -4756,7 +4966,7 @@ export default function StandardUserDashboard({
       )}
 
       {/* STICKY BOTTOM NAVIGATION */}
-      {!arbitrageGuideCoin && !(activeTab === 'earn' && mmfSubView === 'form') && !activeRunningBot && (
+      {!isHideHeaderFooter && (
         <footer className={`fixed bottom-0 left-0 right-0 z-30 px-4 py-2 flex justify-around max-w-md mx-auto border-t ${
           isLightTheme 
             ? 'bg-[#FFF3D6] border-zinc-200/80 shadow-[0_-4px_12px_rgba(0,0,0,0.03)]' 

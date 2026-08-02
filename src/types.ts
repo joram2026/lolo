@@ -94,6 +94,8 @@ export interface BotTemplate {
   category: string;
   description?: string;
   winRatioRange: string;
+  winProfitRange?: string;
+  lossPercentRange?: string;
   minCapital: number;
   dailyRoi?: string;
   tradingPairs: string[];
@@ -116,6 +118,8 @@ export interface UserBot {
   status: 'RUNNING' | 'PAUSED' | 'STOPPED';
   dailyRoi: string;
   winRatioRange: string;
+  winProfitRange?: string;
+  lossPercentRange?: string;
   wins: number;
   totalTrades: number;
   losses: number;

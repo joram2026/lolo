@@ -21,6 +21,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
   const toast = useToast();
   const [profile, setProfile] = useState<UserAccount | null>(null);
   const [displayName, setDisplayName] = useState('');
+  const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [messageState, setMessageState] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -232,6 +233,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
 
           setProfile(data);
           setDisplayName(data.displayName || user.displayName || '');
+          setPhone(data.phone || (data as any).phoneNumber || '');
         }
       } catch (err) {
         console.error('Error fetching profile:', err);
@@ -288,13 +290,17 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
         await updateProfile(auth.currentUser!, { displayName });
       }
 
-      // 2. Update Firestore document
+      // 2. Update Firestore document with displayName and phone
       const docRef = doc(db, 'users', user.uid);
+      const updatedPhone = phone.trim();
       await updateDoc(docRef, {
-        displayName
+        displayName: displayName.trim(),
+        phone: updatedPhone,
+        phoneNumber: updatedPhone
       });
 
-      setMessage({ type: 'success', text: 'Profile updated successfully!' });
+      setProfile(prev => prev ? { ...prev, displayName: displayName.trim(), phone: updatedPhone } : null);
+      setMessage({ type: 'success', text: 'Profile & phone number updated successfully!' });
       // Clear message after 3 seconds
       setTimeout(() => setMessage(null), 3000);
     } catch (err: any) {
@@ -487,6 +493,12 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
               <div className="flex-1 min-w-0">
                 <h3 className="text-sm font-bold text-zinc-800 truncate">{displayName || 'Anonymous User'}</h3>
                 <p className="text-[11px] text-zinc-500 font-mono truncate">{user.email}</p>
+                {phone && (
+                  <p className="text-[10px] text-amber-600 font-mono font-medium truncate flex items-center gap-1 mt-0.5">
+                    <Smartphone size={10} />
+                    {phone}
+                  </p>
+                )}
               </div>
               <div className="bg-emerald-50 border border-emerald-100 text-emerald-600 text-[10px] px-2.5 py-1 rounded-full font-bold flex items-center gap-1 shrink-0">
                 <Shield size={10} />
@@ -665,6 +677,10 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                 <span className="font-mono text-zinc-600 font-medium">{user.email}</span>
               </div>
               <div className="flex justify-between items-center text-xs border-t border-zinc-100 pt-2.5">
+                <span className="text-zinc-500">Registered Phone</span>
+                <span className="font-mono text-amber-600 font-bold">{phone || 'Not provided'}</span>
+              </div>
+              <div className="flex justify-between items-center text-xs border-t border-zinc-100 pt-2.5">
                 <span className="text-zinc-500">Unique CODE</span>
                 <span className="font-mono text-amber-600 font-bold select-all tracking-wider text-sm">{(profile as any)?.uniqueCode || '-----'}</span>
               </div>
@@ -696,6 +712,23 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                 onChange={(e) => setDisplayName(e.target.value)}
                 className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 placeholder-zinc-400 text-zinc-800"
               />
+            </div>
+
+            {/* Phone Number Input */}
+            <div className="space-y-1.5 text-left">
+              <label className="text-xs font-semibold text-zinc-650 flex items-center gap-1.5">
+                <Smartphone size={14} className="text-amber-500" />
+                Phone Number
+              </label>
+              <input
+                id="profile-phone-number"
+                type="tel"
+                placeholder="e.g. +254 700 000000"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 placeholder-zinc-400 text-zinc-800 font-mono"
+              />
+              <p className="text-[10px] text-zinc-500">Update your phone number for transaction verification and contact.</p>
             </div>
 
             {/* Submit Button */}

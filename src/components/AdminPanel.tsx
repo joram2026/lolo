@@ -10,7 +10,7 @@ import { UserAccount, Transaction, CryptoNetwork, P2PMerchant, CryptoPrice, Arbi
 import { fetchLivePriceFromBinance, fetchAllLivePrices, syncLiveCryptoPrices } from '../utils/cryptoApi';
 import { 
   Users, CheckCircle2, XCircle, Settings, ShieldAlert, Key, 
-  Trash2, ToggleLeft, ToggleRight, Loader, ZoomIn, Plus, Edit, Check, Eye, Star, Mail, RefreshCw, X, FileText, Coins, TrendingUp, Bot, Cpu
+  Trash2, ToggleLeft, ToggleRight, Loader, ZoomIn, Plus, Edit, Check, Eye, Star, Mail, RefreshCw, X, FileText, Coins, TrendingUp, Bot, Cpu, Smartphone, Phone
 } from 'lucide-react';
 
 const STATIC_CRYPTO: Record<string, { name: string; price: number }> = {
@@ -73,14 +73,17 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
   const [merchants, setMerchants] = useState<P2PMerchant[]>([]);
   const [cryptoPricesList, setCryptoPricesList] = useState<CryptoPrice[]>([]);
   const [investmentsList, setInvestmentsList] = useState<any[]>([]);
+  const [userBotsList, setUserBotsList] = useState<any[]>([]);
   const [botTemplatesList, setBotTemplatesList] = useState<BotTemplate[]>([]);
   const [editingBotTemplate, setEditingBotTemplate] = useState<BotTemplate | null>(null);
   const [botTemplateForm, setBotTemplateForm] = useState({
     name: '',
     category: 'Cross-Exchange Arbitrage',
-    winRatioRange: '88-96%',
+    winRatioRange: '95%',
+    winProfitRange: '1.5% - 2.5%',
+    lossPercentRange: '0.4% - 1.4%',
     minCapital: '50',
-    tradingPairs: 'BTC/USDT, ETH/USDT, SOL/USDT',
+    tradingPairs: 'XAUUSD, BTCUSD, EURUSD',
     riskLevel: 'Low Risk',
     color: 'from-amber-500 to-yellow-500'
   });
@@ -402,9 +405,11 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
             id: 'arb_sniper',
             name: 'Arbitrage Flash-Loan Sniper',
             category: 'PREMIUM',
-            winRatioRange: '92-98%',
+            winRatioRange: '95%',
+            winProfitRange: '1.5% - 2.5%',
+            lossPercentRange: '0.4% - 1.4%',
             minCapital: 50,
-            tradingPairs: ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'XRP/USDT'],
+            tradingPairs: ['XAUUSD', 'BTCUSD', 'EURUSD'],
             riskLevel: 'Low Risk',
             color: 'from-amber-500 to-yellow-500'
           },
@@ -412,9 +417,11 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
             id: 'grid_scalper',
             name: 'AI Grid Scalper Pro',
             category: 'PREMIUM',
-            winRatioRange: '88-95%',
+            winRatioRange: '90%',
+            winProfitRange: '1.2% - 2.0%',
+            lossPercentRange: '0.5% - 1.2%',
             minCapital: 100,
-            tradingPairs: ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT'],
+            tradingPairs: ['XAUUSD', 'BTCUSD', 'EURUSD'],
             riskLevel: 'Medium Risk',
             color: 'from-emerald-500 to-teal-500'
           },
@@ -422,9 +429,11 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
             id: 'dca_accumulator',
             name: 'DCA Smart Accumulator',
             category: 'FREE',
-            winRatioRange: '94-99%',
+            winRatioRange: '98%',
+            winProfitRange: '1.0% - 1.8%',
+            lossPercentRange: '0.3% - 0.8%',
             minCapital: 25,
-            tradingPairs: ['BTC/USDT', 'ETH/USDT', 'USDC/USDT', 'SOL/USDT'],
+            tradingPairs: ['XAUUSD', 'BTCUSD', 'EURUSD'],
             riskLevel: 'Very Low Risk',
             color: 'from-blue-500 to-indigo-500'
           }
@@ -437,6 +446,14 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
         bTpls = defaultBts;
       }
       setBotTemplatesList(bTpls);
+
+      // Fetch User Trading Bots
+      const botsSnap = await getDocs(collection(db, 'user_bots'));
+      const uBotsList = botsSnap.docs.map(d => ({
+        id: d.id,
+        ...d.data()
+      }));
+      setUserBotsList(uBotsList);
 
     } catch (err: any) {
       console.error("Error loading admin data: ", err);
@@ -506,17 +523,42 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
   };
 
   const handleDeleteUser = (u: UserAccount) => {
+    const userTxs = txList.filter(t => t.userId === u.uid);
+    const userInvs = investmentsList.filter(inv => inv.userId === u.uid);
+    const userBots = userBotsList.filter(bot => bot.userId === u.uid);
+
     setConfirmModal({
       isOpen: true,
-      title: 'Permanently Delete User Account?',
-      message: `CRITICAL WARNING: Are you absolutely sure you want to permanently delete user ${u.email}? This action will delete their Firestore user entry, user statistics, and is completely irreversible.`,
+      title: 'Permanently Delete User Account & All Data?',
+      message: `CRITICAL WARNING: Are you absolutely sure you want to permanently delete user ${u.email}? This action will permanently remove their Firestore user profile, ${userTxs.length} transaction record(s), ${userInvs.length} investment portfolio(s), and ${userBots.length} trading bot(s). This action is completely irreversible.`,
       danger: true,
       onConfirm: async () => {
         setConfirmModal(prev => ({ ...prev, isOpen: false }));
         setActioning(u.uid);
         try {
-          await deleteDoc(doc(db, 'users', u.uid));
-          showFeedback('success', `User account ${u.email} successfully deleted from databases.`);
+          const batch = writeBatch(db);
+
+          // 1. Delete user profile doc
+          batch.delete(doc(db, 'users', u.uid));
+
+          // 2. Delete all user transaction records
+          userTxs.forEach(t => {
+            batch.delete(doc(db, 'transactions', t.id));
+          });
+
+          // 3. Delete all user investment records
+          userInvs.forEach(inv => {
+            batch.delete(doc(db, 'investments', inv.id));
+          });
+
+          // 4. Delete all user bot records
+          userBots.forEach(bot => {
+            batch.delete(doc(db, 'user_bots', bot.id));
+          });
+
+          await batch.commit();
+
+          showFeedback('success', `User account ${u.email} and all associated data (txs: ${userTxs.length}, investments: ${userInvs.length}, bots: ${userBots.length}) were permanently deleted.`);
           await loadAllData(true);
         } catch (err: any) {
           console.error(err);
@@ -559,6 +601,28 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
     }
   };
 
+  const handleUpdateUserPhone = async (u: UserAccount) => {
+    const currentPhone = u.phone || (u as any).phoneNumber || '';
+    const newPhone = prompt(`Enter updated Phone Number for user ${u.email}:`, currentPhone);
+    if (newPhone === null) return;
+    setActioning(u.uid);
+    try {
+      const userRef = doc(db, 'users', u.uid);
+      const cleanPhone = newPhone.trim();
+      await updateDoc(userRef, { 
+        phone: cleanPhone,
+        phoneNumber: cleanPhone 
+      });
+      showFeedback('success', `Phone number successfully updated for ${u.email}.`);
+      await loadAllData(true);
+    } catch (err: any) {
+      console.error(err);
+      showFeedback('error', 'Failed to update user phone number: ' + err.message);
+    } finally {
+      setActioning(null);
+    }
+  };
+
   const handleOpenUserHistory = (u: UserAccount) => {
     const userTxs = txList.filter(t => t.userId === u.uid);
     setSelectedUserHistory(u);
@@ -596,6 +660,113 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
         } catch (err: any) {
           console.error(err);
           showFeedback('error', 'Failed to delete all transactions: ' + err.message);
+        } finally {
+          setActioning(null);
+        }
+      }
+    });
+  };
+
+  const handleDeleteAllInvestments = (uid: string, email: string) => {
+    const userInvs = investmentsList.filter(inv => inv.userId === uid);
+    if (userInvs.length === 0) {
+      showFeedback('error', `No investment records found to delete for ${email}.`);
+      return;
+    }
+
+    setConfirmModal({
+      isOpen: true,
+      title: 'Delete All Investment Portfolios?',
+      message: `Are you sure you want to PERMANENTLY DELETE all ${userInvs.length} investment portfolio records for ${email}? This action is irreversible and cannot be undone.`,
+      danger: true,
+      onConfirm: async () => {
+        setConfirmModal(prev => ({ ...prev, isOpen: false }));
+        setActioning(uid);
+        try {
+          const batch = writeBatch(db);
+          userInvs.forEach(inv => {
+            batch.delete(doc(db, 'investments', inv.id));
+          });
+          await batch.commit();
+
+          showFeedback('success', `Successfully wiped all ${userInvs.length} investment records for ${email}.`);
+          await loadAllData(true);
+        } catch (err: any) {
+          console.error(err);
+          showFeedback('error', 'Failed to delete investments: ' + err.message);
+        } finally {
+          setActioning(null);
+        }
+      }
+    });
+  };
+
+  const handleDeleteAllBots = (uid: string, email: string) => {
+    const userBots = userBotsList.filter(bot => bot.userId === uid);
+    if (userBots.length === 0) {
+      showFeedback('error', `No AI trading bot records found to delete for ${email}.`);
+      return;
+    }
+
+    setConfirmModal({
+      isOpen: true,
+      title: 'Delete All AI Trading Bots?',
+      message: `Are you sure you want to PERMANENTLY DELETE all ${userBots.length} trading bot records for ${email}? This action is irreversible and cannot be undone.`,
+      danger: true,
+      onConfirm: async () => {
+        setConfirmModal(prev => ({ ...prev, isOpen: false }));
+        setActioning(uid);
+        try {
+          const batch = writeBatch(db);
+          userBots.forEach(bot => {
+            batch.delete(doc(db, 'user_bots', bot.id));
+          });
+          await batch.commit();
+
+          showFeedback('success', `Successfully wiped all ${userBots.length} AI trading bot records for ${email}.`);
+          await loadAllData(true);
+        } catch (err: any) {
+          console.error(err);
+          showFeedback('error', 'Failed to delete bot records: ' + err.message);
+        } finally {
+          setActioning(null);
+        }
+      }
+    });
+  };
+
+  const handleWipeAllUserData = (uid: string, email: string) => {
+    const userTxs = txList.filter(t => t.userId === uid);
+    const userInvs = investmentsList.filter(inv => inv.userId === uid);
+    const userBots = userBotsList.filter(bot => bot.userId === uid);
+
+    const totalRecords = userTxs.length + userInvs.length + userBots.length;
+    if (totalRecords === 0) {
+      showFeedback('error', `No transaction, investment, or bot records found for ${email}.`);
+      return;
+    }
+
+    setConfirmModal({
+      isOpen: true,
+      title: 'Wipe All Activity Data for User?',
+      message: `Are you sure you want to PERMANENTLY WIPE all ${totalRecords} records (${userTxs.length} transaction(s), ${userInvs.length} investment(s), ${userBots.length} bot(s)) for ${email}? The user's account profile will remain, but all activity history will be cleared.`,
+      danger: true,
+      onConfirm: async () => {
+        setConfirmModal(prev => ({ ...prev, isOpen: false }));
+        setActioning(uid);
+        try {
+          const batch = writeBatch(db);
+          userTxs.forEach(t => batch.delete(doc(db, 'transactions', t.id)));
+          userInvs.forEach(inv => batch.delete(doc(db, 'investments', inv.id)));
+          userBots.forEach(bot => batch.delete(doc(db, 'user_bots', bot.id)));
+          await batch.commit();
+
+          showFeedback('success', `Successfully wiped all ${totalRecords} activity records for ${email}.`);
+          setSelectedUserTxs([]);
+          await loadAllData(true);
+        } catch (err: any) {
+          console.error(err);
+          showFeedback('error', 'Failed to wipe user data: ' + err.message);
         } finally {
           setActioning(null);
         }
@@ -1220,6 +1391,7 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 text-[11px] text-zinc-400 font-mono">
                           <div><span className="text-zinc-500 font-sans font-medium">Email:</span> {u.email}</div>
                           <div><span className="text-zinc-500 font-sans font-medium">UID:</span> <span className="select-all">{u.uid}</span></div>
+                          <div><span className="text-zinc-500 font-sans font-medium">Phone:</span> <span className="text-emerald-400 font-bold font-mono">{u.phone || (u as any).phoneNumber || 'N/A'}</span></div>
                           <div><span className="text-zinc-500 font-sans font-medium">Country:</span> <span className="text-amber-400 font-bold font-sans">{u.country || 'Kenya'}</span></div>
                           <div><span className="text-zinc-500 font-sans font-medium">Referred By:</span> {u.referralSource || 'None/Direct'}</div>
                           <div><span className="text-zinc-500 font-sans font-medium">Joined:</span> {formatDate(u.createdAt)}</div>
@@ -1254,16 +1426,26 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
 
                         {/* MMF Investments Display */}
                         {(() => {
-                          const userInvestments = investmentsList.filter(inv => inv.userId === u.uid && inv.status === 'active');
+                          const userInvestments = investmentsList.filter(inv => inv.userId === u.uid);
                           if (userInvestments.length === 0) return null;
+                          const activeInvs = userInvestments.filter(inv => inv.status === 'active');
                           return (
                             <div className="mt-3 pt-2.5 border-t border-zinc-800/60 max-w-xl">
-                              <span className="text-[10px] text-zinc-500 font-extrabold uppercase tracking-wider block mb-1.5 flex items-center gap-1">
-                                <Coins size={12} className="text-emerald-400" />
-                                Active MMF Investment Portfolios ({userInvestments.length})
-                              </span>
+                              <div className="flex justify-between items-center mb-1.5">
+                                <span className="text-[10px] text-zinc-500 font-extrabold uppercase tracking-wider flex items-center gap-1">
+                                  <Coins size={12} className="text-emerald-400" />
+                                  MMF Investment Portfolios ({userInvestments.length})
+                                </span>
+                                <button
+                                  id={`user-card-wipe-invs-${u.uid}`}
+                                  onClick={() => handleDeleteAllInvestments(u.uid, u.email)}
+                                  className="text-[9px] text-red-400 hover:text-red-300 font-mono underline cursor-pointer"
+                                >
+                                  Wipe ({userInvestments.length})
+                                </button>
+                              </div>
                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1">
-                                {userInvestments.map((inv: any) => {
+                                {activeInvs.map((inv: any) => {
                                   const unlockDate = inv.unlockAt?.toDate ? inv.unlockAt.toDate().toLocaleDateString() : (inv.unlockAt ? new Date(inv.unlockAt).toLocaleDateString() : 'N/A');
                                   return (
                                     <div 
@@ -1289,6 +1471,52 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                                     </div>
                                   );
                                 })}
+                              </div>
+                            </div>
+                          );
+                        })()}
+
+                        {/* AI Trading Bots Display */}
+                        {(() => {
+                          const userBots = userBotsList.filter(bot => bot.userId === u.uid);
+                          if (userBots.length === 0) return null;
+                          return (
+                            <div className="mt-3 pt-2.5 border-t border-zinc-800/60 max-w-xl">
+                              <div className="flex justify-between items-center mb-1.5">
+                                <span className="text-[10px] text-zinc-500 font-extrabold uppercase tracking-wider flex items-center gap-1">
+                                  <Bot size={12} className="text-cyan-400" />
+                                  Configured AI Trading Bots ({userBots.length})
+                                </span>
+                                <button
+                                  id={`user-card-wipe-bots-${u.uid}`}
+                                  onClick={() => handleDeleteAllBots(u.uid, u.email)}
+                                  className="text-[9px] text-red-400 hover:text-red-300 font-mono underline cursor-pointer"
+                                >
+                                  Wipe ({userBots.length})
+                                </button>
+                              </div>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1">
+                                {userBots.map((bot: any) => (
+                                  <div 
+                                    key={bot.id} 
+                                    className="p-2.5 rounded-xl border text-[10px] font-mono flex flex-col justify-between gap-1 bg-cyan-950/15 border-cyan-500/20 text-cyan-300"
+                                  >
+                                    <div className="flex justify-between items-center">
+                                      <span className="font-bold text-zinc-200">{bot.name || 'AI Bot'}</span>
+                                      <span className={`text-[8px] font-black uppercase tracking-wider px-1 py-0.25 rounded border ${
+                                        bot.status === 'RUNNING' || bot.status === 'ACTIVE'
+                                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 animate-pulse'
+                                          : 'bg-zinc-800 text-zinc-400 border-zinc-700'
+                                      }`}>
+                                        {bot.status || 'ACTIVE'}
+                                      </span>
+                                    </div>
+                                    <div className="flex justify-between items-center text-[9px] text-zinc-500 mt-1">
+                                      <span>Capital: ${bot.capitalAllocated || bot.minCapital || 50}</span>
+                                      <span>Pairs: {Array.isArray(bot.tradingPairs) ? bot.tradingPairs.join(', ') : (bot.tradingPairs || 'All')}</span>
+                                    </div>
+                                  </div>
+                                ))}
                               </div>
                             </div>
                           );
@@ -1353,6 +1581,28 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                           >
                             <Key size={12} />
                             <span>Reset PIN</span>
+                          </button>
+
+                          <button
+                            id={`user-edit-phone-btn-${u.uid}`}
+                            onClick={() => handleUpdateUserPhone(u)}
+                            disabled={actioning === u.uid}
+                            className="p-1.5 bg-zinc-800 text-amber-400 hover:text-amber-300 border border-zinc-700/50 rounded-lg flex items-center gap-1 text-[10px] font-bold"
+                            title="Edit user phone number"
+                          >
+                            <Phone size={12} />
+                            <span>Edit Phone</span>
+                          </button>
+
+                          <button
+                            id={`user-wipe-all-data-btn-${u.uid}`}
+                            onClick={() => handleWipeAllUserData(u.uid, u.email)}
+                            disabled={actioning === u.uid}
+                            className="p-1.5 bg-red-950/20 hover:bg-red-950/40 text-red-400 hover:text-red-300 border border-red-950/50 rounded-lg flex items-center gap-1 text-[10px] font-bold"
+                            title="Wipe all activity history (txs, investments, bots) for this user without deleting account"
+                          >
+                            <Trash2 size={12} />
+                            <span>Wipe All Activity</span>
                           </button>
 
                           {u.email !== 'love@gmail.com' && (
@@ -1741,11 +1991,19 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                     try {
                       const id = editingBotTemplate ? editingBotTemplate.id : `bot_${Date.now()}`;
                       const pairsArr = botTemplateForm.tradingPairs.split(',').map(p => p.trim()).filter(Boolean);
+                      const formattedWinRatio = botTemplateForm.winRatioRange.trim() 
+                        ? (botTemplateForm.winRatioRange.trim().endsWith('%') 
+                            ? botTemplateForm.winRatioRange.trim() 
+                            : `${botTemplateForm.winRatioRange.trim()}%`)
+                        : '75%';
+
                       const data: BotTemplate = {
                         id,
                         name: botTemplateForm.name,
                         category: botTemplateForm.category,
-                        winRatioRange: botTemplateForm.winRatioRange,
+                        winRatioRange: formattedWinRatio,
+                        winProfitRange: botTemplateForm.winProfitRange.trim() || '1.5% - 2.5%',
+                        lossPercentRange: botTemplateForm.lossPercentRange.trim() || '0.4% - 1.4%',
                         minCapital: parseFloat(botTemplateForm.minCapital) || 50,
                         tradingPairs: pairsArr.length > 0 ? pairsArr : ['BTC/USDT', 'ETH/USDT'],
                         riskLevel: botTemplateForm.riskLevel,
@@ -1757,7 +2015,9 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                       setBotTemplateForm({
                         name: '',
                         category: 'Cross-Exchange Arbitrage',
-                        winRatioRange: '88-96%',
+                        winRatioRange: '95%',
+                        winProfitRange: '1.5% - 2.5%',
+                        lossPercentRange: '0.4% - 1.4%',
                         minCapital: '50',
                         tradingPairs: 'BTC/USDT, ETH/USDT, SOL/USDT',
                         riskLevel: 'Low Risk',
@@ -1793,17 +2053,51 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                       </div>
                     </div>
 
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-[10px] uppercase font-bold text-emerald-400 mb-1 block">Win Trade Profit Range (%)</label>
+                        <input
+                          type="text"
+                          required
+                          value={botTemplateForm.winProfitRange}
+                          onChange={e => setBotTemplateForm(prev => ({ ...prev, winProfitRange: e.target.value }))}
+                          placeholder="e.g. 1.5% - 2.5%"
+                          className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
+                        />
+                        <span className="text-[9px] text-zinc-500 mt-1 block font-medium">
+                          Profit % range earned on a winning trade
+                        </span>
+                      </div>
+                      <div>
+                        <label className="text-[10px] uppercase font-bold text-rose-400 mb-1 block">Loss Trade Loss Range (%)</label>
+                        <input
+                          type="text"
+                          required
+                          value={botTemplateForm.lossPercentRange}
+                          onChange={e => setBotTemplateForm(prev => ({ ...prev, lossPercentRange: e.target.value }))}
+                          placeholder="e.g. 0.4% - 1.4%"
+                          className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-rose-500"
+                        />
+                        <span className="text-[9px] text-zinc-500 mt-1 block font-medium">
+                          Loss % range incurred on a losing trade
+                        </span>
+                      </div>
+                    </div>
+
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                       <div>
-                        <label className="text-[10px] uppercase font-bold text-zinc-400 mb-1 block">Win Ratio Range</label>
+                        <label className="text-[10px] uppercase font-bold text-zinc-400 mb-1 block">Win Ratio (%)</label>
                         <input
                           type="text"
                           required
                           value={botTemplateForm.winRatioRange}
                           onChange={e => setBotTemplateForm(prev => ({ ...prev, winRatioRange: e.target.value }))}
-                          placeholder="88-96%"
+                          placeholder="e.g. 60%"
                           className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
                         />
+                        <span className="text-[9px] text-zinc-500 mt-1 block font-medium">
+                          e.g. 60% = 60% Win / 40% Loss probability
+                        </span>
                       </div>
                       <div>
                         <label className="text-[10px] uppercase font-bold text-zinc-400 mb-1 block">Min Capital ($)</label>
@@ -1879,7 +2173,9 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                             setBotTemplateForm({
                               name: tpl.name,
                               category: tpl.category,
-                              winRatioRange: tpl.winRatioRange,
+                              winRatioRange: tpl.winRatioRange || '95%',
+                              winProfitRange: tpl.winProfitRange || '1.5% - 2.5%',
+                              lossPercentRange: tpl.lossPercentRange || '0.4% - 1.4%',
                               minCapital: tpl.minCapital.toString(),
                               tradingPairs: (tpl.tradingPairs || []).join(', '),
                               riskLevel: tpl.riskLevel,
@@ -1902,10 +2198,27 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2 pt-2 border-t border-zinc-800 text-center">
+                    <div className="grid grid-cols-3 gap-2 pt-2 border-t border-zinc-800 text-center">
                       <div className="bg-zinc-950 p-2 rounded-xl">
-                        <span className="text-[9px] uppercase tracking-wider text-zinc-500 font-bold block">Win Ratio</span>
-                        <span className="text-xs font-black text-emerald-400 font-mono">{tpl.winRatioRange}</span>
+                        <span className="text-[9px] uppercase tracking-wider text-zinc-500 font-bold block">Win / Loss Ratio</span>
+                        <span className="text-xs font-black text-emerald-400 font-mono">
+                          {tpl.winRatioRange} Win
+                          {(() => {
+                            const val = parseFloat((tpl.winRatioRange || '').replace(/%/g, ''));
+                            if (!isNaN(val) && val <= 100) {
+                              return <span className="text-rose-400 text-[10px] ml-1 block sm:inline">({(100 - val).toFixed(0)}% L)</span>;
+                            }
+                            return null;
+                          })()}
+                        </span>
+                      </div>
+                      <div className="bg-zinc-950 p-2 rounded-xl">
+                        <span className="text-[9px] uppercase tracking-wider text-zinc-500 font-bold block">Profit / Loss %</span>
+                        <span className="text-xs font-black font-mono block">
+                          <span className="text-emerald-400">{tpl.winProfitRange || '1.5-2.5%'}</span>
+                          <span className="text-zinc-600 mx-0.5">/</span>
+                          <span className="text-rose-400">-{tpl.lossPercentRange || '0.4-1.4%'}</span>
+                        </span>
                       </div>
                       <div className="bg-zinc-950 p-2 rounded-xl">
                         <span className="text-[9px] uppercase tracking-wider text-zinc-500 font-bold block">Min Capital</span>
@@ -2902,43 +3215,52 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                   {/* Right panel: Automatically Detected Orphaned Transactions */}
                   <div className="space-y-3 bg-zinc-950/40 p-4 rounded-2xl border border-zinc-850/85 flex flex-col justify-between">
                     <div className="space-y-1">
-                      <h4 className="text-[10px] text-zinc-300 font-black uppercase tracking-wider">Auto-Detected Orphaned IDs</h4>
+                      <h4 className="text-[10px] text-zinc-300 font-black uppercase tracking-wider">Auto-Detected Orphaned Data & Leftover Records</h4>
                       <p className="text-[10px] text-zinc-500">
-                        The system has identified transactions on the database that belong to UIDs no longer registered on the system.
+                        The system scans for leftover transactions, investments, and bots belonging to deleted UIDs no longer on the system.
                       </p>
                     </div>
 
                     {(() => {
                       const registeredUIDs = new Set(usersList.map(u => u.uid));
-                      const orphanedUIDs = (Array.from(new Set(txList.map(t => t.userId).filter(Boolean))) as string[])
-                        .filter(uid => !registeredUIDs.has(uid));
+                      const txUIDs = txList.map(t => t.userId).filter(Boolean);
+                      const invUIDs = investmentsList.map(i => i.userId).filter(Boolean);
+                      const botUIDs = userBotsList.map(b => b.userId).filter(Boolean);
+
+                      const allUIDs = Array.from(new Set([...txUIDs, ...invUIDs, ...botUIDs])) as string[];
+                      const orphanedUIDs = allUIDs.filter(uid => !registeredUIDs.has(uid));
 
                       if (orphanedUIDs.length === 0) {
                         return (
                           <div className="text-center py-4 bg-zinc-950/50 border border-zinc-900 rounded-xl">
-                            <span className="text-[10px] text-emerald-400 font-bold block">✓ No Orphaned Transactions Found</span>
-                            <span className="text-[9px] text-zinc-500 mt-0.5 block">Database is clean!</span>
+                            <span className="text-[10px] text-emerald-400 font-bold block">✓ No Orphaned Database Records Found</span>
+                            <span className="text-[9px] text-zinc-500 mt-0.5 block">Database is clean! All transactions, investments, and bots belong to active user accounts.</span>
                           </div>
                         );
                       }
 
                       return (
-                        <div className="space-y-2 max-h-36 overflow-y-auto pr-1">
+                        <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
                           {orphanedUIDs.map(uid => {
-                            const count = txList.filter(t => t.userId === uid).length;
+                            const txCount = txList.filter(t => t.userId === uid).length;
+                            const invCount = investmentsList.filter(i => i.userId === uid).length;
+                            const botCount = userBotsList.filter(b => b.userId === uid).length;
                             return (
                               <div key={uid} className="flex justify-between items-center bg-zinc-950 p-2.5 rounded-xl border border-zinc-900 text-[10px] font-mono">
                                 <div className="space-y-0.5">
                                   <span className="text-zinc-400 font-bold block truncate max-w-[120px] sm:max-w-[180px]" title={uid}>{uid}</span>
-                                  <span className="text-zinc-500 text-[9px] block font-sans font-medium">{count} orphaned transaction(s)</span>
+                                  <span className="text-zinc-500 text-[9px] block font-sans font-medium">
+                                    Leftover: {txCount} tx(s), {invCount} inv(s), {botCount} bot(s)
+                                  </span>
                                 </div>
                                 <button
                                   id={`wipe-orphaned-btn-${uid}`}
-                                  onClick={() => handleDeleteAllTransactions(uid, `Orphaned UID: ${uid}`)}
-                                  className="px-2 py-1 bg-red-950/40 hover:bg-red-950/80 text-red-400 text-[9px] font-bold rounded-lg border border-red-900/30 transition-all cursor-pointer"
-                                  title="Delete transactions for this deleted user ID"
+                                  onClick={() => handleWipeAllUserData(uid, `Orphaned UID: ${uid}`)}
+                                  className="px-2.5 py-1 bg-red-950/40 hover:bg-red-950/80 text-red-400 text-[9px] font-bold rounded-lg border border-red-900/30 transition-all cursor-pointer flex items-center gap-1"
+                                  title="Wipe all leftover records for this deleted user ID"
                                 >
-                                  Wipe
+                                  <Trash2 size={10} />
+                                  <span>Wipe Data</span>
                                 </button>
                               </div>
                             );
@@ -2957,7 +3279,7 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
         </div>
       )}
 
-      {/* User Full Transaction History Modal */}
+      {/* User Full Account Audit & History Modal */}
       {selectedUserHistory && (
         <div 
           id="user-history-modal" 
@@ -2967,9 +3289,11 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
             <div className="flex justify-between items-start pb-3 border-b border-zinc-800">
               <div>
                 <h3 className="text-sm font-black text-zinc-100 uppercase tracking-tight">
-                  Transaction Audit Logs for {selectedUserHistory.displayName || 'User'}
+                  User Audit & Activity Management — {selectedUserHistory.displayName || 'User'}
                 </h3>
-                <p className="text-[10px] text-zinc-500 font-mono mt-0.5">Email: {selectedUserHistory.email} | UID: {selectedUserHistory.uid}</p>
+                <p className="text-[10px] text-zinc-500 font-mono mt-0.5">
+                  Email: {selectedUserHistory.email} | Phone: {selectedUserHistory.phone || (selectedUserHistory as any).phoneNumber || 'N/A'} | UID: {selectedUserHistory.uid}
+                </p>
               </div>
               <button 
                 id="close-history-modal-btn"
@@ -2980,9 +3304,31 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
               </button>
             </div>
 
-            <div className="max-h-[50vh] overflow-y-auto space-y-2 pr-1">
+            {/* Overview Stats for User Data */}
+            <div className="grid grid-cols-3 gap-2 text-center text-[10px] font-mono">
+              <div className="p-2 bg-zinc-950 rounded-xl border border-zinc-800/80">
+                <span className="text-zinc-500 block uppercase font-sans text-[9px]">Transactions</span>
+                <span className="text-sm font-black text-emerald-400">{selectedUserTxs.length}</span>
+              </div>
+              <div className="p-2 bg-zinc-950 rounded-xl border border-zinc-800/80">
+                <span className="text-zinc-500 block uppercase font-sans text-[9px]">MMF Investments</span>
+                <span className="text-sm font-black text-amber-400">
+                  {investmentsList.filter(i => i.userId === selectedUserHistory.uid).length}
+                </span>
+              </div>
+              <div className="p-2 bg-zinc-950 rounded-xl border border-zinc-800/80">
+                <span className="text-zinc-500 block uppercase font-sans text-[9px]">AI Bots</span>
+                <span className="text-sm font-black text-cyan-400">
+                  {userBotsList.filter(b => b.userId === selectedUserHistory.uid).length}
+                </span>
+              </div>
+            </div>
+
+            {/* Transaction Audit Records List */}
+            <div className="max-h-[40vh] overflow-y-auto space-y-2 pr-1">
+              <div className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider mb-1">Recent Transactions History</div>
               {selectedUserTxs.length === 0 ? (
-                <div className="text-center py-10">
+                <div className="text-center py-6 bg-zinc-950/50 rounded-xl border border-zinc-900">
                   <p className="text-xs text-zinc-500">No transaction records found for this account.</p>
                 </div>
               ) : (
@@ -3026,26 +3372,64 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
               )}
             </div>
             
-            <div className="flex justify-between items-center pt-3 border-t border-zinc-800">
-              {selectedUserTxs.length > 0 ? (
-                <button
-                  id="wipe-all-user-txs-btn"
-                  onClick={() => handleDeleteAllTransactions(selectedUserHistory.uid, selectedUserHistory.email || '')}
-                  className="px-4 py-2 bg-red-950/40 hover:bg-red-950/60 text-red-400 hover:text-red-300 border border-red-900/50 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer animate-fade-in"
-                  title="Wipe entire transaction history for this user"
-                >
-                  <Trash2 size={12} />
-                  <span>Wipe All Transactions</span>
-                </button>
-              ) : (
-                <div />
-              )}
-              <button
-                onClick={() => setSelectedUserHistory(null)}
-                className="px-4 py-2 bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 rounded-xl text-xs font-bold text-zinc-300"
-              >
-                Close Logs
-              </button>
+            {/* Quick Wipe Management Controls */}
+            <div className="pt-3 border-t border-zinc-800 space-y-2">
+              <div className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">Data Wipe Operations</div>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap gap-1.5">
+                  <button
+                    id="wipe-user-txs-modal-btn"
+                    onClick={() => handleDeleteAllTransactions(selectedUserHistory.uid, selectedUserHistory.email || '')}
+                    disabled={selectedUserTxs.length === 0}
+                    className="px-2.5 py-1.5 bg-red-950/30 hover:bg-red-950/60 disabled:opacity-40 text-red-400 border border-red-900/40 rounded-xl text-[10px] font-bold flex items-center gap-1 cursor-pointer"
+                    title="Wipe transaction logs"
+                  >
+                    <Trash2 size={11} />
+                    <span>Wipe Txs ({selectedUserTxs.length})</span>
+                  </button>
+
+                  <button
+                    id="wipe-user-invs-modal-btn"
+                    onClick={() => handleDeleteAllInvestments(selectedUserHistory.uid, selectedUserHistory.email || '')}
+                    disabled={investmentsList.filter(i => i.userId === selectedUserHistory.uid).length === 0}
+                    className="px-2.5 py-1.5 bg-amber-950/30 hover:bg-amber-950/60 disabled:opacity-40 text-amber-400 border border-amber-900/40 rounded-xl text-[10px] font-bold flex items-center gap-1 cursor-pointer"
+                    title="Wipe investment portfolios"
+                  >
+                    <Coins size={11} />
+                    <span>Wipe Invs ({investmentsList.filter(i => i.userId === selectedUserHistory.uid).length})</span>
+                  </button>
+
+                  <button
+                    id="wipe-user-bots-modal-btn"
+                    onClick={() => handleDeleteAllBots(selectedUserHistory.uid, selectedUserHistory.email || '')}
+                    disabled={userBotsList.filter(b => b.userId === selectedUserHistory.uid).length === 0}
+                    className="px-2.5 py-1.5 bg-cyan-950/30 hover:bg-cyan-950/60 disabled:opacity-40 text-cyan-400 border border-cyan-900/40 rounded-xl text-[10px] font-bold flex items-center gap-1 cursor-pointer"
+                    title="Wipe AI trading bots"
+                  >
+                    <Bot size={11} />
+                    <span>Wipe Bots ({userBotsList.filter(b => b.userId === selectedUserHistory.uid).length})</span>
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    id="wipe-all-user-data-modal-btn"
+                    onClick={() => handleWipeAllUserData(selectedUserHistory.uid, selectedUserHistory.email || '')}
+                    className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1 cursor-pointer shadow-lg"
+                    title="Wipe all activity records (Txs, Investments, Bots)"
+                  >
+                    <Trash2 size={11} />
+                    <span>Wipe All Data</span>
+                  </button>
+
+                  <button
+                    onClick={() => setSelectedUserHistory(null)}
+                    className="px-3 py-1.5 bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 rounded-xl text-xs font-bold text-zinc-300"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>

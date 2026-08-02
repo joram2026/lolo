@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { getTradingPairConfig, TradingPairBadge } from '../utils/pairUtils';
+import { HourglassProgress } from './HourglassProgress';
 import { 
   ArrowLeft, 
   Bot, 
@@ -13,11 +15,14 @@ import {
   XCircle, 
   Zap,
   Activity,
+  Target,
+  Trophy,
   ShieldCheck,
   AlertCircle,
   X,
   History,
-  RotateCcw
+  RotateCcw,
+  WifiOff
 } from 'lucide-react';
 import { doc, updateDoc, addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -45,6 +50,7 @@ interface RunningBotViewProps {
   user: any;
   userBalance: number;
   isLightTheme: boolean;
+  isOffline?: boolean;
   onBack: () => void;
   onTradeAgain?: (bot: any) => void;
   onGoToHistory?: () => void;
@@ -55,11 +61,33 @@ export const RunningBotView: React.FC<RunningBotViewProps> = ({
   user,
   userBalance,
   isLightTheme,
+  isOffline,
   onBack,
   onTradeAgain,
   onGoToHistory
 }) => {
   const toast = useToast();
+  
+  const [browserOffline, setBrowserOffline] = useState<boolean>(
+    typeof navigator !== 'undefined' ? !navigator.onLine : false
+  );
+
+  useEffect(() => {
+    const handleOnline = () => setBrowserOffline(false);
+    const handleOffline = () => setBrowserOffline(true);
+    if (typeof window !== 'undefined') {
+      window.addEventListener('online', handleOnline);
+      window.addEventListener('offline', handleOffline);
+    }
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('online', handleOnline);
+        window.removeEventListener('offline', handleOffline);
+      }
+    };
+  }, []);
+
+  const isBotOffline = Boolean(isOffline || browserOffline);
   
   const durationSeconds = bot?.durationSeconds || (bot?.durationMinutes ? Math.round(bot.durationMinutes * 60) : 60);
   const tradingPair = bot?.tradingPair || 'BTC/USDT';
@@ -107,7 +135,7 @@ export const RunningBotView: React.FC<RunningBotViewProps> = ({
 
   // Main Trade Cycle & Countdown Timer Effect
   useEffect(() => {
-    if (status !== 'RUNNING' || outcomeModal !== null) return;
+    if (isBotOffline || status !== 'RUNNING' || outcomeModal !== null) return;
 
     const interval = setInterval(() => {
       setRemainingSeconds((prev) => {
@@ -138,7 +166,7 @@ export const RunningBotView: React.FC<RunningBotViewProps> = ({
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [status, durationSeconds, tradingPair, outcomeModal]);
+  }, [status, durationSeconds, tradingPair, outcomeModal, isBotOffline]);
 
   const addLog = (message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') => {
     setLogs((prevLogs) => [
@@ -152,15 +180,57 @@ export const RunningBotView: React.FC<RunningBotViewProps> = ({
     ]);
   };
 
+  const parseWinProbability = (val?: string): number => {
+    if (!val) return 0.75;
+    const clean = val.trim();
+    if (clean.includes('-')) {
+      const parts = clean.replace(/%/g, '').split('-').map(p => parseFloat(p.trim())).filter(n => !isNaN(n));
+      if (parts.length >= 2) {
+        return Math.max(0.01, Math.min(0.99, ((parts[0] + parts[1]) / 2) / 100));
+      } else if (parts.length === 1) {
+        return Math.max(0.01, Math.min(0.99, parts[0] / 100));
+      }
+    }
+    const num = parseFloat(clean.replace(/%/g, ''));
+    if (!isNaN(num)) {
+      return Math.max(0.01, Math.min(0.99, num / 100));
+    }
+    return 0.75;
+  };
+
+  const parseRangeToDecimals = (val?: string, defaultMinPercent = 1.5, defaultMaxPercent = 2.5): { min: number; max: number } => {
+    if (!val) return { min: defaultMinPercent / 100, max: defaultMaxPercent / 100 };
+    const clean = val.trim().replace(/%/g, '');
+    if (clean.includes('-')) {
+      const parts = clean.split('-').map(p => parseFloat(p.trim())).filter(n => !isNaN(n));
+      if (parts.length >= 2) {
+        const minVal = Math.min(parts[0], parts[1]);
+        const maxVal = Math.max(parts[0], parts[1]);
+        return { min: minVal / 100, max: maxVal / 100 };
+      } else if (parts.length === 1) {
+        return { min: parts[0] / 100, max: parts[0] / 100 };
+      }
+    }
+    const num = parseFloat(clean);
+    if (!isNaN(num)) {
+      return { min: num / 100, max: num / 100 };
+    }
+    return { min: defaultMinPercent / 100, max: defaultMaxPercent / 100 };
+  };
+
   const executeTradeRound = async () => {
-    // 75% win probability (25% loss chance) per trade cycle
-    const isWin = Math.random() < 0.75;
+    // Win probability based on admin configured win ratio percentage (e.g. 60% win / 40% loss)
+    const winProb = parseWinProbability(bot?.winRatioRange);
+    const isWin = Math.random() < winProb;
     const capital = bot?.capital || 50;
     
-    // Profit delta calculation (+1.5% to +2.3% for win, -0.4% to -1.4% for loss)
+    // Profit / loss percentage range configured by admin
+    const winRange = parseRangeToDecimals(bot?.winProfitRange, 1.5, 2.5);
+    const lossRange = parseRangeToDecimals(bot?.lossPercentRange, 0.4, 1.4);
+
     const profitRate = isWin 
-      ? (0.015 + Math.random() * 0.008) 
-      : -(0.004 + Math.random() * 0.010);
+      ? (winRange.min + Math.random() * (winRange.max - winRange.min)) 
+      : -(lossRange.min + Math.random() * (lossRange.max - lossRange.min));
     const profitDelta = parseFloat((capital * profitRate).toFixed(2));
     const profitPercent = parseFloat((profitRate * 100).toFixed(2));
 
@@ -323,11 +393,32 @@ export const RunningBotView: React.FC<RunningBotViewProps> = ({
     }
   };
 
-  const progressPercent = Math.min(100, Math.max(0, (remainingSeconds / durationSeconds) * 100));
+  const elapsedSeconds = Math.max(0, durationSeconds - remainingSeconds);
+  const progressPercent = Math.min(100, Math.max(0, (elapsedSeconds / durationSeconds) * 100));
   const winRatio = totalTrades > 0 ? ((wins / totalTrades) * 100).toFixed(1) : '100.0';
 
   return (
     <div className="space-y-5 animate-fade-in max-w-4xl mx-auto pb-10">
+      {/* SYSTEM OFFLINE BANNER */}
+      {isBotOffline && (
+        <div className={`p-4.5 sm:p-5 rounded-3xl border flex items-center gap-3.5 shadow-xs ${
+          isLightTheme ? 'bg-rose-50/90 border-rose-200 text-rose-950' : 'bg-rose-950/40 border-rose-500/30 text-rose-200'
+        }`}>
+          <div className="w-10 h-10 rounded-2xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center shrink-0">
+            <WifiOff size={20} className="text-rose-500 animate-pulse" />
+          </div>
+          <div>
+            <h4 className="text-xs font-black uppercase tracking-wider text-rose-600 dark:text-rose-400 flex items-center gap-1.5">
+              <span>System State: OFFLINE</span>
+              <span className="text-[10px] px-2 py-0.2 rounded-full bg-rose-500/20 text-rose-500 font-mono">Offline Rate</span>
+            </h4>
+            <p className="text-xs font-medium mt-0.5 leading-relaxed opacity-90">
+              Network latency or offline market rate detected. Bot status is <strong>OFFLINE</strong> and every bot detail (Capital, Wins, Losses, Trades, Profit, Win Ratio) is set to <strong>0</strong> until live rate syncing resumes.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* HEADER SECTION */}
       <div className={`p-5 sm:p-6 rounded-3xl border shadow-xs transition-all ${
         isLightTheme ? 'bg-white border-zinc-200/90' : 'bg-slate-900 border-slate-800'
@@ -354,12 +445,14 @@ export const RunningBotView: React.FC<RunningBotViewProps> = ({
                   Running Bot
                 </h2>
                 <span className={`inline-flex items-center gap-1.5 text-[10px] font-mono px-3 py-1 rounded-full font-black uppercase tracking-wider border shadow-xs ${
-                  status === 'RUNNING'
-                    ? isLightTheme ? 'bg-emerald-100/90 text-emerald-900 border-emerald-300' : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                    : isLightTheme ? 'bg-amber-100/90 text-amber-900 border-amber-300' : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                  isBotOffline
+                    ? isLightTheme ? 'bg-rose-100/90 text-rose-900 border-rose-300' : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                    : status === 'RUNNING'
+                      ? isLightTheme ? 'bg-emerald-100/90 text-emerald-900 border-emerald-300' : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                      : isLightTheme ? 'bg-amber-100/90 text-amber-900 border-amber-300' : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
                 }`}>
-                  <span className={`w-2 h-2 rounded-full ${status === 'RUNNING' ? 'bg-emerald-500 animate-ping' : 'bg-amber-500'}`} />
-                  {status}
+                  <span className={`w-2 h-2 rounded-full ${isBotOffline ? 'bg-rose-500' : status === 'RUNNING' ? 'bg-emerald-500 animate-ping' : 'bg-amber-500'}`} />
+                  {isBotOffline ? 'OFFLINE' : status}
                 </span>
               </div>
             </div>
@@ -387,201 +480,220 @@ export const RunningBotView: React.FC<RunningBotViewProps> = ({
         </div>
 
         {/* Text line */}
-        <p className={`text-xs font-medium mt-3 leading-relaxed ${
+        <p className={`text-xs font-medium mt-3 leading-relaxed flex items-center gap-1.5 flex-wrap ${
           isLightTheme ? 'text-zinc-600' : 'text-zinc-400'
         }`}>
-          <strong className={isLightTheme ? 'text-amber-700 font-bold' : 'text-emerald-400 font-bold'}>'{botName}'</strong> is automatically analyzing trade entries on <strong className="font-mono text-zinc-900 dark:text-zinc-100">{tradingPair}</strong>.
+          <span><strong className={isLightTheme ? 'text-amber-700 font-bold' : 'text-emerald-400 font-bold'}>'{botName}'</strong> is automatically analyzing trade entries on</span>
+          <TradingPairBadge pair={tradingPair} isLightTheme={isLightTheme} size="sm" showName />
         </p>
       </div>
 
-      {/* CARD 1: Trade Closes in & Trading Pair + Countdown Progress Bar */}
-      <div className={`p-5 sm:p-6 rounded-3xl border shadow-xs space-y-4 ${
-        isLightTheme ? 'bg-white border-zinc-200/90' : 'bg-slate-900 border-slate-800'
+      {/* CARD 1: Trade Closes In & Trading Pair + Hourglass Timer - EXACT BLUEPRINT DESIGN */}
+      <HourglassProgress
+        tradingPair={tradingPair}
+        progressPercent={isBotOffline ? 0 : progressPercent}
+        remainingSeconds={isBotOffline ? 0 : remainingSeconds}
+        durationSeconds={durationSeconds}
+        status={isBotOffline ? 'OFFLINE' : status}
+        isOffline={isBotOffline}
+        isLightTheme={isLightTheme}
+      />
+
+      {/* CARD 2: PERFORMANCE STATS - COMPACT MODERN HIGH-DENSITY */}
+      <div className={`p-4 sm:p-5 rounded-2xl border shadow-sm space-y-3.5 transition-all ${
+        isLightTheme ? 'bg-white border-slate-200/90' : 'bg-slate-900 border-slate-800'
       }`}>
-        <div className="flex flex-row items-center justify-between gap-3">
-          {/* Trade Closes in */}
-          <div>
-            <span className={`text-[11px] font-black uppercase tracking-wider block ${
-              isLightTheme ? 'text-zinc-400' : 'text-zinc-400'
+        {/* Header Strip */}
+        <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800/80">
+          <div className="flex items-center gap-2">
+            <div className={`w-2 h-2 rounded-full ${isBotOffline ? 'bg-rose-500' : 'bg-emerald-500 animate-pulse'}`} />
+            <h3 className={`text-xs font-black uppercase tracking-wider ${
+              isLightTheme ? 'text-slate-700' : 'text-slate-300'
             }`}>
-              Trade Closes In
-            </span>
-            <div className="flex items-center gap-2 mt-1.5">
-              <span className={`px-4 py-1.5 rounded-xl font-mono text-lg sm:text-xl font-black border tracking-tight shadow-xs ${
-                remainingSeconds <= 10 
-                  ? 'bg-rose-100 border-rose-300 text-rose-800 dark:bg-rose-950/60 dark:border-rose-500/40 dark:text-rose-300 animate-pulse'
-                  : isLightTheme 
-                    ? 'bg-amber-100/80 border-amber-300 text-amber-900' 
-                    : 'bg-emerald-950/50 border-emerald-500/30 text-emerald-300'
-              }`}>
-                {status === 'PAUSED' ? 'PAUSED' : `${remainingSeconds}s`}
-              </span>
-            </div>
+              Performance Stats
+            </h3>
           </div>
-
-          {/* Trading Pair */}
-          <div className="text-right">
-            <span className={`text-[11px] font-black uppercase tracking-wider block ${
-              isLightTheme ? 'text-zinc-400' : 'text-zinc-400'
+          <div className="flex items-center gap-2">
+            <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-md border ${
+              isLightTheme 
+                ? 'bg-slate-100 border-slate-200 text-slate-600' 
+                : 'bg-slate-800 border-slate-700 text-slate-300'
             }`}>
-              Trading Pair
-            </span>
-            <div className="mt-1.5">
-              <span className={`px-4 py-1.5 rounded-xl font-mono text-sm sm:text-base font-black border inline-block shadow-xs ${
-                isLightTheme ? 'bg-zinc-100 border-zinc-200 text-zinc-900' : 'bg-slate-800 border-slate-700 text-white'
-              }`}>
-                {tradingPair}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Progress Bar */}
-        <div className="space-y-2 pt-2">
-          <div className="flex justify-between items-center text-[10px] font-mono font-bold text-zinc-400 uppercase tracking-wider">
-            <span>Progress: {progressPercent.toFixed(0)}%</span>
-            <span>Duration: {durationSeconds}s</span>
-          </div>
-          <div className={`w-full h-3 rounded-full p-0.5 overflow-hidden border ${
-            isLightTheme ? 'bg-zinc-100 border-zinc-200' : 'bg-slate-950 border-slate-800'
-          }`}>
-            <div 
-              className={`h-full rounded-full transition-all duration-1000 ease-linear ${
-                remainingSeconds <= 10
-                  ? 'bg-rose-500'
-                  : isLightTheme 
-                    ? 'bg-gradient-to-r from-amber-500 to-amber-400 shadow-xs' 
-                    : 'bg-gradient-to-r from-emerald-500 to-teal-400 shadow-xs'
-              }`}
-              style={{ width: `${progressPercent}%` }}
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* CARD 2: Wins, Total Trades, Losses, Win Ratio, Profit + STOP & PAUSE Buttons */}
-      <div className={`p-5 sm:p-6 rounded-3xl border shadow-xs space-y-5 ${
-        isLightTheme ? 'bg-white border-zinc-200/90' : 'bg-slate-900 border-slate-800'
-      }`}>
-        {/* Top Row: Wins, Total trades, Losses */}
-        <div className="grid grid-cols-3 gap-3">
-          <div className={`p-3.5 sm:p-4 rounded-2xl border text-center transition-all ${
-            isLightTheme ? 'bg-emerald-50/80 border-emerald-200' : 'bg-emerald-950/20 border-emerald-500/20'
-          }`}>
-            <span className={`text-[10px] sm:text-xs font-black uppercase tracking-wider block ${
-              isLightTheme ? 'text-emerald-800' : 'text-emerald-400'
-            }`}>
-              Wins
-            </span>
-            <span className={`text-xl sm:text-2xl font-black font-mono mt-0.5 block ${
-              isLightTheme ? 'text-emerald-700' : 'text-emerald-300'
-            }`}>
-              {wins}
-            </span>
-          </div>
-
-          <div className={`p-3.5 sm:p-4 rounded-2xl border text-center transition-all ${
-            isLightTheme ? 'bg-zinc-50 border-zinc-200' : 'bg-slate-800/60 border-slate-700/60'
-          }`}>
-            <span className={`text-[10px] sm:text-xs font-black uppercase tracking-wider block ${
-              isLightTheme ? 'text-zinc-500' : 'text-zinc-400'
-            }`}>
-              Total Trades
-            </span>
-            <span className={`text-xl sm:text-2xl font-black font-mono mt-0.5 block ${
-              isLightTheme ? 'text-zinc-900' : 'text-white'
-            }`}>
-              {totalTrades}
-            </span>
-          </div>
-
-          <div className={`p-3.5 sm:p-4 rounded-2xl border text-center transition-all ${
-            isLightTheme ? 'bg-rose-50/80 border-rose-200' : 'bg-rose-950/20 border-rose-500/20'
-          }`}>
-            <span className={`text-[10px] sm:text-xs font-black uppercase tracking-wider block ${
-              isLightTheme ? 'text-rose-800' : 'text-rose-400'
-            }`}>
-              Losses
-            </span>
-            <span className={`text-xl sm:text-2xl font-black font-mono mt-0.5 block ${
-              isLightTheme ? 'text-rose-700' : 'text-rose-300'
-            }`}>
-              {losses}
+              Capital: ${bot?.capital || 50} USDT
             </span>
           </div>
         </div>
 
-        {/* Bottom Row: Win ratio & Profit */}
-        <div className="grid grid-cols-2 gap-3">
-          <div className={`p-4 rounded-2xl border ${
-            isLightTheme ? 'bg-zinc-50 border-zinc-200' : 'bg-slate-800/40 border-slate-700/60'
-          }`}>
-            <span className={`text-[11px] font-black uppercase tracking-wider block ${
-              isLightTheme ? 'text-zinc-500' : 'text-zinc-400'
-            }`}>
-              Win Ratio
-            </span>
-            <span className={`text-xl sm:text-2xl font-black font-mono mt-1 block ${
-              isLightTheme ? 'text-amber-600' : 'text-emerald-400'
-            }`}>
-              {winRatio}%
-            </span>
-          </div>
-
-          <div className={`p-4 rounded-2xl border ${
+        {/* Top Metric Grid: Wins, Total Trades, Losses (3 Columns, compact padding) */}
+        <div className="grid grid-cols-3 gap-2 sm:gap-2.5">
+          {/* Wins */}
+          <div className={`px-3 py-2.5 rounded-xl border transition-all ${
             isLightTheme 
-              ? accruedProfit >= 0 ? 'bg-emerald-50/50 border-emerald-200/80' : 'bg-rose-50/50 border-rose-200/80'
-              : accruedProfit >= 0 ? 'bg-emerald-950/20 border-emerald-500/20' : 'bg-rose-950/20 border-rose-500/20'
+              ? 'bg-emerald-50/60 border-emerald-200/70' 
+              : 'bg-emerald-950/30 border-emerald-500/25'
           }`}>
-            <span className={`text-[11px] font-black uppercase tracking-wider block ${
-              isLightTheme 
-                ? accruedProfit >= 0 ? 'text-emerald-800' : 'text-rose-800'
-                : accruedProfit >= 0 ? 'text-emerald-400' : 'text-rose-400'
+            <div className="flex items-center justify-between">
+              <span className={`text-[10px] font-black uppercase tracking-wider ${
+                isLightTheme ? 'text-emerald-800' : 'text-emerald-400'
+              }`}>
+                Wins
+              </span>
+              <CheckCircle2 size={12} className={isLightTheme ? 'text-emerald-600' : 'text-emerald-400'} strokeWidth={2.5} />
+            </div>
+            <span className={`text-xl sm:text-2xl font-black font-mono mt-0.5 block tracking-tight ${
+              isLightTheme ? 'text-emerald-900' : 'text-emerald-300'
             }`}>
-              {accruedProfit >= 0 ? 'Accrued Profit' : 'Accrued Loss'}
+              {isBotOffline ? 0 : wins}
             </span>
-            <span className={`text-xl sm:text-2xl font-black font-mono mt-1 block ${
-              isLightTheme 
-                ? accruedProfit >= 0 ? 'text-emerald-700' : 'text-rose-700'
-                : accruedProfit >= 0 ? 'text-emerald-300' : 'text-rose-300'
+          </div>
+
+          {/* Total Trades */}
+          <div className={`px-3 py-2.5 rounded-xl border transition-all ${
+            isLightTheme 
+              ? 'bg-slate-50 border-slate-200/80' 
+              : 'bg-slate-800/60 border-slate-700/70'
+          }`}>
+            <div className="flex items-center justify-between">
+              <span className={`text-[10px] font-black uppercase tracking-wider ${
+                isLightTheme ? 'text-slate-600' : 'text-slate-400'
+              }`}>
+                Total Trades
+              </span>
+              <Activity size={12} className={isLightTheme ? 'text-slate-500' : 'text-slate-400'} strokeWidth={2.5} />
+            </div>
+            <span className={`text-xl sm:text-2xl font-black font-mono mt-0.5 block tracking-tight ${
+              isLightTheme ? 'text-slate-900' : 'text-white'
             }`}>
-              {accruedProfit >= 0 ? '+' : ''}${accruedProfit.toFixed(2)}
+              {isBotOffline ? 0 : totalTrades}
+            </span>
+          </div>
+
+          {/* Losses */}
+          <div className={`px-3 py-2.5 rounded-xl border transition-all ${
+            isLightTheme 
+              ? 'bg-rose-50/60 border-rose-200/70' 
+              : 'bg-rose-950/30 border-rose-500/25'
+          }`}>
+            <div className="flex items-center justify-between">
+              <span className={`text-[10px] font-black uppercase tracking-wider ${
+                isLightTheme ? 'text-rose-800' : 'text-rose-400'
+              }`}>
+                Losses
+              </span>
+              <XCircle size={12} className={isLightTheme ? 'text-rose-600' : 'text-rose-400'} strokeWidth={2.5} />
+            </div>
+            <span className={`text-xl sm:text-2xl font-black font-mono mt-0.5 block tracking-tight ${
+              isLightTheme ? 'text-rose-900' : 'text-rose-300'
+            }`}>
+              {isBotOffline ? 0 : losses}
+            </span>
+          </div>
+        </div>
+
+        {/* Middle Row: Win Ratio & Accrued Profit (2 columns, sleek compact styling) */}
+        <div className="grid grid-cols-2 gap-2 sm:gap-2.5">
+          {/* Win Ratio */}
+          <div className={`px-3.5 py-3 rounded-xl border transition-all ${
+            isLightTheme 
+              ? 'bg-amber-50/40 border-amber-200/80' 
+              : 'bg-slate-800/40 border-amber-500/20'
+          }`}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1">
+                <Target size={12} className={isLightTheme ? 'text-amber-600' : 'text-amber-400'} />
+                <span className={`text-[10px] font-black uppercase tracking-wider ${
+                  isLightTheme ? 'text-slate-700' : 'text-slate-300'
+                }`}>
+                  Win Ratio
+                </span>
+              </div>
+              <span className="text-[9px] font-mono font-bold text-amber-700 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.2 rounded">
+                Target {bot?.winRatioRange || '95%'}
+              </span>
+            </div>
+            <div className="mt-1 flex items-baseline justify-between">
+              <span className={`text-xl sm:text-2xl font-black font-mono tracking-tight ${
+                isLightTheme ? 'text-amber-800' : 'text-amber-300'
+              }`}>
+                {isBotOffline ? '0.0' : winRatio}<span className="text-sm">%</span>
+              </span>
+            </div>
+            {/* Sleek slim progress bar */}
+            <div className="mt-2 w-full bg-slate-200/70 dark:bg-slate-700/70 rounded-full h-1 overflow-hidden">
+              <div 
+                className="bg-gradient-to-r from-amber-500 to-emerald-500 h-full rounded-full transition-all duration-500"
+                style={{ width: `${Math.min(100, Math.max(0, parseFloat(isBotOffline ? '0' : winRatio)))}%` }}
+              />
+            </div>
+          </div>
+
+          {/* Accrued Profit */}
+          <div className={`px-3.5 py-3 rounded-xl border transition-all ${
+            isLightTheme 
+              ? (isBotOffline ? 0 : accruedProfit) >= 0 
+                ? 'bg-emerald-50/70 border-emerald-300/80' 
+                : 'bg-rose-50/70 border-rose-300/80'
+              : (isBotOffline ? 0 : accruedProfit) >= 0 
+                ? 'bg-emerald-950/30 border-emerald-500/30' 
+                : 'bg-rose-950/30 border-rose-500/30'
+          }`}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1">
+                {(isBotOffline ? 0 : accruedProfit) >= 0 ? (
+                  <TrendingUp size={12} className={isLightTheme ? 'text-emerald-700' : 'text-emerald-400'} />
+                ) : (
+                  <TrendingDown size={12} className={isLightTheme ? 'text-rose-700' : 'text-rose-400'} />
+                )}
+                <span className={`text-[10px] font-black uppercase tracking-wider ${
+                  isLightTheme 
+                    ? (isBotOffline ? 0 : accruedProfit) >= 0 ? 'text-emerald-900' : 'text-rose-900'
+                    : (isBotOffline ? 0 : accruedProfit) >= 0 ? 'text-emerald-300' : 'text-rose-300'
+                }`}>
+                  {(isBotOffline ? 0 : accruedProfit) >= 0 ? 'Accrued Profit' : 'Accrued Loss'}
+                </span>
+              </div>
+              <span className={`text-[8px] font-mono font-extrabold uppercase px-1.5 py-0.2 rounded ${
+                (isBotOffline ? 0 : accruedProfit) >= 0
+                  ? isLightTheme ? 'bg-emerald-200/80 text-emerald-900' : 'bg-emerald-500/20 text-emerald-300'
+                  : isLightTheme ? 'bg-rose-200/80 text-rose-900' : 'bg-rose-500/20 text-rose-300'
+              }`}>
+                {(isBotOffline ? 0 : accruedProfit) >= 0 ? '+PROFIT' : '-LOSS'}
+              </span>
+            </div>
+            <span className={`text-xl sm:text-2xl font-black font-mono mt-1 block tracking-tight ${
+              isLightTheme 
+                ? (isBotOffline ? 0 : accruedProfit) >= 0 ? 'text-emerald-800' : 'text-rose-800'
+                : (isBotOffline ? 0 : accruedProfit) >= 0 ? 'text-emerald-300' : 'text-rose-300'
+            }`}>
+              {isBotOffline ? '+$0.00' : `${accruedProfit >= 0 ? '+' : ''}$${accruedProfit.toFixed(2)}`}
             </span>
           </div>
         </div>
 
         {/* Action Buttons: Stop & Pause */}
-        <div className="flex items-center gap-3 pt-2">
+        <div className="flex items-center gap-2.5 pt-1">
           <button
             type="button"
             onClick={handleStopBotClick}
             disabled={actionLoading}
-            className={`flex-1 py-3.5 rounded-2xl text-xs font-black uppercase tracking-wider cursor-pointer border transition-all flex items-center justify-center gap-2 shadow-xs active:scale-95 ${
-              isLightTheme 
-                ? 'bg-rose-50 hover:bg-rose-100 border-rose-300 text-rose-700' 
-                : 'bg-rose-500/15 hover:bg-rose-500/25 border-rose-500/30 text-rose-300'
-            }`}
+            className="flex-1 py-2.5 px-4 rounded-xl text-xs font-black uppercase tracking-wider cursor-pointer transition-all duration-150 flex items-center justify-center gap-2 shadow-xs hover:shadow-sm bg-rose-600 hover:bg-rose-700 text-white active:scale-[0.98] border-none disabled:opacity-50"
           >
-            <Square size={15} fill="currentColor" />
-            <span>Stop</span>
+            <Square size={13} fill="currentColor" />
+            <span>Stop Bot</span>
           </button>
 
           <button
             type="button"
             onClick={handleTogglePause}
             disabled={actionLoading}
-            className={`flex-1 py-3.5 rounded-2xl text-xs font-black uppercase tracking-wider cursor-pointer border transition-all flex items-center justify-center gap-2 shadow-xs active:scale-95 ${
+            className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-black uppercase tracking-wider cursor-pointer transition-all duration-150 flex items-center justify-center gap-2 shadow-xs hover:shadow-sm active:scale-[0.98] border-none disabled:opacity-50 ${
               status === 'RUNNING'
-                ? isLightTheme 
-                  ? 'bg-amber-100 hover:bg-amber-200 border-amber-300 text-amber-900' 
-                  : 'bg-amber-500/20 hover:bg-amber-500/30 border-amber-500/40 text-amber-300'
-                : isLightTheme
-                  ? 'bg-emerald-600 hover:bg-emerald-700 border-emerald-700 text-white'
-                  : 'bg-emerald-500 hover:bg-emerald-400 border-emerald-400 text-slate-950'
+                ? 'bg-amber-500 hover:bg-amber-600 text-slate-950 font-black'
+                : 'bg-emerald-600 hover:bg-emerald-700 text-white font-black'
             }`}
           >
-            {status === 'RUNNING' ? <Pause size={15} /> : <Play size={15} />}
-            <span>{status === 'RUNNING' ? 'Pause' : 'Resume'}</span>
+            {status === 'RUNNING' ? <Pause size={14} strokeWidth={2.5} /> : <Play size={14} strokeWidth={2.5} />}
+            <span>{status === 'RUNNING' ? 'Pause Bot' : 'Resume Bot'}</span>
           </button>
         </div>
       </div>
@@ -745,20 +857,12 @@ export const RunningBotView: React.FC<RunningBotViewProps> = ({
                 type="button"
                 onClick={() => {
                   setOutcomeModal(null);
-                  if (onGoToHistory) {
-                    onGoToHistory();
-                  } else {
-                    onBack();
-                  }
+                  handleStopBotClick();
                 }}
-                className={`py-3 px-4 rounded-2xl text-xs font-black uppercase tracking-wider cursor-pointer border transition-all flex items-center justify-center gap-1.5 active:scale-95 ${
-                  isLightTheme
-                    ? 'bg-zinc-100 hover:bg-zinc-200 border-zinc-300 text-zinc-800'
-                    : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-white'
-                }`}
+                className="py-3 px-4 rounded-2xl text-xs font-black uppercase tracking-wider cursor-pointer border transition-all flex items-center justify-center gap-1.5 shadow-md active:scale-95 bg-rose-500 hover:bg-rose-600 border-rose-600 text-white"
               >
-                <History size={14} />
-                <span>History</span>
+                <Square size={13} fill="currentColor" />
+                <span>STOP</span>
               </button>
             </div>
           </div>
