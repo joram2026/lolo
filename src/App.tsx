@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { auth, db } from './firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import AuthPage from './components/AuthPage';
@@ -71,7 +71,7 @@ export default function App() {
     };
   }, []);
 
-  const navigate = (newPath: string, clearSearch = false) => {
+  const navigate = useCallback((newPath: string, clearSearch = false) => {
     const cleanPath = newPath.startsWith('/') ? newPath : '/' + newPath;
     const currentSearch = clearSearch ? '' : window.location.search;
     const targetUrl = '/' + currentSearch + `#${cleanPath}`;
@@ -82,7 +82,7 @@ export default function App() {
       window.history.pushState(null, '', targetUrl);
     }
     setPath(cleanPath);
-  };
+  }, []);
 
   // Track Firebase Auth State changes
   useEffect(() => {

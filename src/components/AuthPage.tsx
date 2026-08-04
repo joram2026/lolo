@@ -45,7 +45,8 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
     { code: 'USA', name: 'USA', flag: '🇺🇸', p2p: false },
     { code: 'South Africa', name: 'South Africa', flag: '🇿🇦', p2p: false },
   ];
-  const [referral, setReferral] = useState('');
+  const [referral, setReferral] = useState(() => localStorage.getItem('pending_referral_code') || '');
+  const referralNotifiedRef = React.useRef(false);
   const toast = useToast();
   const [loading, setLoading] = useState(false);
   const [errorState, setErrorState] = useState<string | null>(null);
@@ -93,13 +94,17 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
       if (path !== '/signup') {
         navigate('/signup', true); // Navigate and clear search params!
       }
-      setSuccessMsg(`Welcome! Referral code "${upperRefCode}" has been successfully pre-filled.`);
+      if (!referralNotifiedRef.current) {
+        referralNotifiedRef.current = true;
+        setSuccessMsg(`Welcome! Referral code "${upperRefCode}" has been successfully pre-filled.`);
+      }
     } else {
       const savedRef = localStorage.getItem('pending_referral_code') || '';
       if (savedRef) {
-        setReferral(savedRef);
+        setReferral((prev) => (prev ? prev : savedRef));
         // Only show prefilled message if they are explicitly on /signup
-        if (path === '/signup') {
+        if (path === '/signup' && !referralNotifiedRef.current) {
+          referralNotifiedRef.current = true;
           setSuccessMsg(`Welcome! Referral code "${savedRef}" has been successfully pre-filled.`);
         }
       }
