@@ -22,11 +22,15 @@ import {
   X,
   History,
   RotateCcw,
-  WifiOff
+  WifiOff,
+  Music,
+  Volume2,
+  VolumeX
 } from 'lucide-react';
 import { doc, updateDoc, addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useToast } from '../context/ToastContext';
+import { motivationalAudio } from '../utils/motivationalAudio';
 
 interface LogEntry {
   id: string;
@@ -102,6 +106,48 @@ export const RunningBotView: React.FC<RunningBotViewProps> = ({
   const [actionLoading, setActionLoading] = useState<boolean>(false);
   const [outcomeModal, setOutcomeModal] = useState<TradeOutcomeModalData | null>(null);
   const [showStopConfirmModal, setShowStopConfirmModal] = useState<boolean>(false);
+
+  // Motivational Audio State
+  const [isAudioPlaying, setIsAudioPlaying] = useState<boolean>(true);
+  const [isAudioMuted, setIsAudioMuted] = useState<boolean>(false);
+  const [audioVolume, setAudioVolume] = useState<number>(0.35);
+
+  // Auto-play / Stop Motivational Audio when bot is running/paused
+  useEffect(() => {
+    if (status === 'RUNNING' && !isBotOffline && isAudioPlaying) {
+      motivationalAudio.start();
+    } else {
+      motivationalAudio.stop();
+    }
+
+    return () => {
+      motivationalAudio.stop();
+    };
+  }, [status, isBotOffline, isAudioPlaying]);
+
+  const handleToggleAudio = () => {
+    if (isAudioPlaying) {
+      motivationalAudio.stop();
+      setIsAudioPlaying(false);
+    } else {
+      setIsAudioPlaying(true);
+      motivationalAudio.start();
+    }
+  };
+
+  const handleToggleMute = () => {
+    const muted = motivationalAudio.toggleMute();
+    setIsAudioMuted(muted);
+  };
+
+  const handleVolumeChange = (newVol: number) => {
+    setAudioVolume(newVol);
+    motivationalAudio.setVolume(newVol);
+    if (newVol > 0 && isAudioMuted) {
+      setIsAudioMuted(false);
+      motivationalAudio.toggleMute();
+    }
+  };
 
   const formatTime = () => {
     const now = new Date();
@@ -486,6 +532,89 @@ export const RunningBotView: React.FC<RunningBotViewProps> = ({
           <span><strong className={isLightTheme ? 'text-amber-700 font-bold' : 'text-emerald-400 font-bold'}>'{botName}'</strong> is automatically analyzing trade entries on</span>
           <TradingPairBadge pair={tradingPair} isLightTheme={isLightTheme} size="sm" showName />
         </p>
+      </div>
+
+      {/* MOTIVATIONAL INSTRUMENTAL SOUNDBAR */}
+      <div className={`p-4 rounded-3xl border shadow-sm transition-all relative overflow-hidden ${
+        isLightTheme 
+          ? 'bg-gradient-to-r from-violet-500/10 via-purple-500/10 to-indigo-500/10 border-purple-200' 
+          : 'bg-gradient-to-r from-purple-950/40 via-violet-950/40 to-slate-900 border-purple-500/30'
+      }`}>
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 relative z-10">
+          <div className="flex items-center gap-3 w-full sm:w-auto">
+            <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 border ${
+              isAudioPlaying && status === 'RUNNING' && !isBotOffline && !isAudioMuted
+                ? 'bg-purple-500/20 border-purple-500/40 text-purple-400 animate-pulse'
+                : 'bg-zinc-800/50 border-zinc-700/50 text-zinc-400'
+            }`}>
+              <Music size={20} className={isAudioPlaying && status === 'RUNNING' && !isBotOffline ? 'animate-bounce text-purple-400' : 'text-zinc-400'} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-black uppercase tracking-wider text-purple-400 dark:text-purple-300 flex items-center gap-1.5">
+                  ♫ Motivational Trading Instrumental
+                </span>
+                {isAudioPlaying && status === 'RUNNING' && !isBotOffline && !isAudioMuted && (
+                  <span className="flex items-end gap-0.5 h-3">
+                    <span className="w-0.5 bg-purple-400 animate-[bounce_0.6s_infinite_100ms] h-full" />
+                    <span className="w-0.5 bg-purple-400 animate-[bounce_0.6s_infinite_300ms] h-full" />
+                    <span className="w-0.5 bg-purple-400 animate-[bounce_0.6s_infinite_200ms] h-full" />
+                    <span className="w-0.5 bg-purple-400 animate-[bounce_0.6s_infinite_400ms] h-full" />
+                  </span>
+                )}
+              </div>
+              <p className={`text-[11px] font-medium ${isLightTheme ? 'text-zinc-600' : 'text-zinc-400'}`}>
+                {status === 'RUNNING' && !isBotOffline
+                  ? (isAudioPlaying ? (isAudioMuted ? 'Instrumental Muted' : 'Playing Uplifting Cyber Trading Atmosphere') : 'Music Paused')
+                  : 'Instrumental paused while bot is stopped or paused'}
+              </p>
+            </div>
+          </div>
+
+          {/* Controls */}
+          <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+            {/* Volume Slider */}
+            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-2xl border ${
+              isLightTheme ? 'bg-white/80 border-purple-200' : 'bg-zinc-950/40 border-purple-500/20'
+            }`}>
+              <button
+                type="button"
+                onClick={handleToggleMute}
+                className="text-purple-400 hover:text-purple-300 transition-colors cursor-pointer"
+                title={isAudioMuted ? 'Unmute' : 'Mute'}
+              >
+                {isAudioMuted || audioVolume === 0 ? <VolumeX size={16} /> : <Volume2 size={16} />}
+              </button>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                value={isAudioMuted ? 0 : audioVolume}
+                onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
+                className="w-20 accent-purple-500 cursor-pointer h-1.5 bg-zinc-700/50 rounded-lg"
+                title="Volume"
+              />
+              <span className="text-[10px] font-mono font-bold text-purple-400 w-7 text-right">
+                {isAudioMuted ? '0%' : `${Math.round(audioVolume * 100)}%`}
+              </span>
+            </div>
+
+            {/* Play/Pause Button */}
+            <button
+              type="button"
+              onClick={handleToggleAudio}
+              className={`px-3.5 py-1.5 rounded-2xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs border ${
+                isAudioPlaying
+                  ? 'bg-purple-600 hover:bg-purple-500 text-white border-purple-400/50'
+                  : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border-zinc-700'
+              }`}
+            >
+              {isAudioPlaying ? <Pause size={14} /> : <Play size={14} />}
+              <span>{isAudioPlaying ? 'Pause Music' : 'Play Music'}</span>
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* CARD 1: Trade Closes In & Trading Pair + Hourglass Timer - EXACT BLUEPRINT DESIGN */}

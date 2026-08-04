@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { collection, addDoc, getDoc, getDocs, doc, updateDoc, runTransaction, serverTimestamp, query, where } from 'firebase/firestore';
-import { CryptoNetwork, P2PMerchant, UserAccount, Transaction } from '../types';
+import { CryptoNetwork, P2PMerchant, UserAccount, Transaction, CryptoPrice } from '../types';
 import { DEFAULT_MERCHANTS } from '../seedData';
 import { 
   ArrowLeft, Send, Users, ShieldAlert, ChevronRight, Check, 
@@ -19,7 +19,7 @@ interface WithdrawalWorkflowProps {
 }
 
 export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProfile }: WithdrawalWorkflowProps) {
-  const [method, setMethod] = useState<'selection' | 'crypto_coin_select' | 'crypto' | 'p2p' | 'p2p_calc' | 'p2p_instructions' | 'p2p_pin_confirm' | 'crypto_pin_confirm'>('selection');
+  const [method, setMethod] = useState<'selection' | 'crypto_coin_select' | 'crypto' | 'p2p' | 'p2p_calc' | 'p2p_instructions' | 'p2p_pin_confirm' | 'crypto_pin_confirm'>('crypto_coin_select');
 
   const handleGoToPinSettings = () => {
     localStorage.setItem('profile_subpage', 'pin');
@@ -43,6 +43,43 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
 
   const [profile, setProfile] = useState<UserAccount | null>(null);
   const [lockedUSDT, setLockedUSDT] = useState<number>(0);
+  const [activeInvestments, setActiveInvestments] = useState<any[]>([]);
+  const [cryptoPrices, setCryptoPrices] = useState<Record<string, CryptoPrice>>({});
+  
+  // Asset holding helpers
+  const getCoinHolding = (symbol: string): number => {
+    const symUpper = symbol.toUpperCase();
+    if (symUpper === 'USDT') {
+      return profile?.balance || 0;
+    }
+    if (profile?.holdings && profile.holdings[symUpper] !== undefined) {
+      return profile.holdings[symUpper];
+    }
+    return 0;
+  };
+
+  const getLockedAmount = (symbol: string): number => {
+    const symUpper = symbol.toUpperCase();
+    if (symUpper === 'USDT') {
+      return lockedUSDT;
+    }
+    return activeInvestments
+      .filter((inv: any) => inv.coinSymbol === symUpper && inv.status === 'active')
+      .reduce((sum: number, inv: any) => sum + (inv.amount || 0), 0);
+  };
+
+  const getUnlockedCoinHolding = (symbol: string): number => {
+    const symUpper = symbol.toUpperCase();
+    const rawHolding = getCoinHolding(symUpper);
+    const locked = getLockedAmount(symUpper);
+    return Math.max(0, rawHolding - locked);
+  };
+
+  const getCoinPrice = (symbol: string): number => {
+    const symUpper = symbol.toUpperCase();
+    if (symUpper === 'USDT' || symUpper === 'USDC') return 1;
+    return cryptoPrices[symUpper]?.price || 0;
+  };
   
   // Crypto States
   const [networks, setNetworks] = useState<CryptoNetwork[]>([]);
@@ -94,10 +131,23 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
         const invSnap = await getDocs(invQuery);
         const invList = invSnap.docs.map(d => d.data());
         const userActiveInvs = invList.filter((inv: any) => inv.status === 'active');
+        setActiveInvestments(userActiveInvs);
         const lockedSum = userActiveInvs
           .filter((inv: any) => inv.coinSymbol === 'USDT')
           .reduce((sum: number, inv: any) => sum + (inv.amount || 0), 0);
         setLockedUSDT(lockedSum);
+
+        // Fetch crypto prices
+        const pricesCol = collection(db, 'crypto_prices');
+        const pricesSnap = await getDocs(pricesCol);
+        const pricesMap: Record<string, CryptoPrice> = {};
+        pricesSnap.docs.forEach(docSnap => {
+          const data = docSnap.data() as CryptoPrice;
+          if (data && data.symbol) {
+            pricesMap[data.symbol.toUpperCase()] = data;
+          }
+        });
+        setCryptoPrices(pricesMap);
 
         const netCol = collection(db, 'crypto_networks');
         const netSnap = await getDocs(netCol);
@@ -181,9 +231,17 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
       return;
     }
     const usdVal = parseFloat(amountUSD);
-    const availableBalance = Math.max(0, (profile?.balance || 0) - lockedUSDT);
-    if (usdVal > availableBalance) {
-      setError(`Insufficient available balance. You have $${availableBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })} available ($${lockedUSDT.toLocaleString(undefined, { minimumFractionDigits: 2 })} USDT is locked in MMF).`);
+    const coinSym = selectedCoin ? selectedCoin.id.toUpperCase() : 'USDT';
+    const unlockedHolding = getUnlockedCoinHolding(coinSym);
+    const price = getCoinPrice(coinSym);
+    const availableUSD = coinSym === 'USDT' ? Math.max(0, (profile?.balance || 0) - lockedUSDT) : unlockedHolding * price;
+
+    if (usdVal > availableUSD + 0.0001) {
+      if (coinSym === 'USDT') {
+        setError(`Insufficient available balance. You have $${availableUSD.toLocaleString(undefined, { minimumFractionDigits: 2 })} available ($${lockedUSDT.toLocaleString(undefined, { minimumFractionDigits: 2 })} USDT is locked in MMF).`);
+      } else {
+        setError(`Insufficient ${coinSym} balance. You have ${unlockedHolding.toFixed(6)} ${coinSym} (≈ $${availableUSD.toLocaleString(undefined, { minimumFractionDigits: 2 })} USD) available.`);
+      }
       return;
     }
     if (!destAddress.trim()) {
@@ -207,11 +265,14 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
     setError(null);
 
     try {
+      const coinAmt = price > 0 ? parseFloat((usdVal / price).toFixed(8)) : usdVal;
       const newTx: Omit<Transaction, 'id'> = {
         userId: user.uid,
         userEmail: user.email,
         type: 'withdraw_crypto',
         amount: usdVal,
+        coinSymbol: coinSym,
+        coinAmount: coinAmt,
         status: 'PENDING APPROVAL',
         createdAt: serverTimestamp(),
         network: selectedNetwork,
@@ -304,14 +365,10 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
         <button 
           id="withdraw-back-btn"
           onClick={() => {
-            if (method === 'selection') onBack();
-            else if (method === 'crypto_coin_select') setMethod('selection');
+            if (method === 'selection' || method === 'crypto_coin_select') onBack();
             else if (method === 'crypto') setMethod('crypto_coin_select');
             else if (method === 'crypto_pin_confirm') setMethod('crypto');
-            else if (method === 'p2p') setMethod('selection');
-            else if (method === 'p2p_calc') setMethod('p2p');
-            else if (method === 'p2p_instructions') setMethod('p2p_calc');
-            else if (method === 'p2p_pin_confirm') setMethod('p2p_instructions');
+            else onBack();
           }}
           className="p-2 rounded-full bg-white border border-zinc-200 text-zinc-600 hover:text-zinc-900 hover:bg-zinc-50 transition-colors"
         >
@@ -319,24 +376,14 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
         </button>
         <div>
           <h2 className="text-lg font-black tracking-tight text-zinc-800">
-            {method === 'selection' && 'Withdraw Funds'}
-            {method === 'crypto_coin_select' && 'Select Coin'}
+            {(method === 'selection' || method === 'crypto_coin_select') && 'Select Coin to Withdraw'}
             {method === 'crypto' && 'Crypto Withdrawal Details'}
             {method === 'crypto_pin_confirm' && 'Verify Security PIN'}
-            {method === 'p2p' && 'P2P withdrawal verified Merchants'}
-            {method === 'p2p_calc' && 'P2P Withdrawal'}
-            {method === 'p2p_instructions' && 'Awaiting P2P Escrow Release'}
-            {method === 'p2p_pin_confirm' && 'Verify Security PIN'}
           </h2>
           <p className="text-xs text-zinc-500">
-            {method === 'selection' && `Available Balance: $${Math.max(0, (profile?.balance || 0) - lockedUSDT).toLocaleString(undefined, { minimumFractionDigits: 2 })}${lockedUSDT > 0 ? ` ($${profile?.balance?.toLocaleString(undefined, { minimumFractionDigits: 2 })} total)` : ''}`}
-            {method === 'crypto_coin_select' && 'Choose a crypto asset to withdraw'}
+            {(method === 'selection' || method === 'crypto_coin_select') && 'Select a coin from your available asset holdings to withdraw'}
             {method === 'crypto' && `Configure network and destination for ${selectedCoin ? formatCoinName(selectedCoin.tokenName) : ''}`}
             {method === 'crypto_pin_confirm' && 'Enter your 4-digit PIN to authorize withdrawal'}
-            {method === 'p2p' && 'Sell USD directly for local shillings'}
-            {method === 'p2p_calc' && `Sell details with ${selectedMerchant?.name}`}
-            {method === 'p2p_instructions' && 'Verify payment receipt before releasing escrow'}
-            {method === 'p2p_pin_confirm' && 'Enter your 4-digit PIN to release funds'}
           </p>
         </div>
       </div>
@@ -435,201 +482,213 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
 
       {!loading && (
         <>
-          {/* Withdrawal selection */}
-          {method === 'selection' && (() => {
-            const isP2PAllowed = !profile?.country || profile.country === 'Kenya';
-            return (
-              <div className="space-y-4">
-                <button
-                  id="withdraw-method-crypto"
-                  onClick={() => setMethod('crypto_coin_select')}
-                  disabled={profile && !profile.withdrawalEnabled}
-                  className="w-full flex items-center justify-between p-4 bg-white hover:bg-zinc-50/80 disabled:opacity-50 disabled:pointer-events-none border border-zinc-200 rounded-2xl transition-all text-left"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="w-11 h-11 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-600 shrink-0">
-                      <Send size={20} className="rotate-[-45deg]" />
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-sm text-zinc-800">Crypto withdrawal</h3>
-                      <p className="text-xs text-zinc-500 mt-0.5">Withdraw Crypto Coins to other exchanges</p>
-                    </div>
-                  </div>
-                  <ChevronRight size={16} className="text-zinc-400" />
-                </button>
+          {/* Crypto Coin Select Panel (Default Withdrawal Screen - filtered by user asset holdings) */}
+          {(method === 'selection' || method === 'crypto_coin_select') && (() => {
+            const userNetworks = networks.filter(net => {
+              const sym = net.id.toUpperCase();
+              return getUnlockedCoinHolding(sym) > 0;
+            });
 
-                {isP2PAllowed && (
-                  <button
-                    id="withdraw-method-p2p"
-                    onClick={() => setMethod('p2p')}
-                    disabled={profile && !profile.withdrawalEnabled}
-                    className="w-full flex items-center justify-between p-4 bg-white hover:bg-zinc-50/80 disabled:opacity-50 disabled:pointer-events-none border border-zinc-200 rounded-2xl transition-all text-left"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="w-11 h-11 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-600 shrink-0">
-                        <Users size={20} />
+            if (userNetworks.length === 0) {
+              return (
+                <div className="bg-white border border-zinc-200 rounded-2xl p-6 text-center space-y-3">
+                  <div className="w-12 h-12 rounded-full bg-amber-500/10 text-amber-600 flex items-center justify-center mx-auto">
+                    <AlertCircle size={24} />
+                  </div>
+                  <h3 className="font-extrabold text-sm text-zinc-800">No Crypto Holdings Available</h3>
+                  <p className="text-xs text-zinc-500 leading-relaxed max-w-xs mx-auto">
+                    You currently do not have any unlocked crypto holdings available for withdrawal. Please deposit or trade to acquire assets.
+                  </p>
+                </div>
+              );
+            }
+
+            return (
+              <div className="space-y-3">
+                {userNetworks.map(net => {
+                  const formattedName = formatCoinName(net.tokenName);
+                  const sym = net.id.toUpperCase();
+                  const unlocked = getUnlockedCoinHolding(sym);
+                  const price = getCoinPrice(sym);
+                  const estUSD = sym === 'USDT' ? unlocked : unlocked * price;
+
+                  return (
+                    <button
+                      key={net.id}
+                      id={`crypto-withdraw-select-asset-${net.id}`}
+                      onClick={() => {
+                        setSelectedCoin(net);
+                        if (net.networks.length > 0) {
+                          setSelectedNetwork(net.networks[0]);
+                        } else {
+                          setSelectedNetwork('');
+                        }
+                        setMethod('crypto');
+                      }}
+                      className="w-full flex items-center justify-between p-4 bg-white hover:bg-zinc-50 border border-zinc-200 rounded-2xl transition-all text-left group cursor-pointer"
+                    >
+                      <div className="flex items-center gap-3.5">
+                        <CoinIcon symbol={sym} className="w-10 h-10 shrink-0" />
+                        <div>
+                          <h4 className="font-bold text-sm text-zinc-800 group-hover:text-amber-600 transition-colors">
+                            {formattedName}
+                          </h4>
+                          <p className="text-[11px] font-semibold text-emerald-600 mt-0.5">
+                            Available: {unlocked < 1 && sym !== 'USDT' && sym !== 'USDC' ? unlocked.toFixed(6) : unlocked.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })} {sym}
+                            {sym !== 'USDT' && sym !== 'USDC' && estUSD > 0 && ` (≈ $${estUSD.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })})`}
+                          </p>
+                          <p className="text-[10px] text-zinc-400 mt-0.5">
+                            Supported Networks: {net.networks.join(', ')}
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <h3 className="font-bold text-sm text-zinc-800">P2P Withdrawal (Mpesa, Airtel Money, Bank)</h3>
-                        <p className="text-xs text-zinc-500 mt-0.5">Receive local currency (Ksh) by selling USD instantly</p>
-                      </div>
-                    </div>
-                    <ChevronRight size={16} className="text-zinc-400" />
-                  </button>
-                )}
+                      <ChevronRight size={16} className="text-zinc-400 group-hover:text-zinc-600 transition-colors shrink-0" />
+                    </button>
+                  );
+                })}
               </div>
             );
           })()}
 
-          {/* Crypto Coin Select Panel */}
-          {method === 'crypto_coin_select' && (
-            <div className="space-y-3">
-              {networks.map(net => {
-                const formattedName = formatCoinName(net.tokenName);
-                return (
-                  <button
-                    key={net.id}
-                    id={`crypto-withdraw-select-asset-${net.id}`}
-                    onClick={() => {
-                      setSelectedCoin(net);
-                      if (net.networks.length > 0) {
-                        setSelectedNetwork(net.networks[0]);
-                      } else {
-                        setSelectedNetwork('');
-                      }
-                      setMethod('crypto');
-                    }}
-                    className="w-full flex items-center justify-between p-4 bg-white hover:bg-zinc-50 border border-zinc-200 rounded-2xl transition-all text-left group"
-                  >
-                    <div className="flex items-center gap-3.5">
-                      <CoinIcon symbol={net.id.toUpperCase()} className="w-10 h-10" />
-                      <div>
-                        <h4 className="font-bold text-sm text-zinc-800 group-hover:text-amber-600 transition-colors">
-                          {formattedName}
-                        </h4>
-                        <p className="text-[10px] text-zinc-500 mt-0.5">
-                          Supported Networks: {net.networks.join(', ')}
-                        </p>
-                      </div>
-                    </div>
-                    <ChevronRight size={16} className="text-zinc-400 group-hover:text-zinc-600 transition-colors" />
-                  </button>
-                );
-              })}
-            </div>
-          )}
-
           {/* Crypto Withdrawal Panel */}
-          {method === 'crypto' && selectedCoin && (
-            <div className="space-y-4">
-              {/* Selected Coin Banner */}
-              <div className="bg-white border border-zinc-200 rounded-2xl p-4 flex items-center gap-3.5 mb-2">
-                <CoinIcon symbol={selectedCoin.id.toUpperCase()} className="w-11 h-11 rounded-xl" />
-                <div>
-                  <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block">Selected Asset</span>
-                  <span className="text-sm font-black text-zinc-800">{formatCoinName(selectedCoin.tokenName)}</span>
-                </div>
-              </div>
+          {method === 'crypto' && selectedCoin && (() => {
+            const sym = selectedCoin.id.toUpperCase();
+            const unlocked = getUnlockedCoinHolding(sym);
+            const price = getCoinPrice(sym);
+            const availableUSD = sym === 'USDT' ? Math.max(0, (profile?.balance || 0) - lockedUSDT) : unlocked * price;
+            const currentNumVal = parseFloat(amountUSD || '0');
+            const coinEquivalent = price > 0 ? (currentNumVal / price) : 0;
 
-              {/* Network Picker */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-zinc-500">Select Network</label>
-                <div className="grid grid-cols-3 gap-2">
-                  {selectedCoin.networks.map(net => (
-                    <button
-                      key={net}
-                      id={`withdraw-network-btn-${net}`}
-                      type="button"
-                      onClick={() => setSelectedNetwork(net)}
-                      className={`py-2 px-3 rounded-xl border text-xs font-semibold transition-all text-center ${
-                        selectedNetwork === net
-                          ? 'bg-amber-500/10 border-amber-500 text-amber-600'
-                          : 'bg-white border-zinc-200 text-zinc-500 hover:text-zinc-850'
-                      }`}
-                    >
-                      {net}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Destination Address */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-zinc-500">External Destination Wallet Address ({selectedNetwork})</label>
-                <input
-                  id="withdraw-crypto-address"
-                  type="text"
-                  required
-                  placeholder={`Paste external ${selectedNetwork} wallet address`}
-                  value={destAddress}
-                  onChange={(e) => setDestAddress(e.target.value)}
-                  className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 text-zinc-800 font-mono"
-                />
-              </div>
-
-              {/* Amount USD */}
-              <div className="space-y-1.5">
-                <div className="flex justify-between items-center">
-                  <label className="text-xs font-semibold text-zinc-500">Amount (USD)</label>
-                  <span className="text-[10px] text-zinc-500 font-semibold">
-                    Available: ${Math.max(0, (profile?.balance || 0) - lockedUSDT).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                  </span>
-                </div>
-                <div className="relative">
-                  <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 text-zinc-500 font-bold text-sm">$</span>
-                  <input
-                    id="withdraw-crypto-amount"
-                    type="number"
-                    required
-                    placeholder="100.00"
-                    value={amountUSD}
-                    onChange={(e) => setAmountUSD(e.target.value)}
-                    className="w-full pl-8 pr-16 py-3 bg-white border border-zinc-200 rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 text-zinc-800 font-mono"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setAmountUSD(Math.max(0, (profile?.balance || 0) - lockedUSDT).toString())}
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center"
-                  >
-                    <span className="bg-amber-500/15 hover:bg-amber-500/25 text-amber-600 font-black text-[10px] px-2.5 py-1 rounded-md border border-amber-500/30 transition-all cursor-pointer">
-                      MAX
+            return (
+              <div className="space-y-4">
+                {/* Selected Coin Banner */}
+                <div className="bg-white border border-zinc-200 rounded-2xl p-4 flex items-center justify-between gap-3.5 mb-2">
+                  <div className="flex items-center gap-3.5">
+                    <CoinIcon symbol={sym} className="w-11 h-11 rounded-xl shrink-0" />
+                    <div>
+                      <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block">Selected Asset</span>
+                      <span className="text-sm font-black text-zinc-800">{formatCoinName(selectedCoin.tokenName)}</span>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block">Asset Holding</span>
+                    <span className="text-xs font-black text-emerald-600">
+                      {unlocked < 1 && sym !== 'USDT' && sym !== 'USDC' ? unlocked.toFixed(6) : unlocked.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })} {sym}
                     </span>
-                  </button>
+                    {sym !== 'USDT' && sym !== 'USDC' && (
+                      <span className="text-[10px] text-zinc-500 block">≈ ${availableUSD.toLocaleString(undefined, { minimumFractionDigits: 2 })} USD</span>
+                    )}
+                  </div>
                 </div>
-              </div>
 
-              {/* Proceed Button */}
-              <button
-                id="withdraw-crypto-proceed"
-                onClick={() => {
-                  setError(null);
-                  const usdVal = parseFloat(amountUSD);
-                  if (!amountUSD || isNaN(usdVal) || usdVal <= 0) {
-                    setError('Please enter a valid withdrawal amount.');
-                    return;
-                  }
-                  const availableBalance = Math.max(0, (profile?.balance || 0) - lockedUSDT);
-                  if (usdVal > availableBalance) {
-                    setError('Insufficient funds');
-                    return;
-                  }
-                  if (!destAddress.trim()) {
-                    setError('Please provide a valid destination wallet address.');
-                    return;
-                  }
-                  if (!profile?.walletPassword) {
-                    setError('Please configure a 4-digit Wallet Security PIN in your Profile settings before withdrawing.');
-                    return;
-                  }
-                  setMethod('crypto_pin_confirm');
-                }}
-                className="w-full flex items-center justify-between py-3 px-5 bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600 disabled:bg-zinc-200 disabled:text-zinc-400 rounded-xl text-sm font-bold transition-all shadow-md mt-6 cursor-pointer"
-              >
-                <span>Proceed to Secure Confirmation</span>
-                <ChevronRight size={16} />
-              </button>
-            </div>
-          )}
+                {/* Network Picker */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-zinc-500">Select Network</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {selectedCoin.networks.map(net => (
+                      <button
+                        key={net}
+                        id={`withdraw-network-btn-${net}`}
+                        type="button"
+                        onClick={() => setSelectedNetwork(net)}
+                        className={`py-2 px-3 rounded-xl border text-xs font-semibold transition-all text-center cursor-pointer ${
+                          selectedNetwork === net
+                            ? 'bg-amber-500/10 border-amber-500 text-amber-600 font-bold'
+                            : 'bg-white border-zinc-200 text-zinc-500 hover:text-zinc-850'
+                        }`}
+                      >
+                        {net}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Destination Address */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-zinc-500">External Destination Wallet Address ({selectedNetwork})</label>
+                  <input
+                    id="withdraw-crypto-address"
+                    type="text"
+                    required
+                    placeholder={`Paste external ${selectedNetwork} wallet address`}
+                    value={destAddress}
+                    onChange={(e) => setDestAddress(e.target.value)}
+                    className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 text-zinc-800 font-mono"
+                  />
+                </div>
+
+                {/* Amount USD */}
+                <div className="space-y-1.5">
+                  <div className="flex justify-between items-center">
+                    <label className="text-xs font-semibold text-zinc-500">Amount (USD)</label>
+                    <span className="text-[10px] text-zinc-500 font-semibold">
+                      Available: {sym === 'USDT' ? `$${availableUSD.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : `${unlocked.toFixed(6)} ${sym} ($${availableUSD.toLocaleString(undefined, { minimumFractionDigits: 2 })})`}
+                    </span>
+                  </div>
+                  <div className="relative">
+                    <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 text-zinc-500 font-bold text-sm">$</span>
+                    <input
+                      id="withdraw-crypto-amount"
+                      type="number"
+                      required
+                      placeholder="0.00"
+                      value={amountUSD}
+                      onChange={(e) => setAmountUSD(e.target.value)}
+                      className="w-full pl-8 pr-16 py-3 bg-white border border-zinc-200 rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 text-zinc-800 font-mono"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setAmountUSD(availableUSD.toFixed(2))}
+                      className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                    >
+                      <span className="bg-amber-500/15 hover:bg-amber-500/25 text-amber-600 font-black text-[10px] px-2.5 py-1 rounded-md border border-amber-500/30 transition-all cursor-pointer">
+                        MAX
+                      </span>
+                    </button>
+                  </div>
+                  {currentNumVal > 0 && price > 0 && sym !== 'USDT' && (
+                    <p className="text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200/60 p-2 rounded-lg">
+                      Withdrawal Asset Value: <span className="font-bold text-zinc-900">{coinEquivalent.toFixed(6)} {sym}</span>
+                    </p>
+                  )}
+                </div>
+
+                {/* Proceed Button */}
+                <button
+                  id="withdraw-crypto-proceed"
+                  onClick={() => {
+                    setError(null);
+                    const usdVal = parseFloat(amountUSD);
+                    if (!amountUSD || isNaN(usdVal) || usdVal <= 0) {
+                      setError('Please enter a valid withdrawal amount.');
+                      return;
+                    }
+                    if (usdVal > availableUSD + 0.0001) {
+                      if (sym === 'USDT') {
+                        setError(`Insufficient available balance. You have $${availableUSD.toLocaleString(undefined, { minimumFractionDigits: 2 })} available.`);
+                      } else {
+                        setError(`Insufficient ${sym} balance. You have ${unlocked.toFixed(6)} ${sym} (≈ $${availableUSD.toLocaleString(undefined, { minimumFractionDigits: 2 })} USD) available.`);
+                      }
+                      return;
+                    }
+                    if (!destAddress.trim()) {
+                      setError('Please provide a valid destination wallet address.');
+                      return;
+                    }
+                    if (!profile?.walletPassword) {
+                      setError('Please configure a 4-digit Wallet Security PIN in your Profile settings before withdrawing.');
+                      return;
+                    }
+                    setMethod('crypto_pin_confirm');
+                  }}
+                  className="w-full flex items-center justify-between py-3 px-5 bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600 disabled:bg-zinc-200 disabled:text-zinc-400 rounded-xl text-sm font-bold transition-all shadow-md mt-6 cursor-pointer"
+                >
+                  <span>Proceed to Secure Confirmation</span>
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+            );
+          })()}
 
           {/* Crypto Enter PIN Final Confirm Screen */}
           {method === 'crypto_pin_confirm' && selectedCoin && (

@@ -10,7 +10,7 @@ import { UserAccount, Transaction, CryptoNetwork, P2PMerchant, CryptoPrice, Arbi
 import { fetchLivePriceFromBinance, fetchAllLivePrices, syncLiveCryptoPrices } from '../utils/cryptoApi';
 import { 
   Users, CheckCircle2, XCircle, Settings, ShieldAlert, Key, 
-  Trash2, ToggleLeft, ToggleRight, Loader, ZoomIn, Plus, Edit, Check, Eye, Star, Mail, RefreshCw, X, FileText, Coins, TrendingUp, Bot, Cpu, Smartphone, Phone
+  Trash2, ToggleLeft, ToggleRight, Loader, ZoomIn, Plus, Edit, Check, Eye, Star, Mail, RefreshCw, X, FileText, Coins, TrendingUp, Bot, Cpu, Smartphone, Phone, Sparkles
 } from 'lucide-react';
 
 const STATIC_CRYPTO: Record<string, { name: string; price: number }> = {
@@ -76,6 +76,7 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
   const [userBotsList, setUserBotsList] = useState<any[]>([]);
   const [botTemplatesList, setBotTemplatesList] = useState<BotTemplate[]>([]);
   const [editingBotTemplate, setEditingBotTemplate] = useState<BotTemplate | null>(null);
+  const [isAddingBotTemplate, setIsAddingBotTemplate] = useState(false);
   const [botTemplateForm, setBotTemplateForm] = useState({
     name: '',
     category: 'Cross-Exchange Arbitrage',
@@ -112,9 +113,13 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
   const [editingPriceSymbol, setEditingPriceSymbol] = useState<string | null>(null);
   const [priceForm, setPriceForm] = useState<{ price: string; change24h: string }>({ price: '', change24h: '' });
 
-  // Crypto MMF rate settings states
+  // Crypto MMF / Signal rate settings states
   const [editingRateSymbol, setEditingRateSymbol] = useState<string | null>(null);
   const [rateInput, setRateInput] = useState<string>('');
+
+  // Trading Signal Win Rate states
+  const [editingWinRateSymbol, setEditingWinRateSymbol] = useState<string | null>(null);
+  const [winRateInput, setWinRateInput] = useState<string>('');
 
   // Crypto MMF minimum investment states
   const [editingMinInvestmentSymbol, setEditingMinInvestmentSymbol] = useState<string | null>(null);
@@ -333,6 +338,10 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
         USDT: 2.5, USDC: 2.5, BTC: 3.5, ETH: 4.0, SOL: 6.0, BNB: 4.5, XRP: 3.0, WLD: 5.0, TRX: 3.5, DOGE: 7.0
       };
 
+      const defaultWinRates: Record<string, number> = {
+        USDT: 99.2, USDC: 99.1, BTC: 97.8, ETH: 96.5, SOL: 95.8, BNB: 96.2, XRP: 94.5, WLD: 93.8, TRX: 95.2, DOGE: 92.4
+      };
+
       const missingSymbols = requiredSymbols.filter(sym => !prList.some(cp => cp.symbol === sym));
       if (missingSymbols.length > 0) {
         const batch = writeBatch(db);
@@ -344,7 +353,8 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
             change24h: defaultInfo[sym].change24h,
             mode: 'live',
             lastSyncedAt: new Date().toISOString(),
-            investmentRate: defaultRates[sym] || 5.0
+            investmentRate: defaultRates[sym] || 5.0,
+            winRate: defaultWinRates[sym] || 96.0
           };
           batch.set(doc(db, 'crypto_prices', sym), cp);
           prList.push(cp);
@@ -352,10 +362,13 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
         await batch.commit();
       }
 
-      // Ensure all loaded prices have a rate
+      // Ensure all loaded prices have a rate and win rate
       prList = prList.map(cp => {
         if (cp.investmentRate === undefined) {
           cp.investmentRate = defaultRates[cp.symbol] || 5.0;
+        }
+        if (cp.winRate === undefined) {
+          cp.winRate = defaultWinRates[cp.symbol] || 96.0;
         }
         return cp;
       });
@@ -445,6 +458,7 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
         await batch.commit();
         bTpls = defaultBts;
       }
+      bTpls.sort((a, b) => Number(a.minCapital ?? 0) - Number(b.minCapital ?? 0));
       setBotTemplatesList(bTpls);
 
       // Fetch User Trading Bots
@@ -863,17 +877,37 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
           throw new Error('User account does not exist.');
         }
 
-        const currentBalance = userSnap.data().balance || 0;
+        const userData = userSnap.data();
+        const currentBalance = userData.balance || 0;
         const withdrawAmount = tx.amount;
+        const coinSym = tx.coinSymbol ? tx.coinSymbol.toUpperCase() : 'USDT';
 
-        if (withdrawAmount > currentBalance) {
-          throw new Error('User has insufficient balance for this withdrawal request.');
+        if (coinSym === 'USDT') {
+          if (withdrawAmount > currentBalance) {
+            throw new Error('User has insufficient USDT balance for this withdrawal request.');
+          }
+          // Permanently subtract funds from user wallet balance
+          transaction.update(userRef, {
+            balance: parseFloat((currentBalance - withdrawAmount).toFixed(2))
+          });
+        } else {
+          const currentHoldings = userData.holdings || {};
+          const currentCoinBalance = currentHoldings[coinSym] || 0;
+          const coinAmtToDeduct = tx.coinAmount || (withdrawAmount > 0 ? withdrawAmount : 0);
+
+          if (coinAmtToDeduct > currentCoinBalance + 0.000001) {
+            throw new Error(`User has insufficient ${coinSym} balance for this withdrawal request.`);
+          }
+
+          const updatedHoldings = {
+            ...currentHoldings,
+            [coinSym]: Math.max(0, currentCoinBalance - coinAmtToDeduct)
+          };
+
+          transaction.update(userRef, {
+            holdings: updatedHoldings
+          });
         }
-
-        // 1. Permanently subtract funds from user wallet balance
-        transaction.update(userRef, {
-          balance: parseFloat((currentBalance - withdrawAmount).toFixed(2))
-        });
 
         // 2. Change status to APPROVED
         transaction.update(txRef, {
@@ -1193,12 +1227,32 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
       await updateDoc(coinRef, {
         investmentRate: rateVal
       });
-      showFeedback('success', `MMF Investment Rate for ${symbol} updated to ${rateVal}%.`);
+      showFeedback('success', `Signal Rate for ${symbol} updated to ${rateVal}%.`);
       setEditingRateSymbol(null);
       await loadAllData(true);
     } catch (err: any) {
       console.error(err);
-      showFeedback('error', 'Failed to update investment rate: ' + err.message);
+      showFeedback('error', 'Failed to update profit rate: ' + err.message);
+    }
+  };
+
+  const handleSaveWinRate = async (symbol: string) => {
+    const winVal = parseFloat(winRateInput);
+    if (isNaN(winVal) || winVal < 0 || winVal > 100) {
+      alert('Please enter a valid Win Rate percentage (0 - 100%).');
+      return;
+    }
+    try {
+      const coinRef = doc(db, 'crypto_prices', symbol);
+      await updateDoc(coinRef, {
+        winRate: winVal
+      });
+      showFeedback('success', `Signal Win Rate for ${symbol} updated to ${winVal}%.`);
+      setEditingWinRateSymbol(null);
+      await loadAllData(true);
+    } catch (err: any) {
+      console.error(err);
+      showFeedback('error', 'Failed to update signal win rate: ' + err.message);
     }
   };
 
@@ -1940,12 +1994,16 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                 </div>
                 <button
                   type="button"
+                  id="add-new-bot-template-btn"
                   onClick={() => {
                     setEditingBotTemplate(null);
+                    setIsAddingBotTemplate(true);
                     setBotTemplateForm({
                       name: '',
-                      category: 'Cross-Exchange Arbitrage',
-                      winRatioRange: '88-96%',
+                      category: 'PREMIUM',
+                      winRatioRange: '95%',
+                      winProfitRange: '1.5% - 2.5%',
+                      lossPercentRange: '0.4% - 1.4%',
                       minCapital: '50',
                       tradingPairs: 'BTC/USDT, ETH/USDT, SOL/USDT',
                       riskLevel: 'Low Risk',
@@ -1960,7 +2018,7 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
               </div>
 
               {/* Edit / Create Form */}
-              {(editingBotTemplate !== null || botTemplateForm.name !== '') && (
+              {(isAddingBotTemplate || editingBotTemplate !== null) && (
                 <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 space-y-4 animate-fade-in">
                   <div className="flex justify-between items-center border-b border-zinc-800 pb-3">
                     <h4 className="text-xs font-black text-zinc-200 uppercase tracking-wider">
@@ -1970,17 +2028,20 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                       type="button"
                       onClick={() => {
                         setEditingBotTemplate(null);
+                        setIsAddingBotTemplate(false);
                         setBotTemplateForm({
                           name: '',
-                          category: 'Cross-Exchange Arbitrage',
-                          winRatioRange: '88-96%',
+                          category: 'PREMIUM',
+                          winRatioRange: '95%',
+                          winProfitRange: '1.5% - 2.5%',
+                          lossPercentRange: '0.4% - 1.4%',
                           minCapital: '50',
                           tradingPairs: 'BTC/USDT, ETH/USDT, SOL/USDT',
                           riskLevel: 'Low Risk',
                           color: 'from-amber-500 to-yellow-500'
                         });
                       }}
-                      className="text-zinc-400 hover:text-white"
+                      className="text-zinc-400 hover:text-white cursor-pointer"
                     >
                       <X size={16} />
                     </button>
@@ -2012,9 +2073,10 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                       await setDoc(doc(db, 'bot_templates', id), data);
                       showFeedback('success', editingBotTemplate ? 'Bot template updated!' : 'Bot template created!');
                       setEditingBotTemplate(null);
+                      setIsAddingBotTemplate(false);
                       setBotTemplateForm({
                         name: '',
-                        category: 'Cross-Exchange Arbitrage',
+                        category: 'PREMIUM',
                         winRatioRange: '95%',
                         winProfitRange: '1.5% - 2.5%',
                         lossPercentRange: '0.4% - 1.4%',
@@ -2049,6 +2111,9 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                         >
                           <option value="PREMIUM">PREMIUM</option>
                           <option value="FREE">FREE</option>
+                          <option value="Cross-Exchange Arbitrage">Cross-Exchange Arbitrage</option>
+                          <option value="AI High Frequency">AI High Frequency</option>
+                          <option value="Flash Loan Arbitrage">Flash Loan Arbitrage</option>
                         </select>
                       </div>
                     </div>
@@ -2140,14 +2205,17 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                     <div className="flex justify-end gap-2 pt-2">
                       <button
                         type="button"
-                        onClick={() => setEditingBotTemplate(null)}
-                        className="px-4 py-2 bg-zinc-800 text-zinc-300 rounded-xl text-xs font-bold hover:bg-zinc-700"
+                        onClick={() => {
+                          setEditingBotTemplate(null);
+                          setIsAddingBotTemplate(false);
+                        }}
+                        className="px-4 py-2 bg-zinc-800 text-zinc-300 rounded-xl text-xs font-bold hover:bg-zinc-700 cursor-pointer"
                       >
                         Cancel
                       </button>
                       <button
                         type="submit"
-                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold"
+                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold cursor-pointer"
                       >
                         Save Bot Template
                       </button>
@@ -2158,7 +2226,9 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
 
               {/* Bot Templates List */}
               <div className="grid gap-4 sm:grid-cols-2">
-                {botTemplatesList.map(tpl => (
+                {[...botTemplatesList]
+                  .sort((a, b) => Number(a.minCapital ?? 0) - Number(b.minCapital ?? 0))
+                  .map(tpl => (
                   <div key={tpl.id} className="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 space-y-3">
                     <div className="flex justify-between items-start">
                       <div>
@@ -2170,15 +2240,16 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                           type="button"
                           onClick={() => {
                             setEditingBotTemplate(tpl);
+                            setIsAddingBotTemplate(false);
                             setBotTemplateForm({
                               name: tpl.name,
-                              category: tpl.category,
+                              category: tpl.category || 'PREMIUM',
                               winRatioRange: tpl.winRatioRange || '95%',
                               winProfitRange: tpl.winProfitRange || '1.5% - 2.5%',
                               lossPercentRange: tpl.lossPercentRange || '0.4% - 1.4%',
-                              minCapital: tpl.minCapital.toString(),
+                              minCapital: (tpl.minCapital ?? 50).toString(),
                               tradingPairs: (tpl.tradingPairs || []).join(', '),
-                              riskLevel: tpl.riskLevel,
+                              riskLevel: tpl.riskLevel || 'Low Risk',
                               color: tpl.color || 'from-amber-500 to-yellow-500'
                             });
                           }}
@@ -2375,14 +2446,14 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                 </div>
               </div>
 
-              {/* Crypto MMF Investment Rates Controller */}
+              {/* Crypto MMF / Signal Profit Rates Controller */}
               <div id="crypto-mmf-rates-controller" className="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-800/80 pb-3">
                   <div className="flex items-center gap-2">
                     <TrendingUp className="text-emerald-400" size={16} />
                     <div>
-                      <h3 className="text-xs font-black text-zinc-300 uppercase tracking-wider">Crypto MMF Investment Rates</h3>
-                      <p className="text-[10px] text-zinc-500 font-semibold mt-0.5">Define the daily investment profit percentage rate for each cryptocurrency coin.</p>
+                      <h3 className="text-xs font-black text-zinc-300 uppercase tracking-wider">Trading Signal Daily Yield Rates</h3>
+                      <p className="text-[10px] text-zinc-500 font-semibold mt-0.5">Define the daily profit percentage rate for each cryptocurrency trading signal.</p>
                     </div>
                   </div>
                 </div>
@@ -2442,6 +2513,86 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                               <button
                                 id={`cancel-rate-btn-${cp.symbol}`}
                                 onClick={() => setEditingRateSymbol(null)}
+                                className="px-2 py-1 bg-zinc-900 hover:bg-zinc-850 text-zinc-400 text-[9px] rounded transition-colors cursor-pointer"
+                              >
+                                X
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Trading Signals Win Ratio Controller */}
+              <div id="trading-signal-win-ratios-controller" className="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-800/80 pb-3">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="text-amber-400" size={16} />
+                    <div>
+                      <h3 className="text-xs font-black text-zinc-300 uppercase tracking-wider">Trading Signal Win Ratios</h3>
+                      <p className="text-[10px] text-zinc-500 font-semibold mt-0.5">Define the accuracy win ratio percentage displayed on trading signal cards.</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                  {cryptoPricesList.map((cp) => {
+                    const isEditingWin = editingWinRateSymbol === cp.symbol;
+                    const winRateVal = cp.winRate ?? 96.0;
+
+                    return (
+                      <div key={`winrate-${cp.symbol}`} className="bg-zinc-950 p-3.5 rounded-2xl border border-zinc-900/60 flex flex-col justify-between space-y-3 relative overflow-hidden">
+                        <div className="absolute top-0 left-0 right-0 h-[2px] bg-amber-500/50" />
+                        
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <span className="text-[10px] text-zinc-500 font-bold block">{cp.name}</span>
+                            <span className="text-xs font-black text-zinc-200 font-mono tracking-wider">{cp.symbol}</span>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-[9px] text-zinc-500 block">Win Ratio</span>
+                            <span className="text-sm font-black text-amber-400 font-mono">{winRateVal}%</span>
+                          </div>
+                        </div>
+
+                        {!isEditingWin ? (
+                          <button
+                            id={`edit-winrate-btn-${cp.symbol}`}
+                            onClick={() => {
+                              setEditingWinRateSymbol(cp.symbol);
+                              setWinRateInput(winRateVal.toString());
+                            }}
+                            className="w-full py-2 bg-zinc-900 hover:bg-zinc-850 text-zinc-300 hover:text-white font-bold text-[10px] rounded-xl border border-zinc-800 transition-colors cursor-pointer"
+                          >
+                            Edit Win Ratio
+                          </button>
+                        ) : (
+                          <div className="space-y-2 pt-2 border-t border-zinc-900/80">
+                            <div className="space-y-1">
+                              <label className="text-[9px] text-zinc-500 font-semibold block">Win % Ratio</label>
+                              <input
+                                id={`input-winrate-${cp.symbol}`}
+                                type="number"
+                                step="any"
+                                value={winRateInput}
+                                onChange={(e) => setWinRateInput(e.target.value)}
+                                className="w-full px-2 py-1 bg-zinc-900 border border-zinc-800 rounded text-[11px] text-white font-mono focus:outline-none focus:ring-1 focus:ring-amber-500"
+                              />
+                            </div>
+                            <div className="flex gap-1">
+                              <button
+                                id={`save-winrate-btn-${cp.symbol}`}
+                                onClick={() => handleSaveWinRate(cp.symbol)}
+                                className="flex-1 py-1 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-black text-[9px] rounded transition-colors cursor-pointer"
+                              >
+                                Save
+                              </button>
+                              <button
+                                id={`cancel-winrate-btn-${cp.symbol}`}
+                                onClick={() => setEditingWinRateSymbol(null)}
                                 className="px-2 py-1 bg-zinc-900 hover:bg-zinc-850 text-zinc-400 text-[9px] rounded transition-colors cursor-pointer"
                               >
                                 X

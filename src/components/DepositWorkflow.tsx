@@ -31,7 +31,7 @@ interface DepositWorkflowProps {
 }
 
 export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSymbol }: DepositWorkflowProps) {
-  const [method, setMethod] = useState<'selection' | 'crypto_coin_select' | 'crypto' | 'crypto_address' | 'crypto_confirm' | 'p2p' | 'p2p_calc' | 'p2p_instructions' | 'p2p_confirm'>('selection');
+  const [method, setMethod] = useState<'selection' | 'crypto_coin_select' | 'crypto' | 'crypto_address' | 'crypto_confirm' | 'p2p' | 'p2p_calc' | 'p2p_instructions' | 'p2p_confirm'>('crypto_coin_select');
 
   const formatCoinName = (tokenName: string) => {
     if (!tokenName) return '';
@@ -391,15 +391,11 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
         <button 
           id="deposit-back-btn"
           onClick={() => {
-            if (method === 'selection') onBack();
-            else if (method === 'crypto_coin_select') setMethod('selection');
+            if (method === 'selection' || method === 'crypto_coin_select') onBack();
             else if (method === 'crypto') setMethod('crypto_coin_select');
             else if (method === 'crypto_address') setMethod('crypto');
             else if (method === 'crypto_confirm') setMethod('crypto_address');
-            else if (method === 'p2p') setMethod('selection');
-            else if (method === 'p2p_calc') setMethod('p2p');
-            else if (method === 'p2p_instructions') setMethod('p2p_calc');
-            else if (method === 'p2p_confirm') setMethod('p2p_instructions');
+            else onBack();
           }}
           className="p-2 rounded-full bg-white border border-zinc-200 text-zinc-600 hover:text-zinc-900 hover:bg-zinc-50 transition-colors"
         >
@@ -407,26 +403,16 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
         </button>
         <div>
           <h2 className="text-lg font-black tracking-tight text-zinc-800">
-            {method === 'selection' && 'Add Funds'}
-            {method === 'crypto_coin_select' && 'Select Coin'}
+            {(method === 'selection' || method === 'crypto_coin_select') && 'Select Coin to Deposit'}
             {method === 'crypto' && 'Crypto Deposit Details'}
             {method === 'crypto_address' && 'Receiver Address'}
             {method === 'crypto_confirm' && 'Upload Deposit Proof'}
-            {method === 'p2p' && 'P2P deposit verified Merchants'}
-            {method === 'p2p_calc' && 'P2P Deposit'}
-            {method === 'p2p_instructions' && 'Complete Merchant Payment'}
-            {method === 'p2p_confirm' && 'Paste Receipt Verification'}
           </h2>
           <p className="text-xs text-zinc-500">
-            {method === 'selection' && 'Select deposit network'}
-            {method === 'crypto_coin_select' && 'Choose a crypto asset to deposit'}
+            {(method === 'selection' || method === 'crypto_coin_select') && 'Choose a crypto asset to deposit'}
             {method === 'crypto' && `Select network and enter deposit amount for ${selectedCoin ? formatCoinName(selectedCoin.tokenName) : ''}`}
             {method === 'crypto_address' && `Send funds to the generated ${selectedNetwork} address`}
             {method === 'crypto_confirm' && 'Provide screenshot evidence of asset transfer'}
-            {method === 'p2p' && 'Buy USD from active verified agents'}
-            {method === 'p2p_calc' && `Conversion buying rates with ${selectedMerchant?.name}`}
-            {method === 'p2p_instructions' && 'Transfer funds to merchant payment details'}
-            {method === 'p2p_confirm' && 'Paste raw SMS/receipt for instant escrow check'}
           </p>
         </div>
       </div>
@@ -442,52 +428,8 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
 
       {!loading && (
         <>
-          {/* Method Selection Page */}
-          {method === 'selection' && (() => {
-            const isP2PAllowed = !profile?.country || profile.country === 'Kenya';
-            return (
-              <div className="space-y-4">
-                <button
-                  id="deposit-method-crypto"
-                  onClick={() => setMethod('crypto_coin_select')}
-                  className="w-full flex items-center justify-between p-4 bg-white hover:bg-zinc-50/80 border border-zinc-200 rounded-2xl transition-all text-left"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="w-11 h-11 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-600 shrink-0">
-                      <Coins size={20} />
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-sm text-zinc-800">Crypto deposit</h3>
-                      <p className="text-xs text-zinc-500 mt-0.5">Deposit Crypto Coins from other exchanges</p>
-                    </div>
-                  </div>
-                  <ChevronRight size={16} className="text-zinc-400" />
-                </button>
-
-                {isP2PAllowed && (
-                  <button
-                    id="deposit-method-p2p"
-                    onClick={() => setMethod('p2p')}
-                    className="w-full flex items-center justify-between p-4 bg-white hover:bg-zinc-50/80 border border-zinc-200 rounded-2xl transition-all text-left"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="w-11 h-11 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-600 shrink-0">
-                        <Users size={20} />
-                      </div>
-                      <div>
-                        <h3 className="font-bold text-sm text-zinc-800">P2P Deposit (Mpesa, Airtel Money, Bank)</h3>
-                        <p className="text-xs text-zinc-500 mt-0.5">Pay local currency (Ksh) to buy USD instantly</p>
-                      </div>
-                    </div>
-                    <ChevronRight size={16} className="text-zinc-400" />
-                  </button>
-                )}
-              </div>
-            );
-          })()}
-
-          {/* Crypto Coin Select Page */}
-          {method === 'crypto_coin_select' && (
+          {/* Crypto Coin Select Page (Default Deposit Screen) */}
+          {(method === 'selection' || method === 'crypto_coin_select') && (
             <div className="space-y-3">
               {networks.map(net => {
                 const formattedName = formatCoinName(net.tokenName);

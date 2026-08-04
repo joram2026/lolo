@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { RunningBotView } from './RunningBotView';
 import { getTradingPairConfig, TradingPairBadge, DEFAULT_BOT_TRADING_PAIRS } from '../utils/pairUtils';
+import { syncLiveCryptoPrices } from '../utils/cryptoApi';
 
 interface StandardUserDashboardProps {
   user: any;
@@ -28,17 +29,49 @@ interface StandardUserDashboardProps {
 }
 
 const STATIC_CRYPTO: CryptoPrice[] = [
-  { name: 'Tether', symbol: 'USDT', price: 1.00, change24h: 0.01 },
-  { name: 'USD Coin', symbol: 'USDC', price: 1.00, change24h: -0.02 },
-  { name: 'Bitcoin', symbol: 'BTC', price: 94250.30, change24h: 3.45 },
-  { name: 'Ethereum', symbol: 'ETH', price: 3480.12, change24h: 1.82 },
-  { name: 'Solana', symbol: 'SOL', price: 184.45, change24h: -2.15 },
-  { name: 'Binance Coin', symbol: 'BNB', price: 592.20, change24h: 0.95 },
-  { name: 'XRP', symbol: 'XRP', price: 2.54, change24h: 4.12 },
-  { name: 'World Coin', symbol: 'WLD', price: 2.80, change24h: -1.25 },
-  { name: 'Tron', symbol: 'TRX', price: 0.22, change24h: 0.45 },
-  { name: 'DOGE Coin', symbol: 'DOGE', price: 0.38, change24h: 2.15 }
+  { name: 'Tether', symbol: 'USDT', price: 1.00, change24h: 0.01, investmentRate: 2.5, winRate: 99.2 },
+  { name: 'USD Coin', symbol: 'USDC', price: 1.00, change24h: -0.02, investmentRate: 2.5, winRate: 99.1 },
+  { name: 'Bitcoin', symbol: 'BTC', price: 94250.30, change24h: 3.45, investmentRate: 3.5, winRate: 97.8 },
+  { name: 'Ethereum', symbol: 'ETH', price: 3480.12, change24h: 1.82, investmentRate: 4.0, winRate: 96.5 },
+  { name: 'Solana', symbol: 'SOL', price: 184.45, change24h: -2.15, investmentRate: 6.0, winRate: 95.8 },
+  { name: 'Binance Coin', symbol: 'BNB', price: 592.20, change24h: 0.95, investmentRate: 4.5, winRate: 96.2 },
+  { name: 'XRP', symbol: 'XRP', price: 2.54, change24h: 4.12, investmentRate: 3.0, winRate: 94.5 },
+  { name: 'World Coin', symbol: 'WLD', price: 2.80, change24h: -1.25, investmentRate: 5.0, winRate: 93.8 },
+  { name: 'Tron', symbol: 'TRX', price: 0.22, change24h: 0.45, investmentRate: 3.5, winRate: 95.2 },
+  { name: 'DOGE Coin', symbol: 'DOGE', price: 0.38, change24h: 2.15, investmentRate: 7.0, winRate: 92.4 }
 ];
+
+export const mergeWithDefaultRates = (rawPrices: CryptoPrice[]): CryptoPrice[] => {
+  const defaultRates: Record<string, number> = {
+    USDT: 2.5, USDC: 2.5, BTC: 3.5, ETH: 4.0, SOL: 6.0, BNB: 4.5, XRP: 3.0, WLD: 5.0, TRX: 3.5, DOGE: 7.0
+  };
+  const defaultWinRates: Record<string, number> = {
+    USDT: 99.2, USDC: 99.1, BTC: 97.8, ETH: 96.5, SOL: 95.8, BNB: 96.2, XRP: 94.5, WLD: 93.8, TRX: 95.2, DOGE: 92.4
+  };
+  const order = ['USDT', 'USDC', 'BTC', 'ETH', 'SOL', 'BNB', 'XRP', 'WLD', 'TRX', 'DOGE'];
+
+  const map = new Map<string, CryptoPrice>();
+  STATIC_CRYPTO.forEach(item => map.set(item.symbol, { ...item }));
+
+  if (Array.isArray(rawPrices) && rawPrices.length > 0) {
+    rawPrices.forEach(item => {
+      if (item && item.symbol) {
+        const existing = map.get(item.symbol) || item;
+        map.set(item.symbol, {
+          ...existing,
+          ...item,
+          price: item.price !== undefined && item.price !== 0 ? item.price : (existing.price || 1.0),
+          investmentRate: item.investmentRate ?? existing.investmentRate ?? defaultRates[item.symbol] ?? 5.0,
+          winRate: item.winRate ?? existing.winRate ?? defaultWinRates[item.symbol] ?? 96.0,
+        });
+      }
+    });
+  }
+
+  const result = Array.from(map.values());
+  result.sort((a, b) => order.indexOf(a.symbol) - order.indexOf(b.symbol));
+  return result;
+};
 
 export const getCoinLogoUrl = (symbol: string): string => {
   const sym = symbol.toUpperCase();
@@ -314,7 +347,7 @@ export default function StandardUserDashboard({
   const [mmfSubView, setMmfSubView] = useState<'main' | 'list' | 'form'>('main');
   const [selectedCoinForInvestment, setSelectedCoinForInvestment] = useState<CryptoPrice | null>(null);
   const [investmentAmount, setInvestmentAmount] = useState<string>('');
-  const [investmentDays, setInvestmentDays] = useState<string>('5');
+  const [investmentDays, setInvestmentDays] = useState<string>('24');
   const [investmentLoading, setInvestmentLoading] = useState<boolean>(false);
   const [investmentErrorState, setInvestmentErrorState] = useState<string | null>(null);
   const [investmentSuccessState, setInvestmentSuccessState] = useState<string | null>(null);
@@ -491,6 +524,31 @@ export default function StandardUserDashboard({
 
   const loading = !userLoaded || (!pricesLoaded && !isUsingFallbackPrices);
 
+  // Helper to re-fetch crypto prices from Firestore backend & trigger sync
+  const refetchPricesFromBackend = async () => {
+    try {
+      const pricesCol = collection(db, 'crypto_prices');
+      const snap = await getDocs(pricesCol);
+      if (!snap.empty) {
+        const fetched = snap.docs.map(doc => doc.data() as CryptoPrice);
+        setCryptoPrices(mergeWithDefaultRates(fetched));
+        setPricesLoaded(true);
+        setIsUsingFallbackPrices(false);
+        setPricesLoadError(null);
+      }
+      syncLiveCryptoPrices(db).catch(console.error);
+    } catch (err) {
+      console.warn("Failed to refetch prices on network recovery:", err);
+    }
+  };
+
+  // Re-fetch prices when entering the SIGNALS / earn tab
+  useEffect(() => {
+    if (activeTab === 'earn') {
+      refetchPricesFromBackend();
+    }
+  }, [activeTab]);
+
   // Safety timeout to avoid getting stuck if Firestore prices fetch is slow or blocked
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -498,35 +556,29 @@ export default function StandardUserDashboard({
         console.warn("Crypto prices fetch timed out. Falling back to default offline prices.");
         setIsUsingFallbackPrices(true);
         setPricesLoadError("Network latency detected. Displaying offline rates.");
-        setCryptoPrices(prev => prev.map(c => ({ ...c, price: 0, change24h: 0 })));
+        setCryptoPrices(mergeWithDefaultRates(STATIC_CRYPTO));
       }
     }, 10000); // 10 seconds timeout
 
     return () => clearTimeout(timer);
   }, [pricesLoaded]);
 
-  // Ensure prices are forced to 0 whenever using fallback/offline rates
-  useEffect(() => {
-    if (isUsingFallbackPrices || (typeof navigator !== 'undefined' && !navigator.onLine)) {
-      setCryptoPrices(prev => prev.map(c => ({ ...c, price: 0, change24h: 0 })));
-    }
-  }, [isUsingFallbackPrices]);
-
   // Listen to network status (online/offline)
   useEffect(() => {
     const handleOnline = () => {
-      setPricesLoaded(false);
-      toast.success('Connection restored! Re-syncing live market rates.', 'Online');
+      refetchPricesFromBackend();
+      toast.success('Connection restored! Re-synced live rates from server.', 'Online');
     };
     const handleOffline = () => {
       setIsUsingFallbackPrices(true);
       toast.warning('No internet connection. Offline mode activated.', 'Offline');
-      setCryptoPrices(prev => prev.map(c => ({ ...c, price: 0, change24h: 0 })));
+      setCryptoPrices(mergeWithDefaultRates(STATIC_CRYPTO));
     };
 
     if (typeof window !== 'undefined') {
       window.addEventListener('online', handleOnline);
       window.addEventListener('offline', handleOffline);
+      window.addEventListener('focus', handleOnline);
       if (!navigator.onLine) {
         handleOffline();
       }
@@ -536,6 +588,7 @@ export default function StandardUserDashboard({
       if (typeof window !== 'undefined') {
         window.removeEventListener('online', handleOnline);
         window.removeEventListener('offline', handleOffline);
+        window.removeEventListener('focus', handleOnline);
       }
     };
   }, []);
@@ -580,30 +633,22 @@ export default function StandardUserDashboard({
 
     const pricesCol = collection(db, 'crypto_prices');
     const unsubscribePrices = onSnapshot(pricesCol, (snapshot) => {
-      const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
-      if (!snapshot.empty && !isOffline) {
+      if (!snapshot.empty) {
         const fetched = snapshot.docs.map(doc => doc.data() as CryptoPrice);
-        const order = ['USDT', 'USDC', 'BTC', 'ETH', 'SOL', 'BNB', 'XRP', 'WLD', 'TRX', 'DOGE'];
-        // Sort according to standard order
-        fetched.sort((a, b) => order.indexOf(a.symbol) - order.indexOf(b.symbol));
-        setCryptoPrices(fetched);
+        setCryptoPrices(mergeWithDefaultRates(fetched));
         setPricesLoaded(true);
         setIsUsingFallbackPrices(false);
         setPricesLoadError(null);
       } else {
         setIsUsingFallbackPrices(true);
-        if (isOffline) {
-          setPricesLoadError("No internet connection detected. Offline mode activated.");
-        } else {
-          setPricesLoadError("No live prices found in database. Using default offline rates.");
-        }
-        setCryptoPrices(prev => prev.map(c => ({ ...c, price: 0, change24h: 0 })));
+        setPricesLoadError("No live prices found in database. Using default rates.");
+        setCryptoPrices(mergeWithDefaultRates(STATIC_CRYPTO));
       }
     }, (err) => {
       console.error("Error listening to crypto prices:", err);
       setIsUsingFallbackPrices(true);
-      setPricesLoadError("Failed to fetch live prices from server. Using offline rates.");
-      setCryptoPrices(prev => prev.map(c => ({ ...c, price: 0, change24h: 0 })));
+      setPricesLoadError("Failed to fetch live prices from server. Using default rates.");
+      setCryptoPrices(mergeWithDefaultRates(STATIC_CRYPTO));
     });
 
     const invCol = collection(db, 'investments');
@@ -665,6 +710,11 @@ export default function StandardUserDashboard({
 
     const unsubscribeTemplates = onSnapshot(collection(db, 'bot_templates'), (snapshot) => {
       const tpls = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as any));
+      tpls.sort((a, b) => {
+        const capA = Number(a.minCapital ?? a.min_capital ?? a.minDeposit ?? a.capital ?? 0);
+        const capB = Number(b.minCapital ?? b.min_capital ?? b.minDeposit ?? b.capital ?? 0);
+        return capA - capB;
+      });
       setBotTemplates(tpls);
     });
 
@@ -789,13 +839,13 @@ export default function StandardUserDashboard({
 
     const amountVal = parseFloat(investmentAmount);
     if (isNaN(amountVal) || amountVal <= 0) {
-      setInvestmentError("Please enter a valid amount to invest.");
+      setInvestmentError("Please enter a valid trade amount.");
       return;
     }
 
     const daysVal = parseInt(investmentDays);
-    if (isNaN(daysVal) || daysVal < 5) {
-      setInvestmentError("Minimum investment duration is 5 days.");
+    if (isNaN(daysVal) || daysVal < 24) {
+      setInvestmentError("Minimum signal trade duration is 24 days.");
       return;
     }
 
@@ -805,17 +855,17 @@ export default function StandardUserDashboard({
 
     const minLimit = selectedCoinForInvestment.minInvestment ?? 10.0;
     if (unlockedHolding < minLimit) {
-      setInvestmentError(`Your available balance of ${unlockedHolding.toFixed(4)} ${selectedCoinForInvestment.symbol} is below the minimum required investment of ${minLimit} ${selectedCoinForInvestment.symbol}. Please go to the deposit page to add deposit.`);
+      setInvestmentError(`Your available balance of ${unlockedHolding.toFixed(4)} ${selectedCoinForInvestment.symbol} is below the minimum required trade amount of ${minLimit} ${selectedCoinForInvestment.symbol}. Please go to the deposit page to add deposit.`);
       return;
     }
 
     if (amountVal < minLimit) {
-      setInvestmentError(`The minimum investment amount allowed for ${selectedCoinForInvestment.symbol} is ${minLimit} ${selectedCoinForInvestment.symbol}. Please enter at least ${minLimit} ${selectedCoinForInvestment.symbol}.`);
+      setInvestmentError(`The minimum trade amount allowed for ${selectedCoinForInvestment.symbol} is ${minLimit} ${selectedCoinForInvestment.symbol}. Please enter at least ${minLimit} ${selectedCoinForInvestment.symbol}.`);
       return;
     }
 
     if (unlockedHolding < amountVal) {
-      setInvestmentError(`Insufficient available ${selectedCoinForInvestment.symbol} balance. You hold ${currentHolding} but ${lockedAmount} is already locked in MMF.`);
+      setInvestmentError(`Insufficient available ${selectedCoinForInvestment.symbol} balance. You hold ${currentHolding} but ${lockedAmount} is already allocated to active trades.`);
       return;
     }
 
@@ -849,16 +899,16 @@ export default function StandardUserDashboard({
         coinAmount: amountVal,
         status: 'APPROVED',
         createdAt: new Date(),
-        paymentMessage: `Crypto MMF Invested: Locked ${amountVal} ${selectedCoinForInvestment.symbol} for ${daysVal} days at ${selectedCoinForInvestment.investmentRate ?? 5.0}% daily yield.`
+        paymentMessage: `Signal Trade Executed: Allocated ${amountVal} ${selectedCoinForInvestment.symbol} for ${daysVal} days at ${selectedCoinForInvestment.investmentRate ?? 5.0}% daily yield.`
       });
 
-      setInvestmentSuccess(`Successfully invested ${amountVal} ${selectedCoinForInvestment.symbol} in MMF! Your funds are locked for ${daysVal} days.`);
+      setInvestmentSuccess(`Successfully executed trading signal for ${amountVal} ${selectedCoinForInvestment.symbol}!`);
       setInvestmentAmount('');
-      setInvestmentDays('5');
+      setInvestmentDays('24');
       setMmfSubView('main');
     } catch (err: any) {
       console.error(err);
-      setInvestmentError("Failed to initiate investment: " + err.message);
+      setInvestmentError("Failed to execute trade signal: " + err.message);
     } finally {
       setInvestmentLoading(false);
     }
@@ -888,7 +938,7 @@ export default function StandardUserDashboard({
         const createdDayEpoch = getKenyanDaysSinceEpoch(created);
         const daysElapsed = Math.max(0, nowDayEpoch - createdDayEpoch);
 
-        const totalDays = inv.totalDays ?? 5;
+        const totalDays = inv.totalDays ?? 24;
         const daysPaid = inv.daysPaid ?? 0;
 
         // We owe payments if more calendar days have elapsed than what we have paid
@@ -912,7 +962,7 @@ export default function StandardUserDashboard({
           const createdDayEpoch = getKenyanDaysSinceEpoch(created);
           const daysElapsed = Math.max(0, nowDayEpoch - createdDayEpoch);
 
-          const totalDays = inv.totalDays ?? 5;
+          const totalDays = inv.totalDays ?? 24;
           const daysPaid = inv.daysPaid ?? 0;
 
           // Number of payouts to apply in this batch
@@ -1168,6 +1218,18 @@ export default function StandardUserDashboard({
 
   const BOT_TEMPLATES = [
     {
+      id: 'dca_accumulator',
+      name: 'DCA Smart Accumulator',
+      category: 'FREE',
+      winRatioRange: '98%',
+      winProfitRange: '1.0% - 1.8%',
+      lossPercentRange: '0.3% - 0.8%',
+      riskLevel: 'Very Low Risk',
+      minCapital: 25,
+      tradingPairs: DEFAULT_BOT_TRADING_PAIRS,
+      color: 'from-blue-500 to-indigo-500'
+    },
+    {
       id: 'arb_sniper',
       name: 'Arbitrage Flash-Loan Sniper',
       category: 'PREMIUM',
@@ -1190,18 +1252,6 @@ export default function StandardUserDashboard({
       minCapital: 100,
       tradingPairs: DEFAULT_BOT_TRADING_PAIRS,
       color: 'from-emerald-500 to-teal-500'
-    },
-    {
-      id: 'dca_accumulator',
-      name: 'DCA Smart Accumulator',
-      category: 'FREE',
-      winRatioRange: '98%',
-      winProfitRange: '1.0% - 1.8%',
-      lossPercentRange: '0.3% - 0.8%',
-      riskLevel: 'Very Low Risk',
-      minCapital: 25,
-      tradingPairs: DEFAULT_BOT_TRADING_PAIRS,
-      color: 'from-blue-500 to-indigo-500'
     },
     {
       id: 'quantum_momentum',
@@ -3341,7 +3391,8 @@ export default function StandardUserDashboard({
                           </div>
 
                           <div className="grid grid-cols-1 gap-4">
-                            {(botTemplates.length > 0 ? botTemplates : BOT_TEMPLATES)
+                            {[...(botTemplates.length > 0 ? botTemplates : BOT_TEMPLATES)]
+                              .sort((a, b) => getTemplateMinCapital(a) - getTemplateMinCapital(b))
                               .filter(tmpl => (tmpl.category || '').toUpperCase() === 'PREMIUM' || (!tmpl.category || tmpl.category.toUpperCase() !== 'FREE'))
                               .map((tmpl) => (
                                 <div 
@@ -3494,7 +3545,8 @@ export default function StandardUserDashboard({
                           </div>
 
                           <div className="grid grid-cols-1 gap-4">
-                            {(botTemplates.length > 0 ? botTemplates : BOT_TEMPLATES)
+                            {[...(botTemplates.length > 0 ? botTemplates : BOT_TEMPLATES)]
+                              .sort((a, b) => getTemplateMinCapital(a) - getTemplateMinCapital(b))
                               .filter(tmpl => (tmpl.category || '').toUpperCase() === 'FREE')
                               .map((tmpl) => (
                                 <div 
@@ -4338,7 +4390,7 @@ export default function StandardUserDashboard({
             </div>
           )}
 
-          {/* TAB 4: EARN (MMF INVESTMENT) */}
+          {/* TAB 4: EARN (VERIFIED TRADING SIGNALS) */}
           {activeTab === 'earn' && (
             <div className="space-y-5 animate-fade-in">
               {/* Earn Specific Interactive Wallet Card */}
@@ -4364,13 +4416,13 @@ export default function StandardUserDashboard({
                       <div className="flex items-center gap-2">
                         <span className={`text-[11px] font-bold uppercase tracking-wider ${
                           isLightTheme ? 'text-zinc-500' : 'text-zinc-400'
-                        }`}>Total Amount Invested</span>
+                        }`}>Total Amount Traded</span>
                         <button
                           onClick={() => setIsEarnBalanceBlurred(!isEarnBalanceBlurred)}
                           className={`p-1 rounded-lg transition-all cursor-pointer inline-flex items-center justify-center shrink-0 ${
                             isLightTheme ? 'hover:bg-amber-500/10 text-zinc-500 hover:text-zinc-700' : 'hover:bg-white/10 text-white/80 hover:text-white'
                           }`}
-                          title={isEarnBalanceBlurred ? "Reveal investment data" : "Hide investment data"}
+                          title={isEarnBalanceBlurred ? "Reveal trading data" : "Hide trading data"}
                         >
                           {isEarnBalanceBlurred ? <EyeOff size={13} strokeWidth={2.5} /> : <Eye size={13} strokeWidth={2.5} />}
                         </button>
@@ -4389,7 +4441,7 @@ export default function StandardUserDashboard({
                             : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
                         }`}>
                           <Sparkles size={10} className={`animate-spin ${isLightTheme ? 'text-amber-600' : 'text-emerald-300'}`} />
-                          {activeInvs.length} Active MMF {activeInvs.length === 1 ? 'Invest' : 'Investments'}
+                          {activeInvs.length} Active Trading {activeInvs.length === 1 ? 'Signal' : 'Signals'}
                         </span>
                       </div>
                     </div>
@@ -4470,7 +4522,7 @@ export default function StandardUserDashboard({
                 </div>
               )}
 
-              {/* mmf investment mode */}
+              {/* trading signals mode */}
               <div className={`border rounded-3xl p-5 space-y-5 animate-fade-in ${
                 isLightTheme ? 'bg-white border-zinc-200/80 shadow-xs' : 'bg-slate-800 border-slate-700/80'
               }`}>
@@ -4479,120 +4531,139 @@ export default function StandardUserDashboard({
                     <div>
                       <h3 className={`text-sm font-black tracking-tight flex items-center gap-1.5 ${isLightTheme ? 'text-zinc-800' : 'text-zinc-300'}`}>
                         <Coins size={16} className={isLightTheme ? 'text-amber-500' : 'text-emerald-400'} />
-                        Crypto MMF Investment
+                        VERIFIED TRADING SIGNALS
                       </h3>
-                      <p className={`text-[11px] mt-0.5 ${isLightTheme ? 'text-zinc-400' : 'text-zinc-500'}`}>Invest in Crypto and Earn daily Profits</p>
+                      <p className={`text-[11px] mt-0.5 ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>Copy verified trading signals from experienced professionals with great win ratio</p>
                     </div>
 
 
 
-                    {/* Coins Cards Grid */}
-                    <div className="grid grid-cols-2 gap-3.5">
+                    {/* Coins Cards List - Single Column Layout (Blueprint Design) */}
+                    <div className="flex flex-col gap-3">
                       {cryptoPrices.map(coin => {
                         const userHolding = getCoinHolding(coin.symbol);
                         const locked = getLockedAmount(coin.symbol);
                         const unlocked = Math.max(0, userHolding - locked);
                         const dailyRate = coin.investmentRate ?? 5.0;
+                        const winRate = coin.winRate ?? 96.0;
 
                         return (
                           <div 
                             key={coin.symbol}
-                            className={`border p-3.5 rounded-2xl flex flex-col justify-between transition-all duration-300 group hover:shadow-lg relative overflow-hidden ${
+                            onClick={() => {
+                              setSelectedCoinForInvestment(coin);
+                              setInvestmentAmount('');
+                              setMmfSubView('form');
+                              setInvestmentError(null);
+                              setInvestmentSuccess(null);
+                            }}
+                            className={`border p-3 sm:p-4 rounded-2xl flex items-center justify-between gap-2 sm:gap-4 transition-all duration-300 group hover:shadow-md cursor-pointer active:scale-[0.99] relative overflow-hidden ${
                               isLightTheme 
-                                ? 'bg-[#FFF8E1] border-amber-300/90 hover:border-amber-400 hover:bg-[#FFF8E1]/80 hover:shadow-amber-500/10' 
-                                : 'bg-slate-900/40 border-slate-850/70 hover:bg-slate-900/70 hover:border-emerald-500/20 hover:shadow-emerald-950/5'
+                                ? 'bg-[#FFF8E1] border-amber-300/90 hover:border-amber-400 hover:shadow-amber-500/10' 
+                                : 'bg-slate-900/60 border-slate-800 hover:bg-slate-900/90 hover:border-emerald-500/30'
                             }`}
                           >
-                            {/* Subtle hover gradient border glow */}
-                            <div className={`absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-amber-500/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300`} />
-                            
-                            <div>
-                              {/* Top row: Logo & Coin identifiers */}
-                              <div className="flex items-center gap-2 mb-3">
-                                <div className={`w-8 h-8 rounded-full border flex items-center justify-center p-1 shadow-inner shrink-0 ${
-                                  isLightTheme ? 'bg-white border-zinc-200' : 'bg-slate-950 border-slate-850'
-                                }`}>
-                                  <img 
-                                    src={getCoinLogoUrl(coin.symbol)} 
-                                    alt={coin.name} 
-                                    className="w-full h-full object-contain rounded-full"
-                                    referrerPolicy="no-referrer"
-                                  />
-                                </div>
-                                <div className="min-w-0">
-                                  <span className={`font-extrabold text-[11px] block truncate leading-tight ${isLightTheme ? 'text-zinc-800' : 'text-zinc-100'}`}>{coin.name}</span>
-                                  <span className="text-[9px] font-bold font-mono text-zinc-500">{coin.symbol}</span>
-                                </div>
+                            {/* Subtle top hover accent line */}
+                            <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-amber-500 via-yellow-400 to-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+
+                            {/* Left Side: Circular Logo + (Coin Name / Symbol stacked above Badges) */}
+                            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                              {/* Circular Logo */}
+                              <div className={`w-9 h-9 sm:w-11 sm:h-11 rounded-full border flex items-center justify-center p-1 sm:p-1.5 shadow-xs shrink-0 ${
+                                isLightTheme ? 'bg-white border-amber-200' : 'bg-slate-950 border-slate-800'
+                              }`}>
+                                <img 
+                                  src={getCoinLogoUrl(coin.symbol)} 
+                                  alt={coin.name} 
+                                  className="w-full h-full object-contain rounded-full"
+                                  referrerPolicy="no-referrer"
+                                />
                               </div>
 
-                              {/* Yield Rate Badge */}
-                              <div className="mb-3.5">
-                                <span className={`inline-flex items-center px-2 py-0.5 rounded-md font-extrabold text-[9px] font-mono tracking-wide ${
-                                  isLightTheme 
-                                    ? 'bg-emerald-50 border border-emerald-200 text-emerald-800' 
-                                    : 'bg-emerald-500/10 border border-emerald-500/15 text-emerald-400'
-                                }`}>
-                                  {dailyRate}% daily profit
-                                </span>
-                              </div>
+                              {/* Coin Name & Badges stacked vertically */}
+                              <div className="flex flex-col gap-1 min-w-0">
+                                <div className="flex items-center gap-1 min-w-0">
+                                  <span className={`font-black text-xs sm:text-base tracking-tight truncate ${isLightTheme ? 'text-zinc-900' : 'text-zinc-100'}`}>
+                                    {coin.name}
+                                  </span>
+                                  <span className={`text-[9px] sm:text-[10px] font-bold font-mono shrink-0 ${isLightTheme ? 'text-amber-900/60' : 'text-zinc-400'}`}>
+                                    {coin.symbol}
+                                  </span>
+                                </div>
 
-                              {/* Balance details section */}
-                              <div className={`pt-2.5 border-t mb-4 ${isLightTheme ? 'border-amber-200/50' : 'border-slate-900/80'}`}>
-                                <span className={`text-[9px] font-black uppercase tracking-wider block ${
-                                  isLightTheme ? 'text-amber-900/60' : 'text-zinc-500'
-                                }`}>
-                                  Available Balance
-                                </span>
-                                <span className={`text-xs font-black font-mono tracking-tight block mt-0.5 ${
-                                  isLightTheme ? 'text-zinc-900' : 'text-zinc-100'
-                                }`}>
-                                  {unlocked.toFixed(4)} <span className={`text-[9px] font-extrabold ${isLightTheme ? 'text-amber-800/75' : 'text-zinc-400'}`}>{coin.symbol}</span>
-                                </span>
-                                {locked > 0 && (
-                                  <div className="mt-1.5 flex">
-                                    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-extrabold tracking-tight ${
-                                      isLightTheme 
-                                        ? 'bg-amber-100/70 border border-amber-200/60 text-amber-900' 
-                                        : 'bg-slate-950/60 border border-slate-800 text-amber-400'
-                                    }`}>
-                                      <span className="w-1 h-1 rounded-full bg-amber-500 animate-pulse shrink-0"></span>
-                                      <span>{locked.toFixed(2)} {coin.symbol} Invested</span>
-                                    </span>
-                                  </div>
-                                )}
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  <span className={`inline-flex items-center gap-1 px-1.5 sm:px-2 py-0.5 rounded-md font-black text-[9px] sm:text-[10px] font-mono tracking-wide whitespace-nowrap ${
+                                    isLightTheme 
+                                      ? 'bg-emerald-100/90 text-emerald-800 border border-emerald-300/60' 
+                                      : 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25'
+                                  }`}>
+                                    {dailyRate}% daily profit
+                                  </span>
+                                  <span className={`inline-flex items-center gap-1 px-1.5 sm:px-2 py-0.5 rounded-md font-black text-[9px] sm:text-[10px] font-mono tracking-wide whitespace-nowrap ${
+                                    isLightTheme 
+                                      ? 'bg-teal-100/90 text-teal-900 border border-teal-300/60' 
+                                      : 'bg-teal-500/20 text-teal-300 border border-teal-500/30'
+                                  }`}>
+                                    <Sparkles size={10} className={isLightTheme ? 'text-teal-700' : 'text-teal-300'} />
+                                    {winRate}% Win Ratio
+                                  </span>
+                                </div>
                               </div>
                             </div>
 
-                            {/* Actions footer */}
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setSelectedCoinForInvestment(coin);
-                                setInvestmentAmount('');
-                                setMmfSubView('form');
-                                setInvestmentError(null);
-                                setInvestmentSuccess(null);
-                              }}
-                              className={`w-full py-2 rounded-xl text-[10px] font-black uppercase tracking-wider shadow-md active:scale-95 transition-all cursor-pointer text-center ${
-                                isLightTheme 
-                                  ? 'bg-gradient-to-tr from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-white' 
-                                  : 'bg-gradient-to-tr from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-slate-950'
-                              }`}
-                            >
-                              Invest
-                            </button>
+                            {/* Right Side: Available balance (top right) & TRADE button (bottom right) */}
+                            <div className="flex flex-col items-end gap-1 sm:gap-1.5 text-right shrink-0">
+                              <div>
+                                <span className={`text-[9px] sm:text-[10px] font-black uppercase tracking-tight sm:tracking-wider block whitespace-nowrap ${
+                                  isLightTheme ? 'text-amber-900/60' : 'text-zinc-400'
+                                }`}>
+                                  Available balance
+                                </span>
+                                <span className={`text-xs sm:text-sm font-black font-mono tracking-tight block whitespace-nowrap ${
+                                  isLightTheme ? 'text-zinc-900' : 'text-zinc-100'
+                                }`}>
+                                  {unlocked.toFixed(4)} <span className={`text-[9px] sm:text-[10px] font-bold ${isLightTheme ? 'text-amber-800/80' : 'text-zinc-400'}`}>{coin.symbol}</span>
+                                </span>
+                                {locked > 0 && (
+                                  <span className={`inline-flex items-center gap-1 mt-0.5 text-[8px] sm:text-[9px] font-extrabold block whitespace-nowrap ${
+                                    isLightTheme ? 'text-amber-800/90' : 'text-amber-400'
+                                  }`}>
+                                    ({locked.toFixed(2)} {coin.symbol} Traded)
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* TRADE Button */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedCoinForInvestment(coin);
+                                  setInvestmentAmount('');
+                                  setMmfSubView('form');
+                                  setInvestmentError(null);
+                                  setInvestmentSuccess(null);
+                                }}
+                                className={`px-3.5 sm:px-5 py-1 sm:py-1.5 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider shadow-md active:scale-95 transition-all cursor-pointer text-center whitespace-nowrap ${
+                                  isLightTheme 
+                                    ? 'bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-white shadow-amber-500/20' 
+                                    : 'bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-slate-950 shadow-emerald-500/20'
+                                }`}
+                              >
+                                TRADE
+                              </button>
+                            </div>
                           </div>
                         );
                       })}
                     </div>
 
-                    {/* Display Active/Completed Investments */}
+                    {/* Display Active/Completed Signal Trades */}
                     {activeInvestments.length > 0 && (
                       <div className={`space-y-3 pt-4 border-t ${isLightTheme ? 'border-zinc-200/60' : 'border-slate-850'}`}>
                         <div className="flex justify-between items-center select-none">
                           <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
                             <History size={12} className="text-zinc-400" />
-                            MMF Investment History
+                            Verified Signal History
                           </h4>
                         </div>
                         <div className="space-y-3.5 max-h-[380px] overflow-y-auto pr-1">
@@ -4600,132 +4671,143 @@ export default function StandardUserDashboard({
                             const createdDate = inv.createdAt?.toDate ? inv.createdAt.toDate().toLocaleDateString() : new Date(inv.createdAt).toLocaleDateString();
                             const unlockDate = inv.unlockAt?.toDate ? inv.unlockAt.toDate().toLocaleDateString() : new Date(inv.unlockAt).toLocaleDateString();
                             const isCompleted = inv.status === 'completed';
-                            const progressPercentage = Math.min(100, (((inv.daysPaid ?? 0) / (inv.totalDays ?? 5)) * 100));
+                            const progressPercentage = Math.min(100, (((inv.daysPaid ?? 0) / (inv.totalDays ?? 24)) * 100));
                             const dailyEarning = inv.amount * (inv.dailyRate / 100);
                             const totalEarned = (inv.daysPaid ?? 0) * dailyEarning;
+                            const targetYield = dailyEarning * (inv.totalDays ?? 24);
 
                             return (
                               <div 
                                 key={inv.id} 
-                                className={`group p-4 rounded-2xl border transition-all duration-300 relative overflow-hidden select-none ${
+                                className={`group p-4 sm:p-5 rounded-2xl border transition-all duration-300 relative overflow-hidden select-none ${
                                   isCompleted 
                                     ? isLightTheme
-                                      ? 'bg-[#FFF8E1]/40 border-zinc-200/80 hover:border-zinc-300'
-                                      : 'bg-slate-900/30 border-slate-850/60 hover:border-slate-800' 
+                                      ? 'bg-zinc-50/70 border-zinc-200/80 hover:border-zinc-300'
+                                      : 'bg-zinc-900/40 border-zinc-800/60 hover:border-zinc-800' 
                                     : isLightTheme
-                                      ? 'bg-[#FFF8E1] border-amber-300/90 shadow-[0_0_10px_rgba(245,158,11,0.08)] hover:border-amber-400'
-                                      : 'bg-gradient-to-br from-slate-900 via-slate-900/90 to-zinc-950 border-emerald-500/10 hover:border-emerald-500/25 hover:shadow-lg hover:shadow-emerald-950/10'
+                                      ? 'bg-white border-amber-300/80 shadow-[0_4px_20px_rgba(245,158,11,0.06)] hover:border-amber-400'
+                                      : 'bg-gradient-to-br from-zinc-900 via-zinc-900/90 to-zinc-950 border-teal-500/20 hover:border-teal-500/40 hover:shadow-lg hover:shadow-teal-950/20'
                                 }`}
                               >
-                                {/* Active subtle glowing indicator */}
-                                {!isCompleted && (
-                                  <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-emerald-500 to-teal-400" />
-                                )}
+                                {/* Active subtle glowing indicator bar on left side */}
+                                <div className={`absolute top-0 left-0 w-1.5 h-full ${
+                                  isCompleted 
+                                    ? (isLightTheme ? 'bg-zinc-300' : 'bg-zinc-700')
+                                    : 'bg-gradient-to-b from-emerald-400 via-teal-500 to-emerald-600'
+                                }`} />
 
-                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                                  {/* Left side: Principal & Rate info */}
-                                  <div className="space-y-2">
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                      <div className="flex items-center gap-1.5">
-                                        <div className={`p-1.5 rounded-lg ${
-                                          isCompleted 
-                                            ? (isLightTheme ? 'bg-zinc-100 text-zinc-400' : 'bg-zinc-850/50 text-zinc-500') 
-                                            : (isLightTheme ? 'bg-emerald-50 text-emerald-600' : 'bg-emerald-500/10 text-emerald-400')
-                                        }`}>
-                                          <Coins size={14} />
+                                <div className="space-y-3 pl-1 sm:pl-1.5">
+                                  {/* Top Row: Coin Logo & Amount + Badges */}
+                                  <div className="flex flex-wrap items-center justify-between gap-2.5">
+                                    <div className="flex items-center gap-2.5">
+                                      <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center p-1.5 shrink-0 border ${
+                                        isLightTheme 
+                                          ? 'bg-zinc-100/90 border-zinc-200/80 shadow-2xs' 
+                                          : 'bg-zinc-800/80 border-zinc-700/80 shadow-2xs'
+                                      }`}>
+                                        <img 
+                                          src={getCoinLogoUrl(inv.coinSymbol)} 
+                                          alt={inv.coinSymbol} 
+                                          className="w-full h-full object-contain"
+                                          onError={(e) => {
+                                            (e.target as HTMLElement).style.display = 'none';
+                                          }}
+                                        />
+                                      </div>
+                                      <div>
+                                        <div className="flex items-center gap-1.5">
+                                          <span className={`font-black text-sm sm:text-base tracking-tight font-mono ${isLightTheme ? 'text-zinc-900' : 'text-zinc-100'}`}>
+                                            {inv.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 8 })}
+                                          </span>
+                                          <span className="text-xs font-black text-zinc-500">{inv.coinSymbol}</span>
                                         </div>
-                                        <span className={`font-extrabold text-xs tracking-tight font-mono ${isLightTheme ? 'text-zinc-800' : 'text-zinc-100'}`}>
-                                          {inv.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 8 })} {inv.coinSymbol}
+                                        <span className={`text-[10px] font-semibold block ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                                          Start: {createdDate} • End: {unlockDate}
                                         </span>
                                       </div>
-                                      <span className={`text-[10px] px-2 py-0.5 rounded-md font-extrabold font-mono tracking-wider border ${
+                                    </div>
+
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <span className={`text-[10px] sm:text-[11px] px-2.5 py-0.5 rounded-md font-black font-mono tracking-wide border shadow-2xs ${
                                         isLightTheme 
-                                          ? 'bg-emerald-50 border-emerald-200 text-emerald-700' 
-                                          : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                                          ? 'bg-emerald-50 border-emerald-200 text-emerald-800' 
+                                          : 'bg-emerald-500/15 border-emerald-500/25 text-emerald-300'
                                       }`}>
                                         {inv.dailyRate}% Daily Profit
                                       </span>
-                                    </div>
-
-                                    {/* Date details */}
-                                    <div className="flex items-center gap-3 text-[10px] text-zinc-500 font-semibold">
-                                      <div className="flex items-center gap-1">
-                                        <span>Start:</span>
-                                        <span className={`font-mono ${isLightTheme ? 'text-zinc-600' : 'text-zinc-400'}`}>{createdDate}</span>
-                                      </div>
-                                      <span className={isLightTheme ? 'text-zinc-300 font-bold' : 'text-zinc-800 font-bold'}>•</span>
-                                      <div className="flex items-center gap-1">
-                                        <span>End:</span>
-                                        <span className={`font-mono ${isLightTheme ? 'text-zinc-600' : 'text-zinc-400'}`}>{unlockDate}</span>
-                                      </div>
-                                    </div>
-                                  </div>
-
-                                  {/* Right side: Status and accrued earnings */}
-                                  <div className={`flex sm:flex-col justify-between sm:text-right items-center sm:items-end gap-2.5 pt-3 sm:pt-0 border-t sm:border-t-0 ${
-                                    isLightTheme ? 'border-zinc-200/80' : 'border-slate-850/50'
-                                  }`}>
-                                    <div className="flex items-center gap-2">
                                       {isCompleted ? (
                                         <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md border ${
                                           isLightTheme 
                                             ? 'bg-zinc-100 text-zinc-500 border-zinc-200' 
-                                            : 'bg-zinc-800/40 text-zinc-400 border-zinc-800/50'
+                                            : 'bg-zinc-800/50 text-zinc-400 border-zinc-800'
                                         }`}>
                                           Completed
                                         </span>
                                       ) : (
-                                        <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md flex items-center gap-1 animate-pulse border ${
+                                        <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md flex items-center gap-1.5 border shadow-2xs ${
                                           isLightTheme 
-                                            ? 'bg-emerald-50 text-emerald-600 border-emerald-200' 
-                                            : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                            ? 'bg-teal-50 text-teal-800 border-teal-200' 
+                                            : 'bg-teal-500/15 text-teal-300 border-teal-500/30'
                                         }`}>
-                                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                                          Active
+                                          <span className="w-1.5 h-1.5 rounded-full bg-teal-500 animate-pulse" />
+                                          Active Signal
                                         </span>
                                       )}
                                     </div>
+                                  </div>
 
-                                    <div className="space-y-0.5">
-                                      <div className="text-[10px] text-zinc-500 font-bold flex items-center justify-end gap-1 font-mono">
-                                        <span>Daily:</span>
-                                        <span className={isLightTheme ? 'text-zinc-700 font-semibold' : 'text-zinc-300'}>+{dailyEarning.toFixed(4)} {inv.coinSymbol}</span>
-                                      </div>
-                                      <div className={`text-[10px] font-extrabold flex items-center justify-end gap-1 font-mono ${
-                                        isLightTheme ? 'text-emerald-700' : 'text-emerald-400'
+                                  {/* Middle Row: Earnings Breakdown Box */}
+                                  <div className={`p-2.5 sm:p-3 rounded-xl border flex flex-wrap items-center justify-between gap-2 text-xs font-mono ${
+                                    isLightTheme 
+                                      ? 'bg-zinc-50/90 border-zinc-200/80' 
+                                      : 'bg-zinc-950/60 border-zinc-800/80'
+                                  }`}>
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider">Daily Profit:</span>
+                                      <span className={`font-bold ${isLightTheme ? 'text-zinc-800' : 'text-zinc-200'}`}>
+                                        +{dailyEarning.toFixed(4)} {inv.coinSymbol}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider">Est. Total Profit:</span>
+                                      <span className={`px-2 py-0.5 rounded-md font-extrabold border ${
+                                        isLightTheme 
+                                          ? 'bg-amber-100/90 border-amber-300/80 text-amber-900' 
+                                          : 'bg-amber-500/20 border-amber-500/30 text-amber-300'
                                       }`}>
-                                        <span>Earned:</span>
-                                        <span className={`px-1.5 py-0.25 rounded border ${
-                                          isLightTheme 
-                                            ? 'bg-emerald-50 border-emerald-200 text-emerald-700' 
-                                            : 'bg-emerald-500/5 border-emerald-500/10'
-                                        }`}>
-                                          +{totalEarned.toFixed(4)} {inv.coinSymbol}
-                                        </span>
-                                      </div>
+                                        +{targetYield.toFixed(4)} {inv.coinSymbol}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider">Earned:</span>
+                                      <span className={`px-2 py-0.5 rounded-md font-extrabold border ${
+                                        isLightTheme 
+                                          ? 'bg-emerald-100/90 border-emerald-300/80 text-emerald-900' 
+                                          : 'bg-emerald-500/20 border-emerald-500/30 text-emerald-300'
+                                      }`}>
+                                        +{totalEarned.toFixed(4)} {inv.coinSymbol}
+                                      </span>
                                     </div>
                                   </div>
-                                </div>
 
-                                {/* Progress Bar Track & Bar */}
-                                <div className={`mt-3.5 pt-3 border-t ${
-                                  isLightTheme ? 'border-zinc-200/50' : 'border-slate-850/30'
-                                }`}>
-                                  <div className="flex justify-between items-center text-[10px] font-bold text-zinc-500 mb-1.5 select-none font-mono">
-                                    <span>Duration Progress</span>
-                                    <span className={isLightTheme ? 'text-zinc-700' : 'text-zinc-400'}>{inv.daysPaid ?? 0} / {inv.totalDays ?? 5} Days</span>
-                                  </div>
-                                  <div className={`w-full h-2 rounded-full overflow-hidden p-[2px] border ${
-                                    isLightTheme ? 'bg-[#FFF3D6] border-amber-200/60' : 'bg-slate-950 border-slate-900'
-                                  }`}>
-                                    <div 
-                                      className={`h-full rounded-full transition-all duration-500 ${
-                                        isCompleted 
-                                          ? 'bg-zinc-700' 
-                                          : 'bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.3)]'
-                                      }`}
-                                      style={{ width: `${progressPercentage}%` }}
-                                    />
+                                  {/* Bottom Row: Duration Progress Bar */}
+                                  <div className="space-y-1.5">
+                                    <div className="flex justify-between items-center text-[10px] font-bold select-none font-mono">
+                                      <span className={isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}>Signal Duration Progress</span>
+                                      <span className={isLightTheme ? 'text-zinc-800' : 'text-zinc-200'}>{inv.daysPaid ?? 0} / {inv.totalDays ?? 24} Days ({Math.round(progressPercentage)}%)</span>
+                                    </div>
+                                    <div className={`w-full h-2 rounded-full overflow-hidden p-[1px] border ${
+                                      isLightTheme ? 'bg-zinc-100 border-zinc-200' : 'bg-zinc-950 border-zinc-800'
+                                    }`}>
+                                      <div 
+                                        className={`h-full rounded-full transition-all duration-500 ${
+                                          isCompleted 
+                                            ? 'bg-zinc-400' 
+                                            : 'bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.4)]'
+                                        }`}
+                                        style={{ width: `${progressPercentage}%` }}
+                                      />
+                                    </div>
                                   </div>
                                 </div>
                               </div>
@@ -4754,10 +4836,10 @@ export default function StandardUserDashboard({
                       <div>
                         <h4 className={`text-xs font-black uppercase tracking-wider ${
                           isLightTheme ? 'text-zinc-800' : 'text-zinc-300'
-                        }`}>Configure MMF Investment</h4>
+                        }`}>Execute Trading Signal</h4>
                         <p className={`text-[10px] mt-0.5 ${
                           isLightTheme ? 'text-zinc-500' : 'text-zinc-500'
-                        }`}>Define your high-yield asset allocation</p>
+                        }`}>Allocate capital to execute verified automated trading signals</p>
                       </div>
                     </div>
 
@@ -4781,7 +4863,7 @@ export default function StandardUserDashboard({
                         <div>
                           <span className={`font-bold text-xs block ${
                             isLightTheme ? 'text-zinc-800' : 'text-zinc-200'
-                          }`}>{selectedCoinForInvestment.name} MMF</span>
+                          }`}>{selectedCoinForInvestment.name} Trading Signal</span>
                           <span className={`text-[10px] font-extrabold block mt-0.5 ${
                             isLightTheme ? 'text-emerald-700' : 'text-emerald-400'
                           }`}>
@@ -4790,7 +4872,7 @@ export default function StandardUserDashboard({
                           <span className={`text-[9px] font-bold block mt-1 ${
                             isLightTheme ? 'text-amber-700/95' : 'text-teal-400'
                           }`}>
-                            Minimum Investment: {selectedCoinForInvestment.minInvestment ?? 10.0} {selectedCoinForInvestment.symbol}
+                            Minimum Trade Amount: {selectedCoinForInvestment.minInvestment ?? 10.0} {selectedCoinForInvestment.symbol}
                           </span>
                         </div>
                       </div>
@@ -4809,7 +4891,7 @@ export default function StandardUserDashboard({
                     {/* Form Controls */}
                     <div className="space-y-4">
                       <div className="space-y-1.5">
-                        <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block">Investment Amount</label>
+                        <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block">Trade Amount</label>
                         <div className="relative">
                           <input
                             id="investment-amount-input"
@@ -4845,12 +4927,12 @@ export default function StandardUserDashboard({
                       </div>
 
                       <div className="space-y-1.5">
-                        <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block">Investment Duration (Days)</label>
+                        <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block">Signal Duration (Days)</label>
                         <input
                           id="investment-days-input"
                           type="number"
-                          min="5"
-                          placeholder="Minimum 5 days"
+                          min="24"
+                          placeholder="Minimum 24 days"
                           value={investmentDays}
                           onChange={(e) => {
                             setInvestmentDays(e.target.value);
@@ -4863,7 +4945,7 @@ export default function StandardUserDashboard({
                               : 'bg-slate-950 border-slate-800 focus:border-emerald-500 text-white'
                           }`}
                         />
-                        <p className={`text-[9px] ${isLightTheme ? 'text-zinc-600' : 'text-zinc-500'}`}>Minimum duration is 5 days. Daily earnings accrue instantly to your main account.</p>
+                        <p className={`text-[9px] ${isLightTheme ? 'text-zinc-600' : 'text-zinc-500'}`}>Minimum duration is 24 days. Daily signal profits accrue instantly to your main account.</p>
                       </div>
 
                       {/* Profit preview calculator */}
@@ -4882,9 +4964,9 @@ export default function StandardUserDashboard({
                           <div className={`flex justify-between items-center text-[10px] border-t pt-2 ${
                             isLightTheme ? 'border-amber-200/60' : 'border-slate-850/60'
                           }`}>
-                            <span className="text-zinc-500 font-bold uppercase tracking-wider">Total {parseInt(investmentDays) || 5} Days Yield</span>
+                            <span className="text-zinc-500 font-bold uppercase tracking-wider">Total {parseInt(investmentDays) || 24} Days Yield</span>
                             <span className={`font-bold font-mono ${isLightTheme ? 'text-emerald-700 font-extrabold' : 'text-emerald-400'}`}>
-                              +{(parseFloat(investmentAmount) * ((selectedCoinForInvestment.investmentRate ?? 5.0) / 100) * (parseInt(investmentDays) || 5)).toFixed(4)} {selectedCoinForInvestment.symbol}
+                              +{(parseFloat(investmentAmount) * ((selectedCoinForInvestment.investmentRate ?? 5.0) / 100) * (parseInt(investmentDays) || 24)).toFixed(4)} {selectedCoinForInvestment.symbol}
                             </span>
                           </div>
                         </div>
@@ -4922,7 +5004,7 @@ export default function StandardUserDashboard({
                         </div>
                       )}
 
-                      {/* Invest Submit button */}
+                      {/* Trade Submit button */}
                       <button
                         type="button"
                         disabled={investmentLoading || !investmentAmount || parseFloat(investmentAmount) <= 0}
@@ -4936,12 +5018,12 @@ export default function StandardUserDashboard({
                         {investmentLoading ? (
                           <>
                             <div className={`w-4 h-4 border-2 border-t-transparent rounded-full animate-spin ${isLightTheme ? 'border-white' : 'border-slate-950'}`}></div>
-                            <span>Locking Funds...</span>
+                            <span>Executing Signal...</span>
                           </>
                         ) : (
                           <>
                             <ShieldCheck size={14} />
-                            <span>Authorize Investment</span>
+                            <span>Execute Signal Trade</span>
                           </>
                         )}
                       </button>
@@ -4976,7 +5058,7 @@ export default function StandardUserDashboard({
             { id: 'home', label: 'Home', icon: Coins },
             { id: 'wallet', label: 'Wallet', icon: Wallet },
             { id: 'trade', label: 'Bot', icon: Bot },
-            { id: 'earn', label: 'Earn', icon: TrendingUp },
+            { id: 'earn', label: 'Signals', icon: TrendingUp },
             { id: 'history', label: 'History', icon: History }
           ] as const).map(tab => {
             const Icon = tab.icon;

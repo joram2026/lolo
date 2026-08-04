@@ -1074,7 +1074,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
             </div>
 
             <p className="text-xs text-zinc-550 leading-relaxed">
-              The 4-digit security PIN is required to authorize all P2P trades, token deposits, and secure cashouts.
+              The 4-digit security PIN is required to authorize all crypto withdrawals, token transfers, and secure cashouts.
             </p>
 
 

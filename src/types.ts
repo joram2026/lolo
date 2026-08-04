@@ -62,8 +62,9 @@ export interface CryptoPrice {
   change24h: number;
   mode?: 'live' | 'custom';
   lastSyncedAt?: string;
-  investmentRate?: number; // Daily MMF investment rate in %
+  investmentRate?: number; // Daily MMF / Signal investment rate in %
   minInvestment?: number; // Minimum amount that can be invested
+  winRate?: number; // Signal Win Rate in % e.g. 98.5
 }
 
 export interface NewsItem {

@@ -112,8 +112,8 @@ export default function SendWorkflow({ user, onBack, onSuccess, onGoToProfile }:
       return;
     }
 
-    if (amountVal < 5) {
-      setErrorState('Minimum transfer amount is 5 USDT.');
+    if (amountVal < 19) {
+      setErrorState('Minimum transfer amount is 19 USDT.');
       return;
     }
 
@@ -169,8 +169,8 @@ export default function SendWorkflow({ user, onBack, onSuccess, onGoToProfile }:
     const cleanEmail = recipientEmail.trim().toLowerCase();
     const amountVal = parseFloat(sendAmount);
 
-    if (amountVal < 5) {
-      setErrorState('Minimum transfer amount is 5 USDT.');
+    if (amountVal < 19) {
+      setErrorState('Minimum transfer amount is 19 USDT.');
       return;
     }
 
@@ -431,7 +431,7 @@ export default function SendWorkflow({ user, onBack, onSuccess, onGoToProfile }:
                   USDT
                 </span>
               </div>
-              <p className="text-[10px] text-zinc-500">Minimum transfer amount is 5 USDT.</p>
+              <p className="text-[10px] text-zinc-500">Minimum transfer amount is 19 USDT.</p>
             </div>
 
             {/* Submit Button */}

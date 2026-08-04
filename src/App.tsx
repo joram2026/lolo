@@ -8,6 +8,7 @@ import ProfileView from './components/ProfileView';
 import DepositWorkflow from './components/DepositWorkflow';
 import WithdrawalWorkflow from './components/WithdrawalWorkflow';
 import SendWorkflow from './components/SendWorkflow';
+import TxSuccessScreen from './components/TxSuccessScreen';
 import { seedFirestoreIfNeeded } from './seedData';
 import { syncLiveCryptoPrices } from './utils/cryptoApi';
 import { Sparkles, ArrowLeft, CheckCircle2, ShieldCheck, Heart } from 'lucide-react';
@@ -283,34 +284,10 @@ export default function App() {
       )}
 
       {path === '/tx_success' && (
-        <div id="success-screen-container" className="min-h-screen max-w-sm mx-auto flex flex-col items-center justify-center p-6 bg-[#FFF3D6] text-center font-sans">
-          <div className="w-16 h-16 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-500 flex items-center justify-center mb-5 shadow-lg shadow-amber-500/5">
-            <CheckCircle2 size={36} />
-          </div>
-
-          <h2 className="text-xl font-black text-zinc-800 tracking-tight">Request Submitted</h2>
-          <p className="text-xs text-zinc-600 mt-2.5 leading-relaxed">
-            {successMessage}
-          </p>
-
-          <div className="w-full bg-white border border-zinc-200/80 p-4 rounded-2xl text-left space-y-3 mt-6">
-            <div className="flex items-start gap-2.5 text-[11px] text-zinc-600 leading-normal">
-              <ShieldCheck size={16} className="text-amber-500 shrink-0 mt-0.5" />
-              <span>
-                <strong>Under Escrow:</strong> Status can be monitored in your <strong>Wallet</strong> tab history. Standard approvals take between 1 to 5 minutes during trading windows.
-              </span>
-            </div>
-          </div>
-
-          <button
-            id="back-to-wallet-dashboard"
-            onClick={() => navigate('/dashboard')}
-            className="w-full flex items-center justify-center gap-1.5 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600 rounded-xl text-xs font-bold transition-all shadow-md mt-8 cursor-pointer font-sans"
-          >
-            <ArrowLeft size={14} />
-            <span>Back to Wallet Dashboard</span>
-          </button>
-        </div>
+        <TxSuccessScreen
+          message={successMessage}
+          onBack={() => navigate('/dashboard')}
+        />
       )}
 
     </div>
