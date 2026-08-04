@@ -571,15 +571,19 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
                 {/* Display Name - Sign Up Only */}
                 {isSignUp && !isReset && (
                   <div className="space-y-1">
-                    <label className="text-xs font-semibold text-zinc-600">Display Name</label>
+                    <label htmlFor="auth-display-name" className="text-xs font-semibold text-zinc-600 cursor-pointer">Display Name</label>
                     <div className="relative">
-                      <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-zinc-400">
+                      <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-zinc-400 pointer-events-none z-10">
                         <User size={15} />
                       </span>
                       <input
                         id="auth-display-name"
+                        name="displayName"
                         type="text"
                         required
+                        autoComplete="name"
+                        autoCapitalize="words"
+                        autoCorrect="off"
                         placeholder="John Doe"
                         value={displayName}
                         onChange={(e) => setDisplayName(e.target.value)}
@@ -589,12 +593,10 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
                   </div>
                 )}
 
-
-
                 {/* Country Dropdown - Sign Up Only */}
                 {isSignUp && !isReset && (
                   <div className="space-y-1 relative">
-                    <label className="text-xs font-semibold text-zinc-600">Country of Residence</label>
+                    <label htmlFor="auth-country-trigger" className="text-xs font-semibold text-zinc-600 cursor-pointer">Country of Residence</label>
                     
                     <button
                       id="auth-country-trigger"
@@ -661,15 +663,20 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
 
                 {/* Email Field */}
                 <div className="space-y-1">
-                  <label className="text-xs font-semibold text-zinc-600">Email Address</label>
+                  <label htmlFor="auth-email" className="text-xs font-semibold text-zinc-600 cursor-pointer">Email Address</label>
                   <div className="relative">
-                    <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-zinc-400">
+                    <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-zinc-400 pointer-events-none z-10">
                       <Mail size={15} />
                     </span>
                     <input
                       id="auth-email"
+                      name="email"
                       type="email"
                       required
+                      autoComplete="email"
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
                       placeholder="alex@gmail.com or personal"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
@@ -681,15 +688,17 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
                 {/* Phone Number - Sign Up Only */}
                 {isSignUp && !isReset && (
                   <div className="space-y-1">
-                    <label className="text-xs font-semibold text-zinc-600">Phone Number</label>
+                    <label htmlFor="auth-phone" className="text-xs font-semibold text-zinc-600 cursor-pointer">Phone Number</label>
                     <div className="relative">
-                      <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-zinc-400">
+                      <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-zinc-400 pointer-events-none z-10">
                         <Phone size={15} />
                       </span>
                       <input
                         id="auth-phone"
+                        name="phone"
                         type="tel"
                         required
+                        autoComplete="tel"
                         placeholder="+254 700 000000"
                         value={phone}
                         onChange={(e) => setPhone(e.target.value)}
@@ -704,16 +713,18 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
                   <>
                     {/* New Password */}
                     <div className="space-y-1">
-                      <label className="text-xs font-semibold text-zinc-600">New Password</label>
+                      <label htmlFor="auth-reset-new-password" className="text-xs font-semibold text-zinc-600 cursor-pointer">New Password</label>
                       <div className="relative">
-                        <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-zinc-400">
+                        <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-zinc-400 pointer-events-none z-10">
                           <Lock size={15} />
                         </span>
                         <input
                           id="auth-reset-new-password"
+                          name="newPassword"
                           type={showResetPassword ? 'text' : 'password'}
                           required
                           minLength={6}
+                          autoComplete="new-password"
                           placeholder="••••••••"
                           value={resetNewPassword}
                           onChange={(e) => setResetNewPassword(e.target.value)}
@@ -722,7 +733,7 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
                         <button
                           type="button"
                           onClick={() => setShowResetPassword(!showResetPassword)}
-                          className="absolute inset-y-0 right-0 flex items-center pr-3 text-zinc-400 hover:text-zinc-600 focus:outline-none cursor-pointer"
+                          className="absolute inset-y-0 right-0 flex items-center pr-3 text-zinc-400 hover:text-zinc-600 focus:outline-none cursor-pointer z-10"
                           title={showResetPassword ? "Hide password" : "Show password"}
                         >
                           {showResetPassword ? <EyeOff size={15} /> : <Eye size={15} />}
@@ -732,16 +743,18 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
 
                     {/* Confirm New Password */}
                     <div className="space-y-1">
-                      <label className="text-xs font-semibold text-zinc-600">Confirm New Password</label>
+                      <label htmlFor="auth-reset-confirm-password" className="text-xs font-semibold text-zinc-600 cursor-pointer">Confirm New Password</label>
                       <div className="relative">
-                        <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-zinc-400">
+                        <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-zinc-400 pointer-events-none z-10">
                           <Lock size={15} />
                         </span>
                         <input
                           id="auth-reset-confirm-password"
+                          name="confirmPassword"
                           type={showResetPassword ? 'text' : 'password'}
                           required
                           minLength={6}
+                          autoComplete="new-password"
                           placeholder="••••••••"
                           value={resetConfirmPassword}
                           onChange={(e) => setResetConfirmPassword(e.target.value)}
@@ -756,27 +769,29 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
                 {!isReset && (
                   <div className="space-y-1">
                     <div className="flex justify-between items-center">
-                      <label className="text-xs font-semibold text-zinc-600">Password</label>
+                      <label htmlFor="auth-password" className="text-xs font-semibold text-zinc-600 cursor-pointer">Password</label>
                       {!isSignUp && (
                         <button
                           id="auth-forgot-password"
                           type="button"
                           onClick={() => { navigate('/reset'); setError(null); }}
-                          className="text-[11px] font-medium text-amber-600 hover:text-amber-700 hover:underline"
+                          className="text-[11px] font-medium text-amber-600 hover:text-amber-700 hover:underline cursor-pointer"
                         >
                           Forgot?
                         </button>
                       )}
                     </div>
                     <div className="relative">
-                      <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-zinc-400">
+                      <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-zinc-400 pointer-events-none z-10">
                         <Lock size={15} />
                       </span>
                       <input
                         id="auth-password"
+                        name="password"
                         type={showPassword ? 'text' : 'password'}
                         required
                         minLength={6}
+                        autoComplete={isSignUp ? "new-password" : "current-password"}
                         placeholder="••••••••"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
@@ -785,7 +800,7 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
-                        className="absolute inset-y-0 right-0 flex items-center pr-3 text-zinc-400 hover:text-zinc-600 focus:outline-none cursor-pointer"
+                        className="absolute inset-y-0 right-0 flex items-center pr-3 text-zinc-400 hover:text-zinc-600 focus:outline-none cursor-pointer z-10"
                         title={showPassword ? "Hide password" : "Show password"}
                       >
                         {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
@@ -797,10 +812,15 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
                 {/* Referral Code - Sign Up Only */}
                 {isSignUp && !isReset && (
                   <div className="space-y-1">
-                    <label className="text-xs font-semibold text-zinc-600">Referral Code (Optional)</label>
+                    <label htmlFor="auth-referral" className="text-xs font-semibold text-zinc-600 cursor-pointer">Referral Code (Optional)</label>
                     <input
                       id="auth-referral"
+                      name="referral"
                       type="text"
+                      autoComplete="off"
+                      autoCapitalize="characters"
+                      autoCorrect="off"
+                      spellCheck={false}
                       placeholder="e.g. FRIEND50"
                       value={referral}
                       onChange={(e) => setReferral(e.target.value)}
