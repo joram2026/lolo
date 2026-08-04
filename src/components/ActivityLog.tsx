@@ -60,7 +60,7 @@ const FILTER_OPTIONS = [
   { value: 'sell', label: 'Sell Crypto' },
   { value: 'swap', label: 'Swap & Convert' },
   { value: 'referral', label: 'Referral Rewards' },
-  { value: 'investments', label: 'Crypto MMF' },
+  { value: 'investments', label: 'Trading Signals' },
 ] as const;
 
 export default function ActivityLog({ userId, isLightTheme = false }: ActivityLogProps) {
@@ -264,7 +264,7 @@ export default function ActivityLog({ userId, isLightTheme = false }: ActivityLo
         };
       case 'invested':
         return {
-          label: 'MMF Invested',
+          label: 'Trade Signal',
           isCredit: false,
           colorClass: isLightTheme ? 'text-amber-600 font-extrabold' : 'text-amber-500',
           bgClass: isLightTheme ? 'bg-amber-50 border border-amber-200 text-amber-600' : 'bg-amber-500/10 border-amber-500/15 text-amber-500',
@@ -272,7 +272,7 @@ export default function ActivityLog({ userId, isLightTheme = false }: ActivityLo
         };
       case 'investment_earning':
         return {
-          label: 'MMF Earning',
+          label: 'Signal Earning',
           isCredit: true,
           colorClass: isLightTheme ? 'text-emerald-700 font-extrabold' : 'text-emerald-400',
           bgClass: isLightTheme ? 'bg-emerald-50 border border-emerald-200 text-emerald-750' : 'bg-emerald-500/10 border-emerald-500/15 text-emerald-400',

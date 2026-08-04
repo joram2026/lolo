@@ -804,6 +804,8 @@ export default function StandardUserDashboard({
       case 'swap_crypto': return 'Swap / Convert';
       case 'internal_send': return 'Internal Send';
       case 'internal_receive': return 'Internal Receive';
+      case 'invested': return 'Trade Signal';
+      case 'investment_earning': return 'Signal Earning';
       default: return type;
     }
   };
@@ -1006,7 +1008,7 @@ export default function StandardUserDashboard({
             coinAmount: parseFloat(totalProfitInBatch.toFixed(6)),
             status: 'APPROVED',
             createdAt: new Date(),
-            paymentMessage: `Crypto MMF Earnings: Received +${parseFloat(totalProfitInBatch.toFixed(6))} ${inv.coinSymbol} daily profit yield (Days ${daysPaid + 1} to ${nextDaysPaid}).`
+            paymentMessage: `Trade Signal Yield: Received +${parseFloat(totalProfitInBatch.toFixed(6))} ${inv.coinSymbol} daily profit yield (Days ${daysPaid + 1} to ${nextDaysPaid}).`
           });
         }
       } catch (err) {
@@ -2274,23 +2276,26 @@ export default function StandardUserDashboard({
     return sum + dailyEarningCoin * (liveCoin ? liveCoin.price : 0);
   }, 0);
 
-  const isHideHeaderFooter = 
+  const isHideHeader = 
     Boolean(arbitrageGuideCoin) || 
-    (activeTab === 'earn' && mmfSubView === 'form') || 
     Boolean(activeRunningBot) || 
     (activeTab === 'trade' && botHubView !== 'menu');
+
+  const isHideFooter = 
+    isHideHeader || 
+    (activeTab === 'earn' && mmfSubView === 'form');
 
   return (
     <div 
       id="user-dashboard-root" 
       className={`min-h-screen font-sans transition-colors duration-300 ${
-        isHideHeaderFooter ? 'pb-10' : 'pb-28'
+        isHideFooter ? 'pb-10' : 'pb-28'
       } ${
         isLightTheme ? 'bg-[#FFF3D6] text-zinc-800' : 'bg-slate-900 text-zinc-100'
       }`}
     >
       {/* Top Header */}
-      {!isHideHeaderFooter && (
+      {!isHideHeader && (
         <header className={`px-4 py-4 border-b sticky top-0 backdrop-blur-md z-20 flex justify-between items-center transition-colors duration-300 ${
           isLightTheme 
             ? 'bg-[#FFF3D6]/85 border-zinc-200/80' 
@@ -5048,7 +5053,7 @@ export default function StandardUserDashboard({
       )}
 
       {/* STICKY BOTTOM NAVIGATION */}
-      {!isHideHeaderFooter && (
+      {!isHideFooter && (
         <footer className={`fixed bottom-0 left-0 right-0 z-30 px-4 py-2 flex justify-around max-w-md mx-auto border-t ${
           isLightTheme 
             ? 'bg-[#FFF3D6] border-zinc-200/80 shadow-[0_-4px_12px_rgba(0,0,0,0.03)]' 
