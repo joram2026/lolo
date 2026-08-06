@@ -9,7 +9,7 @@ if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js')
       .then((registration) => {
-        console.log('ARBITRAGE Service Worker registered with scope:', registration.scope);
+        console.log('MOREX Service Worker registered with scope:', registration.scope);
 
         // 1. Check for updates immediately on load
         registration.update().catch(err => console.log('SW update check failed:', err));
@@ -29,7 +29,7 @@ if ('serviceWorker' in navigator) {
         }, 1000 * 60 * 5);
       })
       .catch((error) => {
-        console.error('ARBITRAGE Service Worker registration failed:', error);
+        console.error('MOREX Service Worker registration failed:', error);
       });
 
     // 4. Listen for service worker controlling changes (signaling a new worker took control)

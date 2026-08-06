@@ -286,20 +286,20 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
               const referralsCount = referralsSnap.size;
 
               // Calculate reward based on tier milestones:
-              // < 5 referrals: Starter Tier ($0.50 USDT)
-              // 5 - 9 referrals: Bronze Tier ($0.55 USDT, +10% bonus)
-              // 10 - 19 referrals: Silver Tier ($0.60 USDT, +20% bonus)
-              // 20+ referrals: Gold Tier ($0.70 USDT, +40% bonus)
-              let rewardAmount = 0.50;
+              // < 7 referrals: Starter Tier ($0.10 USDT)
+              // 7 - 19 referrals: Bronze Tier ($0.20 USDT)
+              // 20 - 39 referrals: Silver Tier ($0.30 USDT)
+              // 40+ referrals: Gold Tier ($0.40 USDT)
+              let rewardAmount = 0.10;
               let tierName = 'Starter';
-              if (referralsCount >= 20) {
-                rewardAmount = 0.70;
+              if (referralsCount >= 40) {
+                rewardAmount = 0.40;
                 tierName = 'Gold';
-              } else if (referralsCount >= 10) {
-                rewardAmount = 0.60;
+              } else if (referralsCount >= 20) {
+                rewardAmount = 0.30;
                 tierName = 'Silver';
-              } else if (referralsCount >= 5) {
-                rewardAmount = 0.55;
+              } else if (referralsCount >= 7) {
+                rewardAmount = 0.20;
                 tierName = 'Bronze';
               }
 
@@ -489,7 +489,7 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
             <div className="relative w-20 h-20 rounded-3xl bg-white border border-zinc-200/80 p-2 shadow-xl flex items-center justify-center overflow-hidden">
               <img 
                 src="/icon.svg" 
-                alt="ARBITRAGE" 
+                alt="MOREX" 
                 className="w-full h-full object-contain transform group-hover:scale-105 transition-transform duration-500"
                 referrerPolicy="no-referrer"
               />
@@ -497,7 +497,7 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
               <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-zinc-950/5 to-transparent pointer-events-none"></div>
             </div>
           </div>
-          <h1 className="text-2xl font-black text-zinc-800 tracking-tight">ARBITRAGE Crypto</h1>
+          <h1 className="text-2xl font-black text-zinc-800 tracking-tight">MOREX Crypto</h1>
           <p className="text-xs text-zinc-500 mt-1 max-w-[260px] mx-auto">
             Start earning from crypto with the most favourable rates.
           </p>

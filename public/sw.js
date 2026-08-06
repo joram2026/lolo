@@ -1,5 +1,5 @@
-// Service Worker for ARBITRAGE PWA
-const CACHE_NAME = 'arbitrage-v3';
+// Service Worker for MOREX PWA
+const CACHE_NAME = 'morex-v1';
 const ASSETS = [
   '/',
   '/index.html',

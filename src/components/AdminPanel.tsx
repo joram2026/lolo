@@ -843,12 +843,48 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
         const txRef = doc(db, 'transactions', tx.id);
         const userRef = doc(db, 'users', tx.userId);
 
+        // --- STEP 1: ALL READS FIRST ---
         const userSnap = await transaction.get(userRef);
         if (!userSnap.exists()) {
           throw new Error('User account does not exist in our systems.');
         }
 
         const userData = userSnap.data();
+        const isFirstDeposit = !userData.hasMadeFirstDeposit;
+
+        // Read referral config
+        let config = referralConfig;
+        const configDocRef = doc(db, 'settings', 'referral_deposit_config');
+        const configSnap = await transaction.get(configDocRef);
+        if (configSnap.exists()) {
+          config = configSnap.data() as ReferralDepositConfig;
+        }
+
+        // Read referrer information if first deposit and referral source exists
+        let referrerUid: string | null = null;
+        let referrerRef: any = null;
+        let referrerData: any = null;
+
+        if (isFirstDeposit && userData.referralSource && userData.referralSource.trim().length > 0) {
+          const refCodeStr = userData.referralSource.trim().toUpperCase();
+          const refMappingRef = doc(db, 'referralCodes', refCodeStr);
+          const refMappingSnap = await transaction.get(refMappingRef);
+
+          if (refMappingSnap.exists()) {
+            const mappedUid = refMappingSnap.data().uid;
+            if (mappedUid && mappedUid !== tx.userId) {
+              const rRef = doc(db, 'users', mappedUid);
+              const rSnap = await transaction.get(rRef);
+              if (rSnap.exists()) {
+                referrerUid = mappedUid;
+                referrerRef = rRef;
+                referrerData = rSnap.data();
+              }
+            }
+          }
+        }
+
+        // --- STEP 2: ALL COMPUTATIONS & WRITES ONLY ---
         const currentBalance = userData.balance || 0;
         const currentHoldings: Record<string, number> = userData.holdings || {};
 
@@ -859,6 +895,7 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
 
         const depositAmountUSD = tx.amount || coinAmount || 0;
         let updatedBalance = currentBalance;
+        let updatedHoldings: Record<string, number> | null = null;
 
         if (coinSymbol === 'USDT' || tx.type === 'deposit_p2p' || !tx.coinSymbol) {
           // Permanently credit the user's USDT wallet balance
@@ -867,102 +904,80 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
           // Permanently credit the specific coin into user's holdings
           const currentCoinBalance = currentHoldings[coinSymbol] || 0;
           const newCoinBalance = parseFloat((currentCoinBalance + coinAmount).toFixed(8));
-          transaction.update(userRef, {
-            holdings: {
-              ...currentHoldings,
-              [coinSymbol]: newCoinBalance
-            }
-          });
+          updatedHoldings = {
+            ...currentHoldings,
+            [coinSymbol]: newCoinBalance
+          };
         }
 
         // --- FIRST DEPOSIT BONUS & REFERRAL COMMISSION LOGIC ---
-        const isFirstDeposit = !userData.hasMadeFirstDeposit;
+        if (isFirstDeposit && config && config.enabled && depositAmountUSD >= (config.minDepositThresholdUSD || 0)) {
+          // Determine reward percentages strictly from custom tier ranges
+          let referrerPct = 0;
+          let refereePct = 0;
 
-        if (isFirstDeposit) {
-          let config = referralConfig;
-          const configDocRef = doc(db, 'settings', 'referral_deposit_config');
-          const configSnap = await transaction.get(configDocRef);
-          if (configSnap.exists()) {
-            config = configSnap.data() as ReferralDepositConfig;
+          if (config.tiers && config.tiers.length > 0) {
+            const matchedTier = config.tiers.find(
+              t => depositAmountUSD >= t.minAmount && depositAmountUSD <= t.maxAmount
+            );
+            if (matchedTier) {
+              referrerPct = matchedTier.referrerPercent;
+              refereePct = matchedTier.refereePercent;
+            }
           }
 
-          if (config.enabled && depositAmountUSD >= (config.minDepositThresholdUSD || 0)) {
-            // Determine reward percentages strictly from custom tier ranges
-            let referrerPct = 0;
-            let refereePct = 0;
+          // 1. Referee Welcome Bonus
+          const welcomeBonusAmount = parseFloat(((depositAmountUSD * refereePct) / 100).toFixed(2));
+          if (welcomeBonusAmount > 0) {
+            updatedBalance = parseFloat((updatedBalance + welcomeBonusAmount).toFixed(2));
 
-            if (config.tiers && config.tiers.length > 0) {
-              const matchedTier = config.tiers.find(
-                t => depositAmountUSD >= t.minAmount && depositAmountUSD <= t.maxAmount
-              );
-              if (matchedTier) {
-                referrerPct = matchedTier.referrerPercent;
-                refereePct = matchedTier.refereePercent;
-              }
-            }
+            const welcomeTxRef = doc(collection(db, 'transactions'));
+            transaction.set(welcomeTxRef, {
+              id: welcomeTxRef.id,
+              userId: tx.userId,
+              userEmail: tx.userEmail,
+              type: 'welcome_bonus',
+              amount: welcomeBonusAmount,
+              status: 'APPROVED',
+              createdAt: serverTimestamp(),
+              paymentMessage: `First Deposit Welcome Bonus (${refereePct}% of $${depositAmountUSD.toFixed(2)} deposit)`
+            });
+          }
 
-            // 1. Referee Welcome Bonus
-            const welcomeBonusAmount = parseFloat(((depositAmountUSD * refereePct) / 100).toFixed(2));
-            if (welcomeBonusAmount > 0) {
-              updatedBalance = parseFloat((updatedBalance + welcomeBonusAmount).toFixed(2));
+          // 2. Referrer First Deposit Commission
+          if (referrerUid && referrerRef && referrerData) {
+            const commissionAmount = parseFloat(((depositAmountUSD * referrerPct) / 100).toFixed(2));
 
-              const welcomeTxRef = doc(collection(db, 'transactions'));
-              transaction.set(welcomeTxRef, {
-                id: welcomeTxRef.id,
-                userId: tx.userId,
-                userEmail: tx.userEmail,
-                type: 'welcome_bonus',
-                amount: welcomeBonusAmount,
+            if (commissionAmount > 0) {
+              const newReferrerBalance = parseFloat(((referrerData.balance || 0) + commissionAmount).toFixed(2));
+              transaction.update(referrerRef, { balance: newReferrerBalance });
+
+              const commissionTxRef = doc(collection(db, 'transactions'));
+              transaction.set(commissionTxRef, {
+                id: commissionTxRef.id,
+                userId: referrerUid,
+                userEmail: referrerData.email || 'Referrer',
+                type: 'first_deposit_commission',
+                amount: commissionAmount,
                 status: 'APPROVED',
                 createdAt: serverTimestamp(),
-                paymentMessage: `First Deposit Welcome Bonus (${refereePct}% of $${depositAmountUSD.toFixed(2)} deposit)`
+                paymentMessage: `Referral First Deposit Bonus (${referrerPct}% of $${depositAmountUSD.toFixed(2)} deposit by ${tx.userEmail})`
               });
-            }
-
-            // 2. Referrer First Deposit Commission
-            if (userData.referralSource && userData.referralSource.trim().length > 0) {
-              const refCodeStr = userData.referralSource.trim().toUpperCase();
-              const refMappingRef = doc(db, 'referralCodes', refCodeStr);
-              const refMappingSnap = await transaction.get(refMappingRef);
-
-              if (refMappingSnap.exists()) {
-                const referrerUid = refMappingSnap.data().uid;
-                if (referrerUid && referrerUid !== tx.userId) {
-                  const referrerRef = doc(db, 'users', referrerUid);
-                  const referrerSnap = await transaction.get(referrerRef);
-
-                  if (referrerSnap.exists()) {
-                    const referrerData = referrerSnap.data();
-                    const commissionAmount = parseFloat(((depositAmountUSD * referrerPct) / 100).toFixed(2));
-
-                    if (commissionAmount > 0) {
-                      const newReferrerBalance = parseFloat(((referrerData.balance || 0) + commissionAmount).toFixed(2));
-                      transaction.update(referrerRef, { balance: newReferrerBalance });
-
-                      const commissionTxRef = doc(collection(db, 'transactions'));
-                      transaction.set(commissionTxRef, {
-                        id: commissionTxRef.id,
-                        userId: referrerUid,
-                        userEmail: referrerData.email || 'Referrer',
-                        type: 'first_deposit_commission',
-                        amount: commissionAmount,
-                        status: 'APPROVED',
-                        createdAt: serverTimestamp(),
-                        paymentMessage: `Referral First Deposit Bonus (${referrerPct}% of $${depositAmountUSD.toFixed(2)} deposit by ${tx.userEmail})`
-                      });
-                    }
-                  }
-                }
-              }
             }
           }
         }
 
-        // Update user record with updated balance and set hasMadeFirstDeposit: true
-        transaction.update(userRef, {
+        // Prepare user updates payload
+        const userUpdatePayload: any = {
           balance: updatedBalance,
           hasMadeFirstDeposit: true
-        });
+        };
+        if (updatedHoldings) {
+          userUpdatePayload.holdings = updatedHoldings;
+        }
+
+        // Update user record with updated balance and set hasMadeFirstDeposit: true
+        transaction.update(userRef, userUpdatePayload);
 
         // Update transaction status to APPROVED
         transaction.update(txRef, {
@@ -1470,14 +1485,14 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
           <div className="w-8 h-8 rounded-lg bg-slate-950 border border-emerald-500/30 p-1 flex items-center justify-center overflow-hidden">
             <img 
               src="/icon.svg" 
-              alt="ARBITRAGE" 
+              alt="MOREX" 
               className="w-full h-full object-contain"
               referrerPolicy="no-referrer"
             />
           </div>
           <div>
             <h1 className="text-sm font-black tracking-tight flex items-center gap-1.5 text-zinc-100">
-              ARBITRAGE Admin Control
+              MOREX Admin Control
               <span className="text-[10px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded-full font-bold uppercase">love</span>
             </h1>
             <p className="text-[10px] text-zinc-500 font-medium">Secured Node Sandbox</p>
@@ -1535,7 +1550,7 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
           {activeTab === 'users' && (
             <div className="space-y-4">
               <div className="flex justify-between items-center">
-                <h2 className="text-sm font-black text-zinc-400 uppercase tracking-wider">ARBITRAGE Accounts Registered ({usersList.length})</h2>
+                <h2 className="text-sm font-black text-zinc-400 uppercase tracking-wider">MOREX Accounts Registered ({usersList.length})</h2>
                 <button 
                   onClick={() => loadAllData(true)} 
                   className="p-1 text-zinc-400 hover:text-white"

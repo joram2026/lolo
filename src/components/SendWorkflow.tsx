@@ -295,11 +295,11 @@ export default function SendWorkflow({ user, onBack, onSuccess, onGoToProfile }:
         
         <div>
           <h2 className="text-lg font-black tracking-tight text-zinc-800">
-            {step === 'form' ? 'ARBITRAGE USDT Send' : 'Authenticate Transfer'}
+            {step === 'form' ? 'MOREX USDT Send' : 'Authenticate Transfer'}
           </h2>
           <p className="text-xs text-zinc-500 font-medium">
             {step === 'form' 
-              ? 'Send USDT to your friends on ARBITRAGE at zero fees' 
+              ? 'Send USDT to your friends on MOREX at zero fees' 
               : `Confirm sending to ${foundRecipientName || recipientEmail}`}
           </p>
         </div>

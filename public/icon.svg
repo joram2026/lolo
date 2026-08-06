@@ -9,41 +9,41 @@
 
     <!-- Glowing outer Ring Gradient -->
     <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#f59e0b" stop-opacity="0.35"/>
-      <stop offset="50%" stop-color="#ea580c" stop-opacity="0.15"/>
+      <stop offset="0%" stop-color="#f59e0b" stop-opacity="0.45"/>
+      <stop offset="50%" stop-color="#ea580c" stop-opacity="0.2"/>
       <stop offset="100%" stop-color="#d97706" stop-opacity="0"/>
     </linearGradient>
 
-    <!-- Amber/Gold Ascent (Left part of A / Growth vector) -->
-    <linearGradient id="emeraldAscent" x1="0%" y1="100%" x2="50%" y2="0%">
+    <!-- Amber Gold Gradient for Left/Right Stems of M -->
+    <linearGradient id="mStemGrad" x1="0%" y1="100%" x2="0%" y2="0%">
       <stop offset="0%" stop-color="#78350f"/>
-      <stop offset="35%" stop-color="#f59e0b"/>
-      <stop offset="100%" stop-color="#fde047"/>
+      <stop offset="40%" stop-color="#d97706"/>
+      <stop offset="85%" stop-color="#f59e0b"/>
+      <stop offset="100%" stop-color="#fef08a"/>
     </linearGradient>
 
-    <!-- Orange/Bronze Descent (Right part of A / Trust vector) -->
-    <linearGradient id="indigoDescent" x1="100%" y1="100%" x2="50%" y2="0%">
-      <stop offset="0%" stop-color="#7c2d12"/>
-      <stop offset="35%" stop-color="#ea580c"/>
-      <stop offset="100%" stop-color="#fde047"/>
+    <!-- Vibrant Center Diagonal Gradient for M -->
+    <linearGradient id="mCenterGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fde047"/>
+      <stop offset="50%" stop-color="#ea580c"/>
+      <stop offset="100%" stop-color="#9a3412"/>
     </linearGradient>
 
-    <!-- Neon Amber/Gold Bridge Gradient (Horizontal connector) -->
-    <linearGradient id="mintBridge" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#ea580c" stop-opacity="0.3"/>
-      <stop offset="50%" stop-color="#fde047"/>
-      <stop offset="100%" stop-color="#f59e0b" stop-opacity="0.3"/>
+    <!-- Glowing Accents for MOREX X emblem -->
+    <linearGradient id="xAccentGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#f59e0b"/>
+      <stop offset="100%" stop-color="#fde047"/>
     </linearGradient>
 
     <!-- Premium Filters for Glow & Shadows -->
     <filter id="heavyShadow" x="-20%" y="-20%" width="140%" height="140%">
-      <feDropShadow dx="0" dy="14" stdDeviation="18" flood-color="#000000" flood-opacity="0.7"/>
+      <feDropShadow dx="0" dy="14" stdDeviation="18" flood-color="#000000" flood-opacity="0.75"/>
     </filter>
 
     <filter id="neonGlow" x="-30%" y="-30%" width="160%" height="160%">
-      <feGaussianBlur stdDeviation="10" result="blur"/>
+      <feGaussianBlur stdDeviation="8" result="blur"/>
       <feComponentTransfer in="blur" result="glow">
-        <feFuncA type="linear" slope="0.75"/>
+        <feFuncA type="linear" slope="0.8"/>
       </feComponentTransfer>
       <feMerge>
         <feMergeNode in="glow"/>
@@ -53,7 +53,7 @@
 
     <!-- Ambient Upper Lighting Overlay -->
     <radialGradient id="ambientLight" cx="50%" cy="20%" r="55%">
-      <stop offset="0%" stop-color="#f59e0b" stop-opacity="0.15"/>
+      <stop offset="0%" stop-color="#f59e0b" stop-opacity="0.2"/>
       <stop offset="100%" stop-color="#000000" stop-opacity="0"/>
     </radialGradient>
   </defs>
@@ -65,25 +65,17 @@
   <rect width="512" height="512" rx="124" fill="url(#ambientLight)"/>
 
   <!-- High-Tech Inner Glow Ring -->
-  <rect x="16" y="16" width="480" height="480" rx="108" fill="none" stroke="url(#ringGrad)" stroke-width="2" opacity="0.85"/>
-  <rect x="22" y="22" width="468" height="468" rx="102" fill="none" stroke="#1c1917" stroke-width="1.5" opacity="0.25"/>
+  <rect x="16" y="16" width="480" height="480" rx="108" fill="none" stroke="url(#ringGrad)" stroke-width="2.5" opacity="0.9"/>
+  <rect x="22" y="22" width="468" height="468" rx="102" fill="none" stroke="#1c1917" stroke-width="1.5" opacity="0.3"/>
 
-  <!-- Tech Dots Grid Pattern for Premium Geometric Depth -->
-  <g opacity="0.14">
+  <!-- Tech Dots Grid Pattern for Premium Depth -->
+  <g opacity="0.12">
     <circle cx="96" cy="96" r="2.5" fill="#f59e0b"/>
     <circle cx="160" cy="96" r="2.5" fill="#f59e0b"/>
     <circle cx="224" cy="96" r="2.5" fill="#f59e0b"/>
     <circle cx="288" cy="96" r="2.5" fill="#f59e0b"/>
     <circle cx="352" cy="96" r="2.5" fill="#f59e0b"/>
     <circle cx="416" cy="96" r="2.5" fill="#f59e0b"/>
-    <circle cx="96" cy="160" r="2.5" fill="#f59e0b"/>
-    <circle cx="416" cy="160" r="2.5" fill="#f59e0b"/>
-    <circle cx="96" cy="224" r="2.5" fill="#f59e0b"/>
-    <circle cx="416" cy="224" r="2.5" fill="#f59e0b"/>
-    <circle cx="96" cy="288" r="2.5" fill="#f59e0b"/>
-    <circle cx="416" cy="288" r="2.5" fill="#f59e0b"/>
-    <circle cx="96" cy="352" r="2.5" fill="#f59e0b"/>
-    <circle cx="416" cy="352" r="2.5" fill="#f59e0b"/>
     <circle cx="96" cy="416" r="2.5" fill="#f59e0b"/>
     <circle cx="160" cy="416" r="2.5" fill="#f59e0b"/>
     <circle cx="224" cy="416" r="2.5" fill="#f59e0b"/>
@@ -92,73 +84,37 @@
     <circle cx="416" cy="416" r="2.5" fill="#f59e0b"/>
   </g>
 
-  <!-- Glowing Circular Tech Radar Orbits -->
-  <g opacity="0.22" stroke-dasharray="6 12">
-    <circle cx="256" cy="256" r="186" fill="none" stroke="#292524" stroke-width="1.5"/>
-    <circle cx="256" cy="256" r="144" fill="none" stroke="#44403c" stroke-width="1.5"/>
+  <!-- Glowing Orbit Lines -->
+  <g opacity="0.25" stroke-dasharray="8 14">
+    <circle cx="256" cy="256" r="180" fill="none" stroke="#f59e0b" stroke-width="1.5"/>
   </g>
 
-  <!-- Main Dynamic Interlocking "A" Symbol with Premium 3D depth -->
+  <!-- Main Dynamic MOREX 'M' Symbol -->
   <g filter="url(#heavyShadow)">
-    
-    <!-- Bronze Descent Curve (Right loop sweeping under) -->
-    <path d="M 374,364
-             C 414,314 414,234 364,184
-             C 324,144 274,124 256,124
-             L 256,169
-             C 265,169 300,184 330,214
-             C 365,249 365,304 330,339
-             Z" 
-          fill="url(#indigoDescent)"/>
+    <!-- Left Vertical Stem -->
+    <path d="M 112,380 L 112,142 C 112,130 124,122 135,127 L 176,148 C 182,151 186,157 186,164 L 186,380 Z" fill="url(#mStemGrad)"/>
 
-    <!-- Gold Ascent Curve (Left loop sweeping over) -->
-    <path d="M 138,364
-             C 98,314 98,234 148,184
-             C 188,144 238,124 256,124
-             L 256,169
-             C 247,169 212,184 182,214
-             C 147,249 147,304 182,339
-             Z" 
-          fill="url(#emeraldAscent)"/>
+    <!-- Right Vertical Stem -->
+    <path d="M 400,380 L 400,142 C 400,130 388,122 377,127 L 336,148 C 330,151 326,157 326,164 L 326,380 Z" fill="url(#mStemGrad)"/>
 
-    <!-- High-Performance Growth Spear (Left pillar shooting up to peak) -->
-    <path d="M 154,374 
-             L 245,158 
-             L 277,168 
-             L 186,384 
-             Z" 
-          fill="url(#emeraldAscent)"
-          filter="url(#neonGlow)"/>
+    <!-- Left Diagonal Fold into Peak Center -->
+    <path d="M 186,164 L 256,310 L 226,350 L 140,172 Z" fill="url(#mCenterGrad)"/>
 
-    <!-- High-Performance Trust Spear (Right pillar anchoring the balance) -->
-    <path d="M 358,374 
-             L 267,158 
-             L 235,168 
-             L 326,384 
-             Z" 
-          fill="url(#indigoDescent)"/>
+    <!-- Right Diagonal Fold into Peak Center -->
+    <path d="M 326,164 L 256,310 L 286,350 L 372,172 Z" fill="url(#mCenterGrad)"/>
 
-    <!-- The Spearhead Arrow at the top peak, indicating extreme upward motion -->
-    <polygon points="256,90 288,144 224,144" fill="#f59e0b" filter="url(#neonGlow)"/>
-    <polygon points="256,106 276,139 236,139" fill="#ffffff"/>
+    <!-- Dynamic Central Crystal Diamond Drop Peak (X Core) -->
+    <polygon points="256,150 292,225 256,300 220,225" fill="url(#xAccentGrad)" filter="url(#neonGlow)"/>
+    <polygon points="256,165 280,225 256,285 232,225" fill="#ffffff"/>
 
-    <!-- Glowing Middle Arbitrage Bridge (The horizontal bar of the 'A') -->
-    <rect x="176" y="270" width="160" height="12" rx="6" fill="url(#mintBridge)" filter="url(#neonGlow)"/>
-    <rect x="206" y="273" width="100" height="6" rx="3" fill="#ffffff"/>
+    <!-- Glowing Base Connector Bar -->
+    <rect x="120" y="364" width="272" height="16" rx="8" fill="url(#xAccentGrad)" filter="url(#neonGlow)"/>
+    <rect x="180" y="368" width="152" height="8" rx="4" fill="#ffffff"/>
   </g>
 
-  <!-- Glossy Glass Reflection Overlay for App Store Finish -->
-  <path d="M 24,24 
-           C 140,24 230,62 302,122 
-           C 374,182 432,282 488,400
-           C 488,180 450,24 256,24
-           Z" 
-        fill="#ffffff" 
-        opacity="0.045" />
-        
-  <!-- Glowing Interactive Activity Nodes (Micro Dots) -->
-  <circle cx="256" cy="276" r="4.5" fill="#ffffff" filter="url(#neonGlow)"/>
-  <circle cx="170" cy="379" r="5" fill="#fde047" filter="url(#neonGlow)"/>
-  <circle cx="342" cy="379" r="5" fill="#ea580c" filter="url(#neonGlow)"/>
-  <circle cx="256" cy="122" r="3.5" fill="#fef08a" opacity="0.95"/>
+  <!-- Gloss Overlay -->
+  <path d="M 24,24 C 140,24 230,62 302,122 C 374,182 432,282 488,400 C 488,180 450,24 256,24 Z" fill="#ffffff" opacity="0.045" />
+
+  <!-- Glowing Energy Core Node -->
+  <circle cx="256" cy="225" r="7" fill="#ffffff" filter="url(#neonGlow)"/>
 </svg>

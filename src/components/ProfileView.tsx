@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { UserAccount } from '../types';
+import { UserAccount, ReferralDepositConfig } from '../types';
 import { db, auth } from '../firebase';
 import { doc, getDoc, updateDoc, collection, query, where, getDocs, setDoc } from 'firebase/firestore';
 import { updateProfile } from 'firebase/auth';
@@ -117,6 +117,21 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
   // Referral list states
   const [referredUsers, setReferredUsers] = useState<any[]>([]);
   const [loadingReferred, setLoadingReferred] = useState(false);
+  const [refConfig, setRefConfig] = useState<ReferralDepositConfig | null>(null);
+
+  useEffect(() => {
+    async function fetchReferralConfig() {
+      try {
+        const snap = await getDoc(doc(db, 'settings', 'referral_deposit_config'));
+        if (snap.exists()) {
+          setRefConfig(snap.data() as ReferralDepositConfig);
+        }
+      } catch (err) {
+        console.error('Error fetching referral deposit config:', err);
+      }
+    }
+    fetchReferralConfig();
+  }, []);
   const [deactivating, setDeactivating] = useState(false);
   const [deactivateCode, setDeactivateCode] = useState('');
   const [deactivateError, setDeactivateError] = useState<string | null>(null);
@@ -263,6 +278,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
             uid: docSnap.id,
             displayName: uData.displayName || 'Anonymous User',
             email: uData.email || '',
+            phone: uData.phone || uData.phoneNumber || '',
             hasMadeFirstDeposit: uData.hasMadeFirstDeposit || false,
             createdAt: uData.createdAt ? uData.createdAt.toDate() : new Date(),
           });
@@ -366,8 +382,8 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
   const triggerFileDownload = () => {
     try {
       const a = document.createElement('a');
-      a.href = '/ARBITRAGE.apk';
-      a.download = 'ARBITRAGE.apk';
+      a.href = '/MOREX.apk';
+      a.download = 'MOREX.apk';
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -411,7 +427,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
         if (prog < 25) {
           setInstallStatusText('Establishing secure data stream...');
         } else if (prog < 60) {
-          setInstallStatusText('Downloading ARBITRAGE app bundle (3.44 MB)...');
+          setInstallStatusText('Downloading MOREX app bundle (3.44 MB)...');
         } else {
           setInstallStatusText('Verifying package security integrity...');
         }
@@ -774,168 +790,184 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
           </div>
 
           <div id="referral-program-section" className="space-y-4 text-left">
-            {/* Promo / Motivation Banner */}
-            <div className="bg-gradient-to-br from-amber-500/10 via-[#FFF8E1] to-[#FFF8E1] border border-amber-200/85 rounded-2xl p-4 relative overflow-hidden shadow-sm">
-              <div className="absolute top-0 right-0 p-3 opacity-15">
-                <Gift className="text-amber-500" size={80} />
-              </div>
-              <div className="space-y-1 relative z-10">
-                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-700 text-[10px] font-bold uppercase tracking-wider border border-amber-500/20">
-                  <Sparkles size={11} className="animate-pulse" /> Limited Time Event
-                </div>
-                <h3 className="text-base font-bold text-zinc-800 pt-1">Earn 0.50 USDT per Invite!</h3>
-                <p className="text-xs text-zinc-600 leading-relaxed max-w-[85%]">
-                  Get paid instantly when your friends register using your link or code. Unlimited rewards, credited directly to your account.
-                </p>
-                <div className="flex gap-4 pt-3 text-[11px] text-zinc-500 font-medium">
-                  <div className="flex items-center gap-1">
-                    <CheckCircle2 size={12} className="text-amber-500" />
-                    <span>Instant Credit</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <CheckCircle2 size={12} className="text-amber-500" />
-                    <span>Zero Caps</span>
-                  </div>
-                </div>
-              </div>
-            </div>
+            {/* 1. FIRST DEPOSIT CASH COMMISSION BADGE (MOVED TO TOP) */}
+            {(() => {
+              const activeTiers = (refConfig?.tiers && refConfig.tiers.length > 0) ? refConfig.tiers : [
+                { id: 'tier-1', minAmount: 10, maxAmount: 99.99, referrerPercent: 5, refereePercent: 10 },
+                { id: 'tier-2', minAmount: 100, maxAmount: 499.99, referrerPercent: 7, refereePercent: 12 },
+                { id: 'tier-3', minAmount: 500, maxAmount: 10000, referrerPercent: 10, refereePercent: 15 },
+              ];
+              const isEnabled = refConfig ? refConfig.enabled : true;
+              if (!isEnabled) return null;
 
-            {/* Referral Earnings & Stats Card */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="bg-[#FFF8E1] border border-zinc-200/80 shadow-sm rounded-2xl p-4 flex flex-col justify-between">
+              const gridColsClass = activeTiers.length === 1 ? 'grid-cols-1' : activeTiers.length === 2 ? 'grid-cols-2' : activeTiers.length === 4 ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3';
+
+              return (
+                <div id="referee-first-deposit-commission-badge" className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-br from-zinc-900 via-zinc-900 to-amber-950 border border-amber-500/40 text-white shadow-sm relative overflow-hidden space-y-3 text-left">
+                  <div className="absolute -right-4 -bottom-4 opacity-15 pointer-events-none">
+                    <Sparkles size={110} className="text-amber-400" />
+                  </div>
+                  <div className="relative z-10 space-y-2.5">
+                    <div className="flex flex-col xs:flex-row xs:items-center justify-between gap-1.5">
+                      <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider border border-amber-500/30 w-fit">
+                        <Sparkles size={11} className="animate-pulse" /> First Deposit Cash Commission
+                      </div>
+                      <span className="text-[10px] sm:text-xs text-amber-200/80 font-medium">Instant Credit</span>
+                    </div>
+                    
+                    <div>
+                      <h3 className="text-xs sm:text-sm font-black text-amber-300">Earn Cash On Your Referees' First Deposit!</h3>
+                      <p className="text-[10px] sm:text-[11px] text-zinc-300 leading-relaxed mt-0.5">
+                        When your invited friends make their first deposit, you automatically receive a direct percentage cash bonus added to your wallet:
+                      </p>
+                    </div>
+
+                    {/* Dynamic Tier Cards from Backend Config */}
+                    <div className={`grid ${gridColsClass} gap-1.5 sm:gap-2 pt-1`}>
+                      {activeTiers.map((tier, idx) => (
+                        <div key={tier.id || idx} className="bg-zinc-950/80 border border-amber-500/30 rounded-xl p-2 sm:p-2.5 text-center">
+                          <span className="block text-[8px] sm:text-[9px] text-zinc-400 font-bold uppercase tracking-wider truncate">
+                            ${tier.minAmount} – {tier.maxAmount >= 9999 ? 'Above' : `$${tier.maxAmount}`}
+                          </span>
+                          <span className="block text-xs sm:text-sm font-black text-amber-400 font-mono mt-0.5">
+                            +{tier.referrerPercent}% Cash
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* 2. REFERRAL EARNINGS & STATS CARD */}
+            <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
+              <div className="bg-[#FFF8E1] border border-zinc-200/80 shadow-sm rounded-2xl p-3.5 sm:p-4 flex flex-col justify-between">
                 <div>
-                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Total Earned</span>
+                  <span className="text-[9px] sm:text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Total Earned</span>
                   <div className="mt-1 flex items-baseline gap-1">
-                    <span className="text-2xl font-bold text-amber-600 font-mono">
+                    <span className="text-xl sm:text-2xl font-bold text-amber-600 font-mono">
                       {(() => {
                         let total = 0;
                         for (let i = 1; i <= referredUsers.length; i++) {
-                          if (i >= 20) total += 0.70;
-                          else if (i >= 10) total += 0.60;
-                          else if (i >= 5) total += 0.55;
-                          else total += 0.50;
+                          if (i >= 40) total += 0.40;
+                          else if (i >= 20) total += 0.30;
+                          else if (i >= 7) total += 0.20;
+                          else total += 0.10;
                         }
                         return total.toFixed(2);
                       })()}
                     </span>
-                    <span className="text-xs text-zinc-450 font-bold">USDT</span>
+                    <span className="text-[10px] sm:text-xs text-zinc-500 font-bold">USDT</span>
                   </div>
                 </div>
-                <p className="text-[10px] text-zinc-500 mt-2">Paid directly to your balance</p>
+                <p className="text-[9px] sm:text-[10px] text-zinc-500 mt-2">Paid directly to your balance</p>
               </div>
 
-              <div className="bg-[#FFF8E1] border border-zinc-200/80 shadow-sm rounded-2xl p-4 flex flex-col justify-between">
+              <div className="bg-[#FFF8E1] border border-zinc-200/80 shadow-sm rounded-2xl p-3.5 sm:p-4 flex flex-col justify-between">
                 <div>
-                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Successful Invites</span>
+                  <span className="text-[9px] sm:text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Successful Invites</span>
                   <div className="mt-1 flex items-baseline gap-1">
-                    <span className="text-2xl font-bold text-zinc-800 font-mono">{referredUsers.length}</span>
-                    <span className="text-xs text-zinc-500 font-bold ml-1">friends</span>
+                    <span className="text-xl sm:text-2xl font-bold text-zinc-800 font-mono">{referredUsers.length}</span>
+                    <span className="text-[10px] sm:text-xs text-zinc-500 font-bold ml-1">friends</span>
                   </div>
                 </div>
-                <p className="text-[10px] text-zinc-500 mt-2">Keep growing your circle!</p>
+                <p className="text-[9px] sm:text-[10px] text-zinc-500 mt-2">Keep growing your circle!</p>
               </div>
             </div>
 
-            {/* Tier Milestone Progress Track */}
+            {/* 3. TIER MILESTONE PROGRESS TRACK */}
             {(() => {
               const count = referredUsers.length;
               
-              // Define intervals/milestones
-              // Starter (0), Bronze (5), Silver (10), Gold (20)
+              // Define progress percentage
               let progressPercent = 0;
-              if (count >= 20) {
+              if (count >= 40) {
                 progressPercent = 100;
-              } else if (count >= 10) {
-                progressPercent = 66.6 + ((count - 10) / 10) * 33.4;
-              } else if (count >= 5) {
-                progressPercent = 33.3 + ((count - 5) / 5) * 33.3;
+              } else if (count >= 20) {
+                progressPercent = 66.6 + ((count - 20) / 20) * 33.4;
+              } else if (count >= 7) {
+                progressPercent = 33.3 + ((count - 7) / 13) * 33.3;
               } else {
-                progressPercent = (count / 5) * 33.3;
+                progressPercent = (count / 7) * 33.3;
               }
 
+              const milestones = [
+                { label: 'Starter', min: 0, amount: '0.10 USDT', badge: '✓', achieved: true },
+                { label: 'Bronze', min: 7, amount: '0.20 USDT', badge: count >= 7 ? '✓' : '7', achieved: count >= 7 },
+                { label: 'Silver', min: 20, amount: '0.30 USDT', badge: count >= 20 ? '✓' : '20', achieved: count >= 20 },
+                { label: 'Gold', min: 40, amount: '0.40 USDT', badge: count >= 40 ? '★' : '40', achieved: count >= 40 },
+              ];
+
               return (
-                <div className="bg-[#FFF8E1] border border-zinc-200/80 shadow-sm rounded-2xl p-5 space-y-6">
-                  <div className="flex justify-between items-center">
+                <div className="bg-[#FFF8E1] border border-zinc-200/80 shadow-sm rounded-2xl p-4 sm:p-5 space-y-4 text-left">
+                  {/* Top Header Row */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-amber-200/60 pb-3">
                     <div className="space-y-0.5">
-                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Your Referral Tier</span>
-                      <div className="flex items-center gap-2">
-                        <span className={`text-sm font-bold px-2 py-0.5 rounded-full ${
-                          count >= 20 ? 'bg-amber-500/10 text-amber-600 border border-amber-500/20' :
-                          count >= 10 ? 'bg-zinc-100 text-zinc-650 border border-zinc-200' :
-                          count >= 5 ? 'bg-orange-500/10 text-orange-600 border border-orange-500/20' :
+                      <span className="text-[9px] sm:text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Your Referral Tier</span>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={`text-xs sm:text-sm font-bold px-2.5 py-0.5 rounded-full ${
+                          count >= 40 ? 'bg-amber-500/10 text-amber-600 border border-amber-500/20' :
+                          count >= 20 ? 'bg-zinc-100 text-zinc-700 border border-zinc-200' :
+                          count >= 7 ? 'bg-orange-500/10 text-orange-600 border border-orange-500/20' :
                           'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'
                         }`}>
-                          {count >= 20 ? 'Gold Tier' : count >= 10 ? 'Silver Tier' : count >= 5 ? 'Bronze Tier' : 'Starter Tier'}
+                          {count >= 40 ? 'Gold Tier' : count >= 20 ? 'Silver Tier' : count >= 7 ? 'Bronze Tier' : 'Starter Tier'}
                         </span>
-                        <span className="text-xs text-zinc-500 font-medium">
-                          {count >= 20 ? 'Max Tier reached!' : 
-                           count >= 10 ? `${20 - count} more for Gold` : 
-                           count >= 5 ? `${10 - count} more for Silver` : 
-                           `${5 - count} more for Bronze`}
+                        <span className="text-[11px] sm:text-xs text-zinc-500 font-medium">
+                          {count >= 40 ? 'Max Tier reached!' : 
+                           count >= 20 ? `${40 - count} more for Gold` : 
+                           count >= 7 ? `${20 - count} more for Silver` : 
+                           `${7 - count} more for Bronze`}
                         </span>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Current Commission</span>
-                      <span className="text-sm font-bold text-emerald-600 font-mono">
-                        {count >= 20 ? '0.70 USDT' : count >= 10 ? '0.60 USDT' : count >= 5 ? '0.55 USDT' : '0.50 USDT'} / ref
+                    <div className="text-left sm:text-right">
+                      <span className="text-[9px] sm:text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Current Commission</span>
+                      <span className="text-xs sm:text-sm font-bold text-emerald-600 font-mono">
+                        {count >= 40 ? '0.40 USDT' : count >= 20 ? '0.30 USDT' : count >= 7 ? '0.20 USDT' : '0.10 USDT'} / ref
                       </span>
                     </div>
                   </div>
 
-                  {/* The Progress Bar Line */}
-                  <div className="relative pt-2 pb-10">
-                    {/* Track Background */}
-                    <div className="h-2 w-full bg-zinc-100 rounded-full overflow-hidden">
-                      {/* Active Progress */}
-                      <div 
-                        className="h-full bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-400 rounded-full transition-all duration-500"
-                        style={{ width: `${progressPercent}%` }}
-                      />
-                    </div>
-
-                    {/* Milestones nodes */}
-                    <div className="absolute top-0 left-0 w-full h-full">
-                      {/* Node 1: Starter */}
-                      <div className="absolute left-[0%] -translate-x-1/2 flex flex-col items-center">
-                        <div className="w-5 h-5 rounded-full border-2 flex items-center justify-center text-[9px] font-bold z-10 border-amber-500 bg-white text-amber-600">
-                          ✓
-                        </div>
-                        <span className="text-[9px] font-bold text-zinc-500 mt-1.5">Starter</span>
-                        <span className="text-[8px] text-zinc-400 font-mono">0.50 USDT</span>
+                  {/* Progress Track Section */}
+                  <div className="pt-2 pb-1 px-1">
+                    <div className="relative">
+                      {/* Background Connecting Line (Inset from edges so end nodes align cleanly) */}
+                      <div className="absolute top-2.5 left-[12.5%] right-[12.5%] h-1.5 bg-zinc-200/80 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-400 transition-all duration-500"
+                          style={{ width: `${progressPercent}%` }}
+                        />
                       </div>
 
-                      {/* Node 2: Bronze */}
-                      <div className="absolute left-[33.3%] -translate-x-1/2 flex flex-col items-center">
-                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center text-[9px] font-bold z-10 ${
-                          count >= 5 ? 'border-amber-500 bg-white text-amber-600' : 'border-zinc-200 bg-zinc-50 text-zinc-400'
-                        }`}>
-                          {count >= 5 ? '✓' : '5'}
-                        </div>
-                        <span className={`text-[9px] font-bold mt-1.5 ${count >= 5 ? 'text-zinc-650' : 'text-zinc-400'}`}>Bronze</span>
-                        <span className="text-[8px] text-zinc-400 font-mono">0.55 USDT</span>
-                      </div>
-
-                      {/* Node 3: Silver */}
-                      <div className="absolute left-[66.6%] -translate-x-1/2 flex flex-col items-center">
-                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center text-[9px] font-bold z-10 ${
-                          count >= 10 ? 'border-amber-500 bg-white text-amber-600' : 'border-zinc-200 bg-zinc-50 text-zinc-400'
-                        }`}>
-                          {count >= 10 ? '✓' : '10'}
-                        </div>
-                        <span className={`text-[9px] font-bold mt-1.5 ${count >= 10 ? 'text-zinc-650' : 'text-zinc-400'}`}>Silver</span>
-                        <span className="text-[8px] text-zinc-400 font-mono">0.60 USDT</span>
-                      </div>
-
-                      {/* Node 4: Gold */}
-                      <div className="absolute left-[100%] -translate-x-1/2 flex flex-col items-center">
-                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center text-[9px] font-bold z-10 ${
-                          count >= 20 ? 'border-amber-500 bg-white text-amber-600' : 'border-zinc-200 bg-zinc-50 text-zinc-400'
-                        }`}>
-                          {count >= 20 ? '★' : '20'}
-                        </div>
-                        <span className={`text-[9px] font-bold mt-1.5 ${count >= 20 ? 'text-amber-600' : 'text-zinc-400'}`}>Gold</span>
-                        <span className="text-[8px] text-zinc-400 font-mono">0.70 USDT</span>
+                      {/* Milestone Nodes Grid Row */}
+                      <div className="relative flex justify-between items-start">
+                        {milestones.map((m, idx) => (
+                          <div 
+                            key={idx} 
+                            className="flex flex-col items-center text-center z-10 w-1/4 px-0.5"
+                          >
+                            {/* Node Badge Circle */}
+                            <div className={`w-5 sm:w-6 h-5 sm:h-6 rounded-full border-2 flex items-center justify-center text-[9px] sm:text-[10px] font-bold shadow-xs transition-all ${
+                              m.achieved 
+                                ? 'border-amber-500 bg-amber-500 text-white' 
+                                : 'border-zinc-300 bg-white text-zinc-400'
+                            }`}>
+                              {m.badge}
+                            </div>
+                            
+                            {/* Labels */}
+                            <span className={`text-[9px] sm:text-[10px] font-bold mt-1.5 whitespace-nowrap ${
+                              m.achieved ? 'text-zinc-800' : 'text-zinc-400'
+                            }`}>
+                              {m.label}
+                            </span>
+                            <span className="text-[8px] sm:text-[9px] text-zinc-500 font-mono font-medium whitespace-nowrap">
+                              {m.amount}
+                            </span>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   </div>
@@ -943,31 +975,37 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
               );
             })()}
 
-                 <div className="bg-[#FFF8E1] border border-zinc-200 shadow-sm rounded-2xl p-4 space-y-4">
-              {/* Referral Code Box */}
-              <div className="flex justify-between items-center text-xs">
-                <span className="text-zinc-500">Your Referral Code</span>
-                <span className="font-mono text-amber-600 font-bold tracking-wider text-sm">
-                  {(profile as any)?.uniqueCode || '-----'}
-                </span>
-              </div>
-
-              {/* Referral Link Box */}
-              <div className="space-y-1.5 border-t border-zinc-100 pt-3">
-                <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">
+            {/* 4. LINK COPIER AND REFERRED FRIENDS LIST */}
+            <div className="bg-[#FFF8E1] border border-zinc-200 shadow-sm rounded-2xl p-3.5 sm:p-4 space-y-4">
+              {/* Referral Link Box with Prominent Copy Button */}
+              <div className="space-y-1.5">
+                <label className="text-[9px] sm:text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">
                   Your Shareable Referral Link
                 </label>
-                <div className="flex gap-2 items-center bg-zinc-50 border border-zinc-200 p-2.5 rounded-xl font-mono text-xs">
-                  <span className="text-zinc-600 font-medium select-all truncate flex-1">
+                <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center bg-white/80 border border-zinc-200 p-2 sm:p-2.5 rounded-xl font-mono text-xs">
+                  <span className="text-zinc-700 font-medium select-all truncate flex-1 px-1 py-1 sm:py-0 text-[11px] sm:text-xs">
                     https://lolo-navy.vercel.app/#/signup?ref={(profile as any)?.uniqueCode || ''}
                   </span>
                   <button
                     type="button"
                     onClick={handleCopyReferral}
-                    className="p-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-500 hover:text-zinc-800 transition-colors cursor-pointer shrink-0"
-                    title="Copy Referral Link"
+                    className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-all cursor-pointer shrink-0 ${
+                      copiedReferral 
+                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white' 
+                        : 'bg-amber-500 hover:bg-amber-600 text-white'
+                    }`}
                   >
-                    {copiedReferral ? <Check size={14} className="text-emerald-600" /> : <Copy size={14} />}
+                    {copiedReferral ? (
+                      <>
+                        <Check size={14} className="stroke-[3]" />
+                        <span>Copied!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy size={14} />
+                        <span>Copy Link</span>
+                      </>
+                    )}
                   </button>
                 </div>
                 {copiedReferral && (
@@ -978,19 +1016,10 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
               </div>
 
               {/* Referred Users List */}
-              <div className="space-y-2 border-t border-zinc-100 pt-3">
-                <div className="flex justify-between items-center text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+              <div className="space-y-2 border-t border-zinc-200/80 pt-3">
+                <div className="flex justify-between items-center text-[9px] sm:text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
                   <span>Your Referred Friends ({referredUsers.length})</span>
                   {loadingReferred && <span className="text-zinc-400 animate-pulse font-normal lowercase">fetching...</span>}
-                </div>
-
-                {/* Encouraging Follow-up Tip */}
-                <div className="bg-amber-50 border border-amber-200/80 rounded-xl p-2.5 text-[10px] text-amber-900 leading-relaxed flex items-start gap-2">
-                  <span className="text-sm shrink-0">💡</span>
-                  <div>
-                    <span className="font-bold block">Follow up with your team!</span>
-                    Encourage your friends to make their first deposit. When they deposit, you automatically receive a percentage commission on their deposit amount!
-                  </div>
                 </div>
 
                 {loadingReferred ? (
@@ -998,38 +1027,26 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                     Loading referred users...
                   </div>
                 ) : referredUsers.length === 0 ? (
-                  <div className="text-center py-6 bg-zinc-50/50 border border-dashed border-zinc-200 rounded-xl text-xs text-zinc-400">
+                  <div className="text-center py-6 bg-white/50 border border-dashed border-zinc-200 rounded-xl text-xs text-zinc-400">
                     No friends have joined using your code yet.
                   </div>
                 ) : (
                   <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
                     {referredUsers.map((refUser) => {
-                      const parts = refUser.email.split('@');
-                      let obfuscatedEmail = refUser.email;
-                      if (parts.length === 2) {
-                        const namePart = parts[0];
-                        const domainPart = parts[1];
-                        if (namePart.length > 2) {
-                          obfuscatedEmail = `${namePart.substring(0, 2)}***@${domainPart}`;
-                        } else {
-                          obfuscatedEmail = `***@${domainPart}`;
-                        }
-                      }
-
                       return (
                         <div 
                           key={refUser.uid} 
-                          className="flex items-center justify-between bg-zinc-50/50 border border-zinc-150 p-2.5 rounded-xl text-xs hover:border-zinc-300 transition-colors"
+                          className="flex flex-col sm:flex-row sm:items-center justify-between bg-white/60 border border-zinc-200/80 p-2.5 rounded-xl text-xs gap-1.5 hover:border-zinc-300 transition-colors"
                         >
                           <div className="space-y-0.5 text-left">
-                            <p className="font-bold text-zinc-800 truncate max-w-[150px]">
+                            <p className="font-bold text-zinc-800 truncate max-w-[180px]">
                               {refUser.displayName}
                             </p>
-                            <p className="text-[10px] text-zinc-500 font-mono">
-                              {obfuscatedEmail}
+                            <p className="text-[11px] text-zinc-700 font-mono font-medium">
+                              {refUser.phone ? refUser.phone : 'No phone provided'}
                             </p>
                           </div>
-                          <div className="text-right flex flex-col items-end gap-0.5">
+                          <div className="text-left sm:text-right flex flex-row sm:flex-col items-center sm:items-end justify-between sm:justify-start gap-1">
                             <p className="text-[10px] text-zinc-400 font-mono">
                               Joined {refUser.createdAt.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
                             </p>
@@ -1348,7 +1365,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                   <span className="text-[10px] font-black text-zinc-500 uppercase tracking-wider block">1. Scan Google Authenticator QR Code</span>
                   <div className="flex justify-center p-3 bg-white border border-zinc-150 rounded-xl max-w-[170px] mx-auto shadow-inner">
                     <img 
-                      src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(`otpauth://totp/ARBITRAGE:${profile?.email || user.email}?secret=${temp2faSecret}&issuer=ARBITRAGE%20Crypto%20Escrow`)}`}
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(`otpauth://totp/MOREX:${profile?.email || user.email}?secret=${temp2faSecret}&issuer=MOREX%20Crypto%20Escrow`)}`}
                       alt="2FA QR Code"
                       className="w-36 h-36"
                       referrerPolicy="no-referrer"
@@ -1484,7 +1501,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
               <ShieldAlert size={18} className="text-amber-500 shrink-0 mt-0.5" />
               <div>
                 <strong className="text-zinc-700 block mb-1">Official Protection Notice</strong>
-                ARBITRAGE Support agents will never ask for your Google Authenticator 2FA secret, account passwords, or secure wallet PINs. Never share these credentials with anyone.
+                MOREX Support agents will never ask for your Google Authenticator 2FA secret, account passwords, or secure wallet PINs. Never share these credentials with anyone.
               </div>
             </div>
           </div>
@@ -1534,11 +1551,11 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
               {/* App Basic Info */}
               <div className="flex gap-4 items-start">
                 
-                {/* ARBITRAGE Rounded App Icon (Official Website Logo) */}
+                {/* MOREX Rounded App Icon (Official Website Logo) */}
                 <div className="w-18 h-18 rounded-2xl bg-zinc-950 border border-zinc-200 shadow-md flex items-center justify-center shrink-0 overflow-hidden select-none">
                   <img 
                     src="/icon.svg" 
-                    alt="ARBITRAGE" 
+                    alt="MOREX" 
                     className="w-full h-full object-cover"
                     referrerPolicy="no-referrer"
                   />
@@ -1547,10 +1564,10 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                 {/* Name, Subtitle & Safety */}
                 <div className="space-y-1">
                   <h1 className="text-xl font-bold text-zinc-900 leading-tight">
-                    ARBITRAGE
+                    MOREX
                   </h1>
                   <h2 className="text-xs font-semibold text-[#01875f] tracking-wide uppercase">
-                    ARBITRAGE Crypto Arbitrage
+                    MOREX Crypto
                   </h2>
                   <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 font-semibold select-none pt-0.5">
                     <ShieldCheck className="text-[#01875f]" size={12} />
@@ -1622,7 +1639,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                       {pwaLoading ? (
                         <>
                           <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                          <span>Installing ARBITRAGE...</span>
+                          <span>Installing MOREX...</span>
                         </>
                       ) : (
                         <span>Install App</span>
@@ -1653,7 +1670,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                               </svg>
                             </div>
                             <div className="space-y-1.5 flex-1 text-left">
-                              <strong className="text-emerald-950 text-[12px] block font-black">🔄 Just uninstalled ARBITRAGE?</strong>
+                              <strong className="text-emerald-950 text-[12px] block font-black">🔄 Just uninstalled MOREX?</strong>
                             
                               <button
                                 onClick={() => window.location.reload()}
@@ -1771,7 +1788,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                     {/* Mock App Content */}
                     <div className="p-2.5 space-y-2.5 relative z-10 flex-1 flex flex-col">
                       <div className="flex justify-between items-center border-b border-slate-800/80 pb-1.5">
-                        <span className="text-[9px] font-black tracking-wider bg-gradient-to-r from-amber-400 to-yellow-200 bg-clip-text text-transparent">ARBITRAGE</span>
+                        <span className="text-[9px] font-black tracking-wider bg-gradient-to-r from-amber-400 to-yellow-200 bg-clip-text text-transparent">MOREX</span>
                         <span className="text-[7px] text-emerald-400 font-bold bg-emerald-500/10 px-1 rounded-full border border-emerald-500/20">LIVE</span>
                       </div>
                       
@@ -1908,7 +1925,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                   <ChevronRight size={16} className="text-zinc-400" />
                 </div>
                 <p className="text-[10px] text-zinc-500 leading-relaxed font-sans">
-                  Welcome to ARBITRAGE, the ultimate micro-arbitrage simulator. Tap into lightning-fast compounding cycles, safe peer-to-peer (P2P) escrows, and robust portfolio management. Designed as a high-fidelity Progressive Web App, it operates directly as a standalone app on your home screen with zero storage footprint!
+                  Welcome to MOREX, the ultimate crypto platform simulator. Tap into lightning-fast compounding cycles, safe peer-to-peer (P2P) escrows, and robust portfolio management. Designed as a high-fidelity Progressive Web App, it operates directly as a standalone app on your home screen with zero storage footprint!
                 </p>
                 <div className="flex flex-wrap gap-1.5 pt-1">
                   <span className="text-[8px] bg-zinc-100 text-zinc-600 px-2 py-0.5 rounded-full font-bold">Finance</span>
@@ -1967,7 +1984,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                   <div className="absolute inset-0 bg-amber-500/10 rounded-3xl animate-pulse"></div>
                   <img 
                     src="/icon.svg" 
-                    alt="ARBITRAGE" 
+                    alt="MOREX" 
                     className="w-14 h-14 object-cover relative z-10"
                     referrerPolicy="no-referrer"
                   />
@@ -1976,7 +1993,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                   Launch Standalone App
                 </h3>
                 <p className="text-[11px] text-zinc-500 mt-1.5 font-medium leading-relaxed px-2">
-                  Due to browser security policies, websites cannot launch installed apps directly. Follow these simple steps to run ARBITRAGE:
+                  Due to browser security policies, websites cannot launch installed apps directly. Follow these simple steps to run MOREX:
                 </p>
               </div>
 
@@ -1999,9 +2016,9 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                     2
                   </div>
                   <div>
-                    <strong className="text-zinc-800 text-xs block font-bold">Find the "ARBITRAGE" Icon</strong>
+                    <strong className="text-zinc-800 text-xs block font-bold">Find the "MOREX" Icon</strong>
                     <p className="text-[11px] text-zinc-500 leading-normal mt-0.5 font-medium">
-                      Look for the beautiful round logo with the letter <span className="text-amber-600 font-bold">"A"</span> on your home screen or app drawer.
+                      Look for the beautiful round logo with the letter <span className="text-amber-600 font-bold">"M"</span> on your home screen or app drawer.
                     </p>
                   </div>
                 </div>

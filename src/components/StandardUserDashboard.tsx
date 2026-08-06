@@ -2443,7 +2443,7 @@ export default function StandardUserDashboard({
                   <h2 className={`text-sm sm:text-base font-black uppercase tracking-wider ${
                     isLightTheme ? 'text-zinc-900' : 'text-white'
                   }`}>
-                    ⚡ {arbitrageGuideCoin.symbol} ARBITRAGE GUIDE
+                    ⚡ {arbitrageGuideCoin.symbol} MOREX GUIDE
                   </h2>
                 </div>
 

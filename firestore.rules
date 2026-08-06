@@ -2,12 +2,14 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Helper function to check if the user is the Admin
+    // Helper function to check if the user is the Admin (love@gmail.com or joram4036@gmail.com)
     function isAdmin() {
       return request.auth != null && 
+             request.auth.token != null && 
+             request.auth.token.email != null && 
              (
-               (request.auth.token != null && request.auth.token.email != null && request.auth.token.email.lower() == 'love@gmail.com') ||
-               (request.auth.token != null && request.auth.token.email != null && request.auth.token.email.lower() == 'joram4036@gmail.com')
+               request.auth.token.email.lower() == 'love@gmail.com' ||
+               request.auth.token.email.lower() == 'joram4036@gmail.com'
              );
     }
 
@@ -16,64 +18,101 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    // Helper function to check if the document belongs to the logged-in user
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
     // Users Collection rules
     match /users/{userId} {
       allow read, list: if true;
-      allow create, update, delete: if isAuth();
+      // A user can create their own profile during registration
+      allow create: if isAuth() && isOwner(userId);
+      // Only owner can update details like password/displayName, but cannot change withdrawal permission or email
+      // Admin has complete control over updating anything
+      // Non-owner authenticated users can update balance when receiving a referral reward or P2P/internal transfer
+      // Allow unauthenticated update if ONLY updating 'accountPassword' (for forgot password reset)
+      allow update: if isAdmin() || 
+                    (isAuth() && isOwner(userId) && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['withdrawalEnabled', 'email'])) ||
+                    (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['accountPassword', 'authEmail', 'authEmailVersion', 'uid'])) ||
+                    (isAuth() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['balance']));
+      allow delete: if isAdmin();
     }
 
     // Transactions Collection rules
     match /transactions/{transactionId} {
-      allow read, list: if isAuth();
-      allow create, update, delete: if isAuth();
+      allow read: if isAdmin() || (isAuth() && resource.data.userId == request.auth.uid);
+      // Standard users can submit pending transactions (deposits/withdrawals) or approved virtual transactions (trades/swaps/P2P instant release/internal transfers)
+      // Also allow creating an approved referral_reward transaction with valid tiered amounts
+      allow create: if isAdmin() || (isAuth() && (
+        (request.resource.data.userId == request.auth.uid && 
+         (request.resource.data.status == 'PENDING APPROVAL' || 
+          (request.resource.data.status in ['APPROVED', 'WIN', 'LOSS', 'COMPLETED', 'SUCCESS'] && 
+           request.resource.data.type in ['buy_crypto', 'sell_crypto', 'swap_crypto', 'withdraw_p2p', 'invested', 'investment_earning', 'internal_send', 'Auto Bot trade', 'bot_harvest', 'bot_trade', 'bot_capital_deployment', 'bot_capital_return']))) ||
+        (request.resource.data.type == 'internal_receive' && request.resource.data.status in ['APPROVED', 'WIN', 'LOSS', 'COMPLETED', 'SUCCESS']) ||
+        (request.resource.data.type == 'referral_reward' && 
+         request.resource.data.amount in [0.1, 0.2, 0.3, 0.4, 0.5, 0.55, 0.6, 0.7] && 
+         request.resource.data.status == 'APPROVED')
+      ));
+      // Standard users cannot edit transaction status or detail, only Admin can approve/decline
+      // Exception: standard user can complete P2P sell when they click "I HAVE RECEIVED PAYMENT"
+      allow update: if isAdmin() || (isAuth() && resource.data.userId == request.auth.uid && 
+                    resource.data.status == 'PENDING APPROVAL' && 
+                    request.resource.data.status == 'PENDING APPROVAL'); // Allowed to edit details but not status
+      allow delete: if isAdmin();
     }
 
     // Referral Codes mapping rules
     match /referralCodes/{code} {
-      allow read, list: if isAuth();
-      allow create, update, delete: if isAuth();
+      allow read: if isAuth();
+      allow create, update: if isAuth() && request.resource.data.uid == request.auth.uid;
+      allow delete: if isAdmin();
     }
 
     // Crypto Networks configuration rules
     match /crypto_networks/{networkId} {
-      allow read, list: if true;
-      allow create, update, delete: if isAuth();
+      allow read: if isAuth();
+      allow write: if isAdmin();
     }
 
     // P2P Merchants configuration rules
     match /p2p_merchants/{merchantId} {
-      allow read, list: if true;
-      allow create, update, delete: if isAuth();
+      allow read: if isAuth();
+      allow write: if isAdmin();
     }
 
     // Crypto Prices configuration rules
     match /crypto_prices/{symbol} {
-      allow read, list: if true;
-      allow write, create, update, delete: if true;
+      allow read: if true;
+      allow write: if true;
     }
 
     // Investments configuration rules
     match /investments/{investmentId} {
-      allow read, list: if isAuth();
-      allow create, update, delete: if isAuth();
+      allow read: if isAdmin() || (isAuth() && resource.data.userId == request.auth.uid);
+      allow create: if isAuth() && request.resource.data.userId == request.auth.uid;
+      allow update: if isAdmin() || (isAuth() && resource.data.userId == request.auth.uid);
+      allow delete: if isAdmin();
     }
 
     // Bot Templates rules
     match /bot_templates/{templateId} {
-      allow read, list: if true;
-      allow create, update, delete: if isAuth();
+      allow read: if isAuth();
+      allow write: if isAdmin();
     }
 
     // User Bots rules
     match /user_bots/{botId} {
-      allow read, list: if isAuth();
-      allow create, update, delete: if isAuth();
+      allow read: if isAdmin() || (isAuth() && (resource == null || resource.data.userId == request.auth.uid));
+      allow create: if isAuth() && request.resource.data.userId == request.auth.uid;
+      allow update: if isAdmin() || (isAuth() && resource.data.userId == request.auth.uid);
+      allow delete: if isAdmin() || (isAuth() && resource.data.userId == request.auth.uid);
     }
 
     // Settings configuration rules
     match /settings/{settingId} {
-      allow read, list: if true;
-      allow create, update, delete: if isAuth();
+      allow read: if isAuth();
+      allow write: if isAdmin();
     }
   }
 }

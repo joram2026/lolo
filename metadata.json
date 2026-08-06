@@ -1,6 +1,6 @@
 {
-  "name": "ARBITRAGE",
-  "description": "ARBITRAGE is a learning prototype simulating crypto wallet operations, peer-to-peer (P2P) networks, and admin-mediated escrow and deposit/withdrawal flows.",
+  "name": "MOREX",
+  "description": "MOREX is a crypto trading and portfolio platform simulating wallet operations, P2P network transfers, automated bot trading, and secure escrow workflows.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

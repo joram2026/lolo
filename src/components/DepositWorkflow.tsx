@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { collection, addDoc, getDocs, getDoc, doc, serverTimestamp, onSnapshot } from 'firebase/firestore';
-import { CryptoNetwork, P2PMerchant, Transaction, UserAccount, CryptoPrice } from '../types';
+import { CryptoNetwork, P2PMerchant, Transaction, UserAccount, CryptoPrice, ReferralDepositConfig } from '../types';
 import { DEFAULT_NETWORKS, DEFAULT_MERCHANTS } from '../seedData';
 
 const FALLBACK_PRICES: Record<string, number> = {
@@ -45,6 +45,7 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
   };
   
   const [profile, setProfile] = useState<UserAccount | null>(null);
+  const [referralConfig, setReferralConfig] = useState<ReferralDepositConfig | null>(null);
   
   // Crypto States
   const [networks, setNetworks] = useState<CryptoNetwork[]>([]);
@@ -52,6 +53,7 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
   const [selectedNetwork, setSelectedNetwork] = useState<string>('');
   const [amountCoin, setAmountCoin] = useState<string>('');
   const [evidence, setEvidence] = useState<string>('');
+  const [compressing, setCompressing] = useState<boolean>(false);
   const [copied, setCopied] = useState<boolean>(false);
   const [cryptoPrices, setCryptoPrices] = useState<CryptoPrice[]>([]);
 
@@ -85,7 +87,7 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
   const [selectedMerchant, setSelectedMerchant] = useState<P2PMerchant | null>(null);
   const [amountShillings, setAmountShillings] = useState<string>('');
   const [calculatedUSD, setCalculatedUSD] = useState<number>(0);
-  const [p2pTxId] = useState<string>(() => 'ARBITRAGE-P2P-' + Math.floor(1000000 + Math.random() * 9000000));
+  const [p2pTxId] = useState<string>(() => 'MOREX-P2P-' + Math.floor(1000000 + Math.random() * 9000000));
   const [p2pMessage, setP2pMessage] = useState<string>('');
 
   const toast = useToast();
@@ -112,6 +114,12 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
           if (userSnap.exists()) {
             setProfile(userSnap.data() as UserAccount);
           }
+        }
+
+        const refDepConfigRef = doc(db, 'settings', 'referral_deposit_config');
+        const refDepConfigSnap = await getDoc(refDepConfigRef);
+        if (refDepConfigSnap.exists()) {
+          setReferralConfig(refDepConfigSnap.data() as ReferralDepositConfig);
         }
 
         const netCol = collection(db, 'crypto_networks');
@@ -293,15 +301,68 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
     document.body.removeChild(textArea);
   };
 
-  // Process uploaded image file to base64
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
+  // Helper to compress uploaded image file using Canvas to stay under Firestore document size limits (< 1MB)
+  const compressImageFile = (file: File, maxWidth = 1000, maxHeight = 1000, quality = 0.75): Promise<string> => {
+    return new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setEvidence(reader.result as string);
+      reader.onerror = (error) => reject(error);
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onerror = (error) => reject(error);
+        img.onload = () => {
+          let width = img.width;
+          let height = img.height;
+
+          if (width > maxWidth || height > maxHeight) {
+            if (width / height > maxWidth / maxHeight) {
+              height = Math.round((height * maxWidth) / width);
+              width = maxWidth;
+            } else {
+              width = Math.round((width * maxHeight) / height);
+              height = maxHeight;
+            }
+          }
+
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            resolve(e.target?.result as string);
+            return;
+          }
+
+          ctx.drawImage(img, 0, 0, width, height);
+          const dataUrl = canvas.toDataURL('image/jpeg', quality);
+          resolve(dataUrl);
+        };
+        img.src = e.target?.result as string;
       };
       reader.readAsDataURL(file);
+    });
+  };
+
+  // Process uploaded image file to compressed base64
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setCompressing(true);
+      setError(null);
+      try {
+        const compressedBase64 = await compressImageFile(file, 1000, 1000, 0.75);
+        setEvidence(compressedBase64);
+      } catch (err) {
+        console.error('Failed to compress image:', err);
+        // Fallback: read directly
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setEvidence(reader.result as string);
+        };
+        reader.readAsDataURL(file);
+      } finally {
+        setCompressing(false);
+      }
     }
   };
 
@@ -321,7 +382,12 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
     setError(null);
 
     try {
-      const txId = 'ARBITRAGE-CRYPTO-' + Math.floor(1000000 + Math.random() * 9000000);
+      let finalEvidence = evidence;
+      // Safety check: Firestore limit is 1,048,487 bytes. If evidence base64 is near limit, truncate or alert.
+      if (finalEvidence.length > 950000) {
+        throw new Error('Image file is too large for database storage. Please choose a smaller image or screenshot.');
+      }
+
       const symbol = currentSymbol;
       const usdVal = calculatedUSDVal;
       
@@ -334,7 +400,7 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
         coinAmount: numCoinAmount,
         status: 'PENDING APPROVAL',
         createdAt: serverTimestamp(),
-        evidence: evidence,
+        evidence: finalEvidence,
         network: selectedNetwork,
         address: selectedCoin?.addresses[selectedNetwork] || '',
         merchantName: selectedCoin ? formatCoinName(selectedCoin.tokenName) : ''
@@ -431,6 +497,38 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
           {/* Crypto Coin Select Page (Default Deposit Screen) */}
           {(method === 'selection' || method === 'crypto_coin_select') && (
             <div className="space-y-3">
+              {/* Promotional Banner for First Deposit / Referred Users */}
+              {referralConfig && referralConfig.enabled && !profile?.hasMadeFirstDeposit && (
+                <div id="first-deposit-welcome-banner" className="mb-5 p-4 rounded-2xl bg-gradient-to-br from-zinc-900 via-zinc-900 to-amber-950 border border-amber-500/40 text-white shadow-md relative overflow-hidden">
+                  <div className="absolute -right-6 -bottom-6 opacity-10 pointer-events-none">
+                    <Sparkles size={130} className="text-amber-400" />
+                  </div>
+                  <div className="relative z-10 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-xs font-black uppercase tracking-wider text-amber-300 flex items-center gap-1.5">
+                        <span>🎁 Welcome Bonus 🎉</span>
+                      </h3>
+                    </div>
+
+                    {/* Tier brackets display */}
+                    {referralConfig.tiers && referralConfig.tiers.length > 0 && (
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        {referralConfig.tiers.map((tier) => (
+                          <div key={tier.id} className="bg-zinc-950/80 border border-amber-500/20 rounded-xl p-3 text-center">
+                            <span className="block text-[10px] text-zinc-400 font-bold uppercase tracking-wide">
+                              ${tier.minAmount} – ${tier.maxAmount} Deposit
+                            </span>
+                            <span className="block text-sm font-black text-amber-400 font-mono mt-1">
+                              +{tier.refereePercent}% Welcome Cash
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {networks.map(net => {
                 const formattedName = formatCoinName(net.tokenName);
                 return (
@@ -681,7 +779,12 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
                     onChange={handleFileChange}
                     className="absolute inset-0 opacity-0 cursor-pointer"
                   />
-                  {evidence ? (
+                  {compressing ? (
+                    <div className="space-y-2 py-2">
+                      <RefreshCw size={24} className="animate-spin text-amber-500 mx-auto" />
+                      <p className="text-xs font-bold text-amber-600">Compressing & optimizing proof image...</p>
+                    </div>
+                  ) : evidence ? (
                     <div className="space-y-2">
                       <img src={evidence} alt="Proof of payment" className="max-h-24 mx-auto rounded-lg border border-zinc-200" />
                       <p className="text-[11px] text-amber-600 font-semibold">Image loaded successfully! Tap to change.</p>
@@ -690,7 +793,7 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
                     <>
                       <Upload size={24} className="text-zinc-400 mb-2" />
                       <p className="text-xs font-bold text-zinc-600">Drag & Drop or Click to Upload</p>
-                      <p className="text-[10px] text-zinc-400 mt-1">Accepts PNG, JPG, JPEG (will be converted to secure proof)</p>
+                      <p className="text-[10px] text-zinc-400 mt-1">Accepts PNG, JPG, JPEG (auto-optimized proof)</p>
                     </>
                   )}
                 </div>
@@ -911,7 +1014,7 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
                     <span className="font-mono font-bold text-zinc-800">{parseFloat(amountShillings).toLocaleString()} Shs</span>
                   </div>
                   <div className="flex justify-between items-center text-xs border-b border-zinc-100 pb-2">
-                    <span className="text-zinc-500">Transaction ID (ARBITRAGE Ref)</span>
+                    <span className="text-zinc-500">Transaction ID (MOREX Ref)</span>
                     <span className="font-mono font-bold text-zinc-500 text-[10px]">{p2pTxId}</span>
                   </div>
                 </div>

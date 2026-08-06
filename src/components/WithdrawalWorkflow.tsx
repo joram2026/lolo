@@ -93,7 +93,7 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
   const [merchants, setMerchants] = useState<P2PMerchant[]>([]);
   const [selectedMerchant, setSelectedMerchant] = useState<P2PMerchant | null>(null);
   const [p2pUSDAmount, setP2pUSDAmount] = useState<string>('');
-  const [p2pTxId] = useState<string>(() => 'ARBITRAGE-SELL-' + Math.floor(1000000 + Math.random() * 9000000));
+  const [p2pTxId] = useState<string>(() => 'MOREX-SELL-' + Math.floor(1000000 + Math.random() * 9000000));
 
   const toast = useToast();
   const [loading, setLoading] = useState<boolean>(false);
