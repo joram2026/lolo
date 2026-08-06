@@ -224,7 +224,29 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
     };
   }, []);
 
-  // Submit Crypto Withdrawal (Locks request into Pending Queue, does not deduct balance yet as instructed)
+  // Helper regex validator for destination crypto addresses based on selected network
+  const validateCryptoAddress = (address: string, networkName: string): boolean => {
+    const trimmed = address.trim();
+    if (!trimmed) return false;
+
+    const upperNet = networkName.toUpperCase();
+    if (upperNet.includes('TRC20') || upperNet.includes('TRON')) {
+      return /^T[a-zA-HJ-NP-Z0-9]{33}$/.test(trimmed);
+    }
+    if (upperNet.includes('ERC20') || upperNet.includes('BEP20') || upperNet.includes('POLYGON') || upperNet.includes('BASE') || upperNet.includes('ARBITRUM') || upperNet.includes('OPTIMISM') || upperNet.includes('AVALANCHE') || upperNet.includes('BNB')) {
+      return /^0x[a-fA-F0-9]{40}$/.test(trimmed);
+    }
+    if (upperNet.includes('BTC') || upperNet.includes('BITCOIN')) {
+      return /^(1|3|bc1)[a-zA-HJ-NP-Z0-9]{25,62}$/.test(trimmed);
+    }
+    if (upperNet.includes('SOL') || upperNet.includes('SOLANA')) {
+      return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(trimmed);
+    }
+    // Generic check for other blockchains (at least 20 non-whitespace chars)
+    return trimmed.length >= 10;
+  };
+
+  // Submit Crypto Withdrawal (Deducts balance immediately & stores 10% fee breakdown)
   const handleCryptoWithdrawSubmit = async () => {
     if (!amountUSD || parseFloat(amountUSD) <= 0) {
       setError('Please enter a valid amount to withdraw.');
@@ -235,6 +257,12 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
     const unlockedHolding = getUnlockedCoinHolding(coinSym);
     const price = getCoinPrice(coinSym);
     const availableUSD = coinSym === 'USDT' ? Math.max(0, (profile?.balance || 0) - lockedUSDT) : unlockedHolding * price;
+    const minLimitUSD = selectedCoin?.minWithdrawalUSD ?? 10;
+
+    if (usdVal < minLimitUSD) {
+      setError(`Minimum withdrawal amount for ${formatCoinName(selectedCoin?.tokenName || '')} is $${minLimitUSD.toFixed(2)} USD.`);
+      return;
+    }
 
     if (usdVal > availableUSD + 0.0001) {
       if (coinSym === 'USDT') {
@@ -244,8 +272,8 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
       }
       return;
     }
-    if (!destAddress.trim()) {
-      setError('Please provide a valid destination wallet address.');
+    if (!validateCryptoAddress(destAddress, selectedNetwork)) {
+      setError(`Invalid ${selectedNetwork} address format. Please check and enter a valid ${selectedNetwork} destination address.`);
       return;
     }
     if (!profile?.walletPassword) {
@@ -266,21 +294,63 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
 
     try {
       const coinAmt = price > 0 ? parseFloat((usdVal / price).toFixed(8)) : usdVal;
-      const newTx: Omit<Transaction, 'id'> = {
-        userId: user.uid,
-        userEmail: user.email,
-        type: 'withdraw_crypto',
-        amount: usdVal,
-        coinSymbol: coinSym,
-        coinAmount: coinAmt,
-        status: 'PENDING APPROVAL',
-        createdAt: serverTimestamp(),
-        network: selectedNetwork,
-        address: destAddress,
-        merchantName: selectedCoin ? formatCoinName(selectedCoin.tokenName) : ''
-      };
+      const feePercent = 10;
+      const feeAmount = parseFloat((usdVal * 0.10).toFixed(2));
+      const netAmount = parseFloat((usdVal * 0.90).toFixed(2));
 
-      await addDoc(collection(db, 'transactions'), newTx);
+      // Run transaction to immediately deduct balance and record withdrawal request with 10% fee breakdown
+      await runTransaction(db, async (transaction) => {
+        const userRef = doc(db, 'users', user.uid);
+        const userSnap = await transaction.get(userRef);
+        if (!userSnap.exists()) {
+          throw new Error('User record does not exist.');
+        }
+
+        const userData = userSnap.data();
+
+        if (coinSym === 'USDT') {
+          const currentBal = userData.balance || 0;
+          const currentAvailable = Math.max(0, currentBal - lockedUSDT);
+          if (usdVal > currentAvailable + 0.0001) {
+            throw new Error(`Insufficient available balance during execution. You have $${currentAvailable.toFixed(2)} available.`);
+          }
+          transaction.update(userRef, {
+            balance: parseFloat((currentBal - usdVal).toFixed(2))
+          });
+        } else {
+          const currentHoldings = userData.holdings || {};
+          const currentCoinBal = currentHoldings[coinSym] || 0;
+          if (coinAmt > currentCoinBal + 0.000001) {
+            throw new Error(`Insufficient ${coinSym} balance. You have ${currentCoinBal.toFixed(6)} ${coinSym}.`);
+          }
+          transaction.update(userRef, {
+            holdings: {
+              ...currentHoldings,
+              [coinSym]: Math.max(0, currentCoinBal - coinAmt)
+            }
+          });
+        }
+
+        const txRef = doc(collection(db, 'transactions'));
+        transaction.set(txRef, {
+          id: txRef.id,
+          userId: user.uid,
+          userEmail: user.email,
+          type: 'withdraw_crypto',
+          amount: usdVal,
+          feePercent: feePercent,
+          feeAmount: feeAmount,
+          netAmount: netAmount,
+          coinSymbol: coinSym,
+          coinAmount: coinAmt,
+          status: 'PENDING APPROVAL',
+          createdAt: serverTimestamp(),
+          network: selectedNetwork,
+          address: destAddress,
+          merchantName: selectedCoin ? formatCoinName(selectedCoin.tokenName) : ''
+        });
+      });
+
       onSuccess();
     } catch (err: any) {
       console.error('Crypto withdrawal error:', err);
@@ -327,6 +397,10 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
           throw new Error(`Insufficient available balance during transaction execution. You have $${availableBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })} available ($${lockedUSDT.toLocaleString(undefined, { minimumFractionDigits: 2 })} USDT is locked in MMF).`);
         }
 
+        const feePercent = 10;
+        const feeAmount = parseFloat((usdVal * 0.10).toFixed(2));
+        const netAmount = parseFloat((usdVal * 0.90).toFixed(2));
+
         // Deduct balance instantly
         transaction.update(userRef, {
           balance: parseFloat((currentBalance - usdVal).toFixed(2))
@@ -340,6 +414,9 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
           userEmail: user.email,
           type: 'withdraw_p2p',
           amount: usdVal,
+          feePercent: feePercent,
+          feeAmount: feeAmount,
+          netAmount: netAmount,
           localAmount: localShillings,
           status: 'APPROVED', // Marked approved instantly because client released it!
           createdAt: serverTimestamp(),
@@ -646,6 +723,19 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
                       </span>
                     </button>
                   </div>
+                  {(() => {
+                    const minLimitUSD = selectedCoin.minWithdrawalUSD ?? 10;
+                    const minCoinEquivalent = price > 0 ? (minLimitUSD / price) : 0;
+                    return (
+                      <div className="flex justify-between items-center text-[11px] font-semibold text-zinc-500 pt-1 px-1">
+                        <span>Min. Withdrawal:</span>
+                        <span className="text-amber-700 font-bold font-mono">
+                          ${minLimitUSD.toFixed(2)} USD
+                          {sym !== 'USDT' && sym !== 'USDC' && price > 0 && ` (≈ ${minCoinEquivalent.toFixed(6)} ${sym})`}
+                        </span>
+                      </div>
+                    );
+                  })()}
                   {currentNumVal > 0 && price > 0 && sym !== 'USDT' && (
                     <p className="text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200/60 p-2 rounded-lg">
                       Withdrawal Asset Value: <span className="font-bold text-zinc-900">{coinEquivalent.toFixed(6)} {sym}</span>
@@ -659,8 +749,13 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
                   onClick={() => {
                     setError(null);
                     const usdVal = parseFloat(amountUSD);
+                    const minLimitUSD = selectedCoin.minWithdrawalUSD ?? 10;
                     if (!amountUSD || isNaN(usdVal) || usdVal <= 0) {
                       setError('Please enter a valid withdrawal amount.');
+                      return;
+                    }
+                    if (usdVal < minLimitUSD) {
+                      setError(`Minimum withdrawal amount for ${formatCoinName(selectedCoin.tokenName)} is $${minLimitUSD.toFixed(2)} USD.`);
                       return;
                     }
                     if (usdVal > availableUSD + 0.0001) {
@@ -673,6 +768,10 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
                     }
                     if (!destAddress.trim()) {
                       setError('Please provide a valid destination wallet address.');
+                      return;
+                    }
+                    if (!validateCryptoAddress(destAddress, selectedNetwork)) {
+                      setError(`Invalid ${selectedNetwork} address format. Please check and enter a valid ${selectedNetwork} destination address.`);
                       return;
                     }
                     if (!profile?.walletPassword) {
@@ -691,44 +790,65 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
           })()}
 
           {/* Crypto Enter PIN Final Confirm Screen */}
-          {method === 'crypto_pin_confirm' && selectedCoin && (
-            <div className="space-y-5 text-left">
-              <div className="bg-white border border-zinc-200 rounded-2xl p-5 space-y-4">
-                <div className="flex flex-col items-center justify-center text-center gap-2.5 pb-2 border-b border-zinc-200/60">
-                  <div className="w-12 h-12 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-500">
-                    <Lock size={22} />
+          {method === 'crypto_pin_confirm' && selectedCoin && (() => {
+            const grossVal = parseFloat(amountUSD) || 0;
+            const feeVal = grossVal * 0.10;
+            const netVal = grossVal * 0.90;
+            const coinSym = selectedCoin.id.toUpperCase();
+            const price = getCoinPrice(coinSym);
+            const netCoinVal = price > 0 ? (netVal / price) : netVal;
+
+            return (
+              <div className="space-y-5 text-left">
+                <div className="bg-white border border-zinc-200 rounded-2xl p-5 space-y-4">
+                  <div className="flex flex-col items-center justify-center text-center gap-2.5 pb-2 border-b border-zinc-200/60">
+                    <div className="w-12 h-12 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-500">
+                      <Lock size={22} />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-black text-zinc-800">Confirm Crypto Withdrawal</h3>
+                      <p className="text-[11px] text-zinc-500">Authorize transfer of assets to your destination address</p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="text-sm font-black text-zinc-800">Confirm Crypto Withdrawal</h3>
-                    <p className="text-[11px] text-zinc-500">Authorize transfer of assets to your destination address</p>
+                  
+                  <div className="space-y-3 text-xs">
+                    <div className="flex justify-between items-center pb-1 border-b border-zinc-100">
+                      <span className="text-zinc-500">Asset</span>
+                      <span className="font-mono font-bold text-zinc-800">{formatCoinName(selectedCoin.tokenName)}</span>
+                    </div>
+                    <div className="flex justify-between items-center pb-1 border-b border-zinc-100">
+                      <span className="text-zinc-500">Network</span>
+                      <span className="font-mono font-bold text-amber-600">{selectedNetwork}</span>
+                    </div>
+                    <div className="flex justify-between items-center pb-1 border-b border-zinc-100">
+                      <span className="text-zinc-500">Destination Address</span>
+                      <span className="font-mono font-bold text-zinc-600 break-all max-w-[180px] text-right">{destAddress}</span>
+                    </div>
+                    <div className="flex justify-between items-center pb-1 border-b border-zinc-100">
+                      <span className="text-zinc-500">Withdrawal Amount (Gross)</span>
+                      <span className="font-mono font-bold text-zinc-800">${grossVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD</span>
+                    </div>
+                    <div className="flex justify-between items-center pb-1 border-b border-zinc-100">
+                      <span className="text-zinc-500">10% Withdrawal Fee</span>
+                      <span className="font-mono font-bold text-red-500">-${feeVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD</span>
+                    </div>
+                    <div className="flex justify-between items-center pt-1 bg-emerald-50/80 p-2.5 rounded-xl border border-emerald-200/80">
+                      <span className="text-emerald-900 font-bold">You Will Receive (Net)</span>
+                      <div className="text-right">
+                        <span className="font-mono font-black text-emerald-700 text-sm block">${netVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD</span>
+                        {coinSym !== 'USDT' && (
+                          <span className="font-mono font-semibold text-emerald-600 text-[10px] block">≈ {netCoinVal.toFixed(6)} {coinSym}</span>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                </div>
-                
-                <div className="space-y-3 text-xs">
-                  <div className="flex justify-between items-center pb-1 border-b border-zinc-100">
-                    <span className="text-zinc-500">Asset</span>
-                    <span className="font-mono font-bold text-zinc-800">{formatCoinName(selectedCoin.tokenName)}</span>
-                  </div>
-                  <div className="flex justify-between items-center pb-1 border-b border-zinc-100">
-                    <span className="text-zinc-500">Network</span>
-                    <span className="font-mono font-bold text-amber-600">{selectedNetwork}</span>
-                  </div>
-                  <div className="flex justify-between items-center pb-1 border-b border-zinc-100">
-                    <span className="text-zinc-500">Destination Address</span>
-                    <span className="font-mono font-bold text-zinc-600 break-all max-w-[180px] text-right">{destAddress}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-zinc-500">Amount to Withdraw</span>
-                    <span className="font-mono font-bold text-amber-600">${parseFloat(amountUSD).toLocaleString(undefined, { minimumFractionDigits: 2 })} USD</span>
+
+                  <div className="p-3 bg-red-50 border border-red-100 text-red-800 text-[10px] rounded-xl leading-relaxed text-center">
+                    <strong>Caution:</strong> Ensure the wallet address is correct. Crypto transfers are irreversible. A 10% system processing fee is deducted from your requested withdrawal.
                   </div>
                 </div>
 
-                <div className="p-3 bg-red-50 border border-red-100 text-red-800 text-[10px] rounded-xl leading-relaxed text-center">
-                  <strong>Caution:</strong> Ensure the wallet address is correct. Crypto transfers are irreversible.
-                </div>
-              </div>
-
-              {/* Wallet PIN Form */}
+                {/* Wallet PIN Form */}
               <div className="space-y-4 bg-white border border-zinc-200 rounded-2xl p-4">
                 <div className="space-y-1.5 text-center">
                   <label className="text-xs font-semibold text-zinc-500 block">
@@ -783,7 +903,8 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
                 </button>
               </div>
             </div>
-          )}
+          );
+        })()}
 
           {/* P2P Sell Board (Merchants) */}
           {method === 'p2p' && (() => {

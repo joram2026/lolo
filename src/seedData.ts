@@ -11,7 +11,8 @@ export const DEFAULT_NETWORKS: CryptoNetwork[] = [
       'TRC20': 'TX8v9nJD7uErsFm2kU9vMQ7vGzB7bY93f4',
       'ERC20': '0x71C7656EC7ab88b098defB751B7401B5f6d8976F',
       'BEP20': '0x71C7656EC7ab88b098defB751B7401B5f6d8976F'
-    }
+    },
+    minWithdrawalUSD: 10
   },
   {
     id: 'usdc',
@@ -21,7 +22,8 @@ export const DEFAULT_NETWORKS: CryptoNetwork[] = [
       'ERC20': '0x95F7a1b8D14E5D466f2C09C726f19DE6D178e24C',
       'SOLANA': 'EPjFW3dpCY3UF296M6ac3yvLCFM3TXrSM2tmc5M96fGP',
       'TRC20': 'THP5Y2Z7vT3uQ9vM5Zg7bX99f36r3qJvU8'
-    }
+    },
+    minWithdrawalUSD: 10
   },
   {
     id: 'btc',
@@ -30,7 +32,8 @@ export const DEFAULT_NETWORKS: CryptoNetwork[] = [
     addresses: {
       'BTC': '1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa',
       'BEP20': '0x71C7656EC7ab88b098defB751B7401B5f6d8976F'
-    }
+    },
+    minWithdrawalUSD: 20
   },
   {
     id: 'eth',
@@ -39,7 +42,8 @@ export const DEFAULT_NETWORKS: CryptoNetwork[] = [
     addresses: {
       'ERC20': '0x71C7656EC7ab88b098defB751B7401B5f6d8976F',
       'BEP20': '0x71C7656EC7ab88b098defB751B7401B5f6d8976F'
-    }
+    },
+    minWithdrawalUSD: 15
   },
   {
     id: 'xrp',
@@ -47,7 +51,8 @@ export const DEFAULT_NETWORKS: CryptoNetwork[] = [
     networks: ['XRP'],
     addresses: {
       'XRP': 'rEb8TK3gBgWvdv8KAcrBgv1vt7gBpt7A8y'
-    }
+    },
+    minWithdrawalUSD: 10
   },
   {
     id: 'wld',
@@ -56,7 +61,8 @@ export const DEFAULT_NETWORKS: CryptoNetwork[] = [
     addresses: {
       'OPTIMISM': '0x71C7656EC7ab88b098defB751B7401B5f6d8976F',
       'ERC20': '0x71C7656EC7ab88b098defB751B7401B5f6d8976F'
-    }
+    },
+    minWithdrawalUSD: 10
   },
   {
     id: 'trx',
@@ -64,7 +70,8 @@ export const DEFAULT_NETWORKS: CryptoNetwork[] = [
     networks: ['TRC20'],
     addresses: {
       'TRC20': 'TX8v9nJD7uErsFm2kU9vMQ7vGzB7bY93f4'
-    }
+    },
+    minWithdrawalUSD: 10
   },
   {
     id: 'doge',
@@ -72,7 +79,8 @@ export const DEFAULT_NETWORKS: CryptoNetwork[] = [
     networks: ['DOGE'],
     addresses: {
       'DOGE': 'DJpx5LhE4W8pksYV1QW9vQYy4W8pksYV1Q'
-    }
+    },
+    minWithdrawalUSD: 10
   },
   {
     id: 'sol',
@@ -81,7 +89,8 @@ export const DEFAULT_NETWORKS: CryptoNetwork[] = [
     addresses: {
       'SOLANA': 'EPjFW3dpCY3UF296M6ac3yvLCFM3TXrSM2tmc5M96fGP',
       'BEP20': '0x71C7656EC7ab88b098defB751B7401B5f6d8976F'
-    }
+    },
+    minWithdrawalUSD: 10
   },
   {
     id: 'bnb',
@@ -90,7 +99,8 @@ export const DEFAULT_NETWORKS: CryptoNetwork[] = [
     addresses: {
       'BEP20': '0x71C7656EC7ab88b098defB751B7401B5f6d8976F',
       'BSC': '0x71C7656EC7ab88b098defB751B7401B5f6d8976F'
-    }
+    },
+    minWithdrawalUSD: 10
   }
 ];
 

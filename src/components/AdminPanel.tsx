@@ -144,7 +144,7 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
 
   // Form States for CRUD Crypto Coins & Networks
   const [editingCoin, setEditingCoin] = useState<CryptoNetwork | null>(null);
-  const [coinForm, setCoinForm] = useState<{ id: string; tokenName: string }>({ id: '', tokenName: '' });
+  const [coinForm, setCoinForm] = useState<{ id: string; tokenName: string; minWithdrawalUSD: number }>({ id: '', tokenName: '', minWithdrawalUSD: 10 });
   const [coinNetworks, setCoinNetworks] = useState<{ network: string; address: string }[]>([]);
   const [newNetworkName, setNewNetworkName] = useState('');
   const [newNetworkAddress, setNewNetworkAddress] = useState('');
@@ -1022,52 +1022,14 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
     try {
       await runTransaction(db, async (transaction) => {
         const txRef = doc(db, 'transactions', tx.id);
-        const userRef = doc(db, 'users', tx.userId);
-
-        const userSnap = await transaction.get(userRef);
-        if (!userSnap.exists()) {
-          throw new Error('User account does not exist.');
-        }
-
-        const userData = userSnap.data();
-        const currentBalance = userData.balance || 0;
-        const withdrawAmount = tx.amount;
-        const coinSym = tx.coinSymbol ? tx.coinSymbol.toUpperCase() : 'USDT';
-
-        if (coinSym === 'USDT') {
-          if (withdrawAmount > currentBalance) {
-            throw new Error('User has insufficient USDT balance for this withdrawal request.');
-          }
-          // Permanently subtract funds from user wallet balance
-          transaction.update(userRef, {
-            balance: parseFloat((currentBalance - withdrawAmount).toFixed(2))
-          });
-        } else {
-          const currentHoldings = userData.holdings || {};
-          const currentCoinBalance = currentHoldings[coinSym] || 0;
-          const coinAmtToDeduct = tx.coinAmount || (withdrawAmount > 0 ? withdrawAmount : 0);
-
-          if (coinAmtToDeduct > currentCoinBalance + 0.000001) {
-            throw new Error(`User has insufficient ${coinSym} balance for this withdrawal request.`);
-          }
-
-          const updatedHoldings = {
-            ...currentHoldings,
-            [coinSym]: Math.max(0, currentCoinBalance - coinAmtToDeduct)
-          };
-
-          transaction.update(userRef, {
-            holdings: updatedHoldings
-          });
-        }
-
-        // 2. Change status to APPROVED
+        // Balance was already deducted upfront upon placing withdrawal request
         transaction.update(txRef, {
           status: 'APPROVED'
         });
       });
 
-      showFeedback('success', `Withdrawal of $${tx.amount} approved and deducted successfully.`);
+      const netAmountDisplay = tx.netAmount !== undefined ? tx.netAmount : parseFloat((tx.amount * 0.90).toFixed(2));
+      showFeedback('success', `Withdrawal approved successfully! Net payout amount: $${netAmountDisplay.toFixed(2)} USD.`);
       await loadAllData(true);
     } catch (err: any) {
       console.error("Error approving withdrawal: ", err);
@@ -1077,18 +1039,103 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
     }
   };
 
-  const handleDeleteTransaction = (txId: string) => {
+  const handleRejectWithdrawal = async (tx: Transaction) => {
+    setActioning(tx.id);
+    try {
+      await runTransaction(db, async (transaction) => {
+        const txRef = doc(db, 'transactions', tx.id);
+        const userRef = doc(db, 'users', tx.userId);
+
+        const userSnap = await transaction.get(userRef);
+        if (userSnap.exists()) {
+          const userData = userSnap.data();
+          const coinSym = tx.coinSymbol ? tx.coinSymbol.toUpperCase() : 'USDT';
+
+          if (coinSym === 'USDT') {
+            const currentBalance = userData.balance || 0;
+            transaction.update(userRef, {
+              balance: parseFloat((currentBalance + tx.amount).toFixed(2))
+            });
+          } else {
+            const currentHoldings = userData.holdings || {};
+            const currentCoinBalance = currentHoldings[coinSym] || 0;
+            const coinAmtToRefund = tx.coinAmount || (tx.amount > 0 ? tx.amount : 0);
+
+            transaction.update(userRef, {
+              holdings: {
+                ...currentHoldings,
+                [coinSym]: parseFloat((currentCoinBalance + coinAmtToRefund).toFixed(8))
+              }
+            });
+          }
+        }
+
+        // Change status to DECLINED
+        transaction.update(txRef, {
+          status: 'DECLINED'
+        });
+      });
+
+      showFeedback('success', `Withdrawal rejected and gross $${tx.amount} refunded back to user's wallet.`);
+      await loadAllData(true);
+    } catch (err: any) {
+      console.error("Error rejecting withdrawal: ", err);
+      showFeedback('error', 'Error rejecting withdrawal: ' + err.message);
+    } finally {
+      setActioning(null);
+    }
+  };
+
+  const handleDeleteTransaction = (tx: Transaction | string) => {
+    const txObj = typeof tx === 'string' ? txList.find(t => t.id === tx) : tx;
+    const txId = typeof tx === 'string' ? tx : tx.id;
+
     setConfirmModal({
       isOpen: true,
       title: 'Delete Transaction Record?',
-      message: 'Are you sure you want to PERMANENTLY DELETE this transaction from the records? This cannot be undone.',
+      message: txObj && txObj.type.startsWith('withdraw') && txObj.status === 'PENDING APPROVAL'
+        ? 'Deleting this pending withdrawal will automatically refund the deducted funds back to the user\'s wallet. Proceed?'
+        : 'Are you sure you want to PERMANENTLY DELETE this transaction from the records? This cannot be undone.',
       danger: true,
       onConfirm: async () => {
         setConfirmModal(prev => ({ ...prev, isOpen: false }));
         setActioning(txId);
         try {
-          await deleteDoc(doc(db, 'transactions', txId));
-          showFeedback('success', 'Transaction record deleted permanently.');
+          if (txObj && txObj.type.startsWith('withdraw') && txObj.status === 'PENDING APPROVAL') {
+            await runTransaction(db, async (transaction) => {
+              const txRef = doc(db, 'transactions', txId);
+              const userRef = doc(db, 'users', txObj.userId);
+              const userSnap = await transaction.get(userRef);
+
+              if (userSnap.exists()) {
+                const userData = userSnap.data();
+                const coinSym = txObj.coinSymbol ? txObj.coinSymbol.toUpperCase() : 'USDT';
+
+                if (coinSym === 'USDT') {
+                  const currentBalance = userData.balance || 0;
+                  transaction.update(userRef, {
+                    balance: parseFloat((currentBalance + txObj.amount).toFixed(2))
+                  });
+                } else {
+                  const currentHoldings = userData.holdings || {};
+                  const currentCoinBalance = currentHoldings[coinSym] || 0;
+                  const coinAmtToRefund = txObj.coinAmount || (txObj.amount > 0 ? txObj.amount : 0);
+
+                  transaction.update(userRef, {
+                    holdings: {
+                      ...currentHoldings,
+                      [coinSym]: parseFloat((currentCoinBalance + coinAmtToRefund).toFixed(8))
+                    }
+                  });
+                }
+              }
+              transaction.delete(txRef);
+            });
+            showFeedback('success', 'Pending withdrawal deleted and funds refunded to user.');
+          } else {
+            await deleteDoc(doc(db, 'transactions', txId));
+            showFeedback('success', 'Transaction record deleted permanently.');
+          }
           await loadAllData(true);
         } catch (err: any) {
           console.error(err);
@@ -1103,7 +1150,11 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
   // 4. Crypto Stablecoins CRUD Management
   const startCoinEdit = (coin: CryptoNetwork) => {
     setEditingCoin(coin);
-    setCoinForm({ id: coin.id, tokenName: coin.tokenName });
+    setCoinForm({
+      id: coin.id,
+      tokenName: coin.tokenName,
+      minWithdrawalUSD: coin.minWithdrawalUSD ?? 10
+    });
     // Convert Record<string, string> addresses to arrays for editing
     const list = coin.networks.map(net => ({
       network: net,
@@ -1116,7 +1167,7 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
 
   const startNewCoin = () => {
     setEditingCoin(null);
-    setCoinForm({ id: '', tokenName: '' });
+    setCoinForm({ id: '', tokenName: '', minWithdrawalUSD: 10 });
     setCoinNetworks([]);
     setNewNetworkName('');
     setNewNetworkAddress('');
@@ -1165,7 +1216,8 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
         id: docId,
         tokenName: coinForm.tokenName.trim(),
         networks: finalNetworks,
-        addresses: finalAddresses
+        addresses: finalAddresses,
+        minWithdrawalUSD: Number(coinForm.minWithdrawalUSD) > 0 ? Number(coinForm.minWithdrawalUSD) : 10
       });
 
       showFeedback('success', `Crypto coin ${coinForm.tokenName} configuration successfully saved.`);
@@ -2135,36 +2187,56 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                         <div><span className="text-zinc-500 font-sans font-medium">DESTINATION ADDRESS:</span> <span className="select-all">{tx.address}</span></div>
                       </div>
 
-                      <div className="bg-zinc-950 p-3 rounded-xl border border-zinc-900/80 flex justify-between items-center">
-                        <div>
-                          <span className="text-[9px] text-zinc-500 uppercase font-black">Requested Amount</span>
-                          <span className="text-lg font-black text-zinc-100 block font-mono">${tx.amount?.toFixed(2)}</span>
+                      {/* Fee and Amount breakdown */}
+                      <div className="bg-zinc-950 p-3 rounded-xl border border-zinc-900/80 space-y-2">
+                        <div className="grid grid-cols-3 gap-2 text-center border-b border-zinc-900/90 pb-2">
+                          <div>
+                            <span className="text-[9px] text-zinc-500 uppercase font-black block">Gross Requested</span>
+                            <span className="text-sm font-bold text-zinc-300 font-mono">${tx.amount?.toFixed(2)} USD</span>
+                          </div>
+                          <div>
+                            <span className="text-[9px] text-zinc-500 uppercase font-black block">10% Fee</span>
+                            <span className="text-sm font-bold text-red-400 font-mono">-${(tx.feeAmount !== undefined ? tx.feeAmount : tx.amount * 0.10).toFixed(2)} USD</span>
+                          </div>
+                          <div className="bg-emerald-950/40 p-1.5 rounded-lg border border-emerald-800/40">
+                            <span className="text-[9px] text-emerald-400 uppercase font-black block">Net Payout to Send</span>
+                            <span className="text-sm font-black text-emerald-400 font-mono">${(tx.netAmount !== undefined ? tx.netAmount : tx.amount * 0.90).toFixed(2)} USD</span>
+                          </div>
                         </div>
+
                         {tx.localAmount && (
-                          <div className="text-right">
-                            <span className="text-[9px] text-zinc-500 uppercase font-black">Local Valuation</span>
-                            <span className="text-sm font-bold text-zinc-300 block font-mono">{tx.localAmount?.toLocaleString()} Shs</span>
+                          <div className="flex justify-between items-center text-[11px] pt-0.5 px-1">
+                            <span className="text-zinc-500 font-medium">Local Valuation:</span>
+                            <span className="font-bold text-zinc-300 font-mono">{tx.localAmount?.toLocaleString()} Shs</span>
                           </div>
                         )}
                       </div>
 
-                      {/* Administrative Option: APPROVE or DELETE */}
+                      {/* Administrative Options: REJECT, DELETE, APPROVE */}
                       <div className="flex justify-end gap-2 pt-2">
                         <button
-                          id={`delete-withdrawal-btn-${tx.id}`}
-                          onClick={() => handleDeleteTransaction(tx.id)}
+                          id={`reject-withdrawal-btn-${tx.id}`}
+                          onClick={() => handleRejectWithdrawal(tx)}
                           disabled={actioning === tx.id}
-                          className="px-4 py-2 bg-red-950/30 hover:bg-red-950/60 text-red-400 border border-red-950/40 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                          className="px-3.5 py-2 bg-amber-950/30 hover:bg-amber-950/60 text-amber-400 border border-amber-900/40 rounded-xl text-xs font-bold transition-all cursor-pointer"
                         >
-                          DELETE REQUEST
+                          REJECT & REFUND
+                        </button>
+                        <button
+                          id={`delete-withdrawal-btn-${tx.id}`}
+                          onClick={() => handleDeleteTransaction(tx)}
+                          disabled={actioning === tx.id}
+                          className="px-3.5 py-2 bg-red-950/30 hover:bg-red-950/60 text-red-400 border border-red-950/40 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                        >
+                          DELETE
                         </button>
                         <button
                           id={`approve-withdrawal-btn-${tx.id}`}
                           onClick={() => handleApproveWithdrawal(tx)}
                           disabled={actioning === tx.id}
-                          className="px-5 py-2 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 rounded-xl text-xs font-black transition-all shadow-md cursor-pointer"
+                          className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 rounded-xl text-xs font-black transition-all shadow-md cursor-pointer"
                         >
-                          APPROVE & RELEASE FUNDS
+                          APPROVE & RELEASE
                         </button>
                       </div>
                     </div>
@@ -3338,6 +3410,7 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                     >
                       <span className="text-xs font-black block">{net.tokenName}</span>
                       <span className="text-[10px] text-zinc-500 font-mono block mt-1">{net.networks.length} network(s) configured</span>
+                      <span className="text-[10px] text-emerald-400 font-semibold font-mono block mt-0.5">Min Withdraw: ${net.minWithdrawalUSD ?? 10} USD</span>
                       <button
                         id={`delete-coin-btn-${net.id}`}
                         onClick={(e) => {
@@ -3378,7 +3451,7 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                             startCoinEdit(existingNet);
                           } else {
                             setEditingCoin(null);
-                            setCoinForm({ id: foundCoin.id, tokenName: foundCoin.name });
+                            setCoinForm({ id: foundCoin.id, tokenName: foundCoin.name, minWithdrawalUSD: 10 });
                             setCoinNetworks([]);
                             setNewNetworkName('');
                             setNewNetworkAddress('');
@@ -3397,6 +3470,26 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                         );
                       })}
                     </select>
+                  </div>
+
+                  {/* Minimum Withdrawal Limit ($ USD) */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] text-zinc-500 font-bold block">Minimum Withdrawal Limit ($ USD)</label>
+                    <div className="relative">
+                      <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-zinc-500 text-xs font-bold">$</span>
+                      <input
+                        id="coin-min-withdrawal-usd-input"
+                        type="number"
+                        min="1"
+                        step="0.01"
+                        required
+                        value={coinForm.minWithdrawalUSD}
+                        onChange={(e) => setCoinForm({ ...coinForm, minWithdrawalUSD: parseFloat(e.target.value) || 0 })}
+                        className="w-full pl-7 pr-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 text-white font-mono"
+                        placeholder="10.00"
+                      />
+                    </div>
+                    <p className="text-[10px] text-zinc-500">Users will not be allowed to submit a withdrawal below this USD value.</p>
                   </div>
 
                   {/* Network Multi Addresses Manager */}

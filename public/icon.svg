@@ -1,120 +1,115 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
-    <!-- Background Gradient: Deep rich charcoal obsidian slate -->
-    <radialGradient id="spaceBg" cx="50%" cy="35%" r="70%" fx="50%" fy="25%">
-      <stop offset="0%" stop-color="#1c1917" />
-      <stop offset="50%" stop-color="#141210" />
-      <stop offset="100%" stop-color="#0c0a09" />
+    <!-- Dark Metallic Background Gradient -->
+    <radialGradient id="bgGrad" cx="50%" cy="30%" r="75%">
+      <stop offset="0%" stop-color="#1e1e24" />
+      <stop offset="55%" stop-color="#121216" />
+      <stop offset="100%" stop-color="#09090b" />
     </radialGradient>
 
-    <!-- Glowing outer Ring Gradient -->
-    <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#f59e0b" stop-opacity="0.45"/>
-      <stop offset="50%" stop-color="#ea580c" stop-opacity="0.2"/>
-      <stop offset="100%" stop-color="#d97706" stop-opacity="0"/>
+    <!-- Outer Golden Halo Ring -->
+    <linearGradient id="haloGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fbbf24" stop-opacity="0.6" />
+      <stop offset="40%" stop-color="#f59e0b" stop-opacity="0.25" />
+      <stop offset="100%" stop-color="#d97706" stop-opacity="0.05" />
     </linearGradient>
 
-    <!-- Amber Gold Gradient for Left/Right Stems of M -->
-    <linearGradient id="mStemGrad" x1="0%" y1="100%" x2="0%" y2="0%">
-      <stop offset="0%" stop-color="#78350f"/>
-      <stop offset="40%" stop-color="#d97706"/>
-      <stop offset="85%" stop-color="#f59e0b"/>
-      <stop offset="100%" stop-color="#fef08a"/>
+    <!-- M Left Wing Gradient (Warm Amber to Gold) -->
+    <linearGradient id="leftWingGrad" x1="0%" y1="100%" x2="50%" y2="0%">
+      <stop offset="0%" stop-color="#b45309" />
+      <stop offset="50%" stop-color="#f59e0b" />
+      <stop offset="100%" stop-color="#fef08a" />
     </linearGradient>
 
-    <!-- Vibrant Center Diagonal Gradient for M -->
-    <linearGradient id="mCenterGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#fde047"/>
-      <stop offset="50%" stop-color="#ea580c"/>
-      <stop offset="100%" stop-color="#9a3412"/>
+    <!-- M Right Wing Gradient (Gold to Bright Yellow) -->
+    <linearGradient id="rightWingGrad" x1="100%" y1="100%" x2="50%" y2="0%">
+      <stop offset="0%" stop-color="#d97706" />
+      <stop offset="50%" stop-color="#f59e0b" />
+      <stop offset="100%" stop-color="#fef08a" />
     </linearGradient>
 
-    <!-- Glowing Accents for MOREX X emblem -->
-    <linearGradient id="xAccentGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#f59e0b"/>
-      <stop offset="100%" stop-color="#fde047"/>
+    <!-- Central Diamond / Upward Arrow Accent -->
+    <linearGradient id="centerCoreGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="35%" stop-color="#fde047" />
+      <stop offset="100%" stop-color="#ea580c" />
     </linearGradient>
 
-    <!-- Premium Filters for Glow & Shadows -->
-    <filter id="heavyShadow" x="-20%" y="-20%" width="140%" height="140%">
-      <feDropShadow dx="0" dy="14" stdDeviation="18" flood-color="#000000" flood-opacity="0.75"/>
+    <!-- Lower X-Cross Bridge Gradient -->
+    <linearGradient id="crossBridgeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f59e0b" />
+      <stop offset="50%" stop-color="#d97706" />
+      <stop offset="100%" stop-color="#78350f" />
+    </linearGradient>
+
+    <!-- Soft Drop Shadow Filter -->
+    <filter id="logoShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="16" stdDeviation="16" flood-color="#000000" flood-opacity="0.8" />
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#f59e0b" flood-opacity="0.2" />
     </filter>
 
-    <filter id="neonGlow" x="-30%" y="-30%" width="160%" height="160%">
-      <feGaussianBlur stdDeviation="8" result="blur"/>
-      <feComponentTransfer in="blur" result="glow">
-        <feFuncA type="linear" slope="0.8"/>
-      </feComponentTransfer>
+    <!-- Neon Glow Filter for Core Node -->
+    <filter id="coreGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="6" result="blur" />
       <feMerge>
-        <feMergeNode in="glow"/>
-        <feMergeNode in="SourceGraphic"/>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
       </feMerge>
     </filter>
 
-    <!-- Ambient Upper Lighting Overlay -->
-    <radialGradient id="ambientLight" cx="50%" cy="20%" r="55%">
-      <stop offset="0%" stop-color="#f59e0b" stop-opacity="0.2"/>
-      <stop offset="100%" stop-color="#000000" stop-opacity="0"/>
-    </radialGradient>
+    <!-- Light Reflection Overlay -->
+    <linearGradient id="glassLight" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.1" />
+      <stop offset="30%" stop-color="#ffffff" stop-opacity="0.02" />
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0" />
+    </linearGradient>
   </defs>
 
-  <!-- Base App Icon Container (Premium Squircle) -->
-  <rect width="512" height="512" rx="124" fill="url(#spaceBg)"/>
-  
-  <!-- Subtle Ambient Top Light Glow -->
-  <rect width="512" height="512" rx="124" fill="url(#ambientLight)"/>
+  <!-- Canvas Container (Squircle) -->
+  <rect width="512" height="512" rx="120" fill="url(#bgGrad)" />
 
-  <!-- High-Tech Inner Glow Ring -->
-  <rect x="16" y="16" width="480" height="480" rx="108" fill="none" stroke="url(#ringGrad)" stroke-width="2.5" opacity="0.9"/>
-  <rect x="22" y="22" width="468" height="468" rx="102" fill="none" stroke="#1c1917" stroke-width="1.5" opacity="0.3"/>
+  <!-- Ambient Top Reflection -->
+  <rect width="512" height="512" rx="120" fill="url(#glassLight)" />
 
-  <!-- Tech Dots Grid Pattern for Premium Depth -->
-  <g opacity="0.12">
-    <circle cx="96" cy="96" r="2.5" fill="#f59e0b"/>
-    <circle cx="160" cy="96" r="2.5" fill="#f59e0b"/>
-    <circle cx="224" cy="96" r="2.5" fill="#f59e0b"/>
-    <circle cx="288" cy="96" r="2.5" fill="#f59e0b"/>
-    <circle cx="352" cy="96" r="2.5" fill="#f59e0b"/>
-    <circle cx="416" cy="96" r="2.5" fill="#f59e0b"/>
-    <circle cx="96" cy="416" r="2.5" fill="#f59e0b"/>
-    <circle cx="160" cy="416" r="2.5" fill="#f59e0b"/>
-    <circle cx="224" cy="416" r="2.5" fill="#f59e0b"/>
-    <circle cx="288" cy="416" r="2.5" fill="#f59e0b"/>
-    <circle cx="352" cy="416" r="2.5" fill="#f59e0b"/>
-    <circle cx="416" cy="416" r="2.5" fill="#f59e0b"/>
+  <!-- Outer Precision Border -->
+  <rect x="12" y="12" width="488" height="488" rx="108" fill="none" stroke="url(#haloGrad)" stroke-width="2.5" />
+  <rect x="20" y="20" width="472" height="472" rx="100" fill="none" stroke="#27272a" stroke-width="1" opacity="0.6" />
+
+  <!-- Background Technical Grid Lines -->
+  <g opacity="0.08" stroke="#f59e0b" stroke-width="1">
+    <line x1="256" y1="60" x2="256" y2="452" stroke-dasharray="6 8" />
+    <line x1="60" y1="256" x2="452" y2="256" stroke-dasharray="6 8" />
+    <circle cx="256" cy="256" r="170" fill="none" stroke-dasharray="4 8" />
+    <circle cx="256" cy="256" r="120" fill="none" stroke-dasharray="2 6" />
   </g>
 
-  <!-- Glowing Orbit Lines -->
-  <g opacity="0.25" stroke-dasharray="8 14">
-    <circle cx="256" cy="256" r="180" fill="none" stroke="#f59e0b" stroke-width="1.5"/>
+  <!-- MOREX Main Emblem (3D Monogram M + Upward Exchange Arrow) -->
+  <g filter="url(#logoShadow)">
+
+    <!-- Left Outer Vertical Pillar -->
+    <path d="M 116 376 L 116 156 C 116 142 128 132 142 136 L 180 148 C 190 151 196 160 196 170 L 196 376 Z" fill="url(#leftWingGrad)" />
+
+    <!-- Right Outer Vertical Pillar -->
+    <path d="M 396 376 L 396 156 C 396 142 384 132 370 136 L 332 148 C 322 151 316 160 316 170 L 316 376 Z" fill="url(#rightWingGrad)" />
+
+    <!-- Left Inner Diagonal Swoosh (Forms M diagonal & X crossover) -->
+    <path d="M 196 170 L 256 280 L 224 330 L 138 180 Z" fill="url(#leftWingGrad)" opacity="0.9" />
+
+    <!-- Right Inner Diagonal Swoosh -->
+    <path d="M 316 170 L 256 280 L 288 330 L 374 180 Z" fill="url(#rightWingGrad)" opacity="0.9" />
+
+    <!-- Dynamic Central Diamond Core (Upward Momentum & High-Yield Node) -->
+    <polygon points="256,128 296,204 256,280 216,204" fill="url(#centerCoreGrad)" filter="url(#coreGlow)" />
+    
+    <!-- Inner Radiant Core Flare -->
+    <polygon points="256,148 280,204 256,260 232,204" fill="#ffffff" />
+
+    <!-- Sleek Bottom Horizon Anchor Bar -->
+    <path d="M 132 360 L 380 360 C 391 360 398 370 393 380 C 388 388 379 392 368 392 L 144 392 C 133 392 124 388 119 380 C 114 370 121 360 132 360 Z" fill="url(#crossBridgeGrad)" />
+    <rect x="180" y="368" width="152" height="6" rx="3" fill="#ffffff" opacity="0.9" filter="url(#coreGlow)" />
+
   </g>
 
-  <!-- Main Dynamic MOREX 'M' Symbol -->
-  <g filter="url(#heavyShadow)">
-    <!-- Left Vertical Stem -->
-    <path d="M 112,380 L 112,142 C 112,130 124,122 135,127 L 176,148 C 182,151 186,157 186,164 L 186,380 Z" fill="url(#mStemGrad)"/>
-
-    <!-- Right Vertical Stem -->
-    <path d="M 400,380 L 400,142 C 400,130 388,122 377,127 L 336,148 C 330,151 326,157 326,164 L 326,380 Z" fill="url(#mStemGrad)"/>
-
-    <!-- Left Diagonal Fold into Peak Center -->
-    <path d="M 186,164 L 256,310 L 226,350 L 140,172 Z" fill="url(#mCenterGrad)"/>
-
-    <!-- Right Diagonal Fold into Peak Center -->
-    <path d="M 326,164 L 256,310 L 286,350 L 372,172 Z" fill="url(#mCenterGrad)"/>
-
-    <!-- Dynamic Central Crystal Diamond Drop Peak (X Core) -->
-    <polygon points="256,150 292,225 256,300 220,225" fill="url(#xAccentGrad)" filter="url(#neonGlow)"/>
-    <polygon points="256,165 280,225 256,285 232,225" fill="#ffffff"/>
-
-    <!-- Glowing Base Connector Bar -->
-    <rect x="120" y="364" width="272" height="16" rx="8" fill="url(#xAccentGrad)" filter="url(#neonGlow)"/>
-    <rect x="180" y="368" width="152" height="8" rx="4" fill="#ffffff"/>
-  </g>
-
-  <!-- Gloss Overlay -->
-  <path d="M 24,24 C 140,24 230,62 302,122 C 374,182 432,282 488,400 C 488,180 450,24 256,24 Z" fill="#ffffff" opacity="0.045" />
-
-  <!-- Glowing Energy Core Node -->
-  <circle cx="256" cy="225" r="7" fill="#ffffff" filter="url(#neonGlow)"/>
+  <!-- Top Center Energy Point Indicator -->
+  <circle cx="256" cy="204" r="6" fill="#ffffff" filter="url(#coreGlow)" />
 </svg>

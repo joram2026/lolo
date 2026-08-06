@@ -63,6 +63,9 @@ export interface Transaction {
   merchantName?: string;
   coinSymbol?: string; // for MMF or specific coin transactions
   coinAmount?: number; // for MMF or specific coin transactions
+  feePercent?: number; // e.g. 10
+  feeAmount?: number;  // 10% fee in USD
+  netAmount?: number;  // amount user actually receives (90%)
 }
 
 export interface CryptoNetwork {
@@ -70,6 +73,7 @@ export interface CryptoNetwork {
   tokenName: string; // e.g. "USDT", "BTC", "ETH"
   networks: string[]; // e.g. ["TRC20", "ERC20"]
   addresses: Record<string, string>; // e.g. {"TRC20": "TY...", "ERC20": "0x..."}
+  minWithdrawalUSD?: number; // Minimum withdrawal amount in USD set by Admin
 }
 
 export interface P2PMerchant {
