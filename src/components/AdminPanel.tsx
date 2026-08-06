@@ -6,11 +6,11 @@ import {
   collection, doc, getDocs, updateDoc, deleteDoc, runTransaction, 
   setDoc, query, orderBy, serverTimestamp, writeBatch, getDoc 
 } from 'firebase/firestore';
-import { UserAccount, Transaction, CryptoNetwork, P2PMerchant, CryptoPrice, ArbitrageConfig, BotTemplate } from '../types';
+import { UserAccount, Transaction, CryptoNetwork, P2PMerchant, CryptoPrice, ArbitrageConfig, BotTemplate, DepositBonusTier, ReferralDepositConfig } from '../types';
 import { fetchLivePriceFromBinance, fetchAllLivePrices, syncLiveCryptoPrices } from '../utils/cryptoApi';
 import { 
   Users, CheckCircle2, XCircle, Settings, ShieldAlert, Key, 
-  Trash2, ToggleLeft, ToggleRight, Loader, ZoomIn, Plus, Edit, Check, Eye, Star, Mail, RefreshCw, X, FileText, Coins, TrendingUp, Bot, Cpu, Smartphone, Phone, Sparkles
+  Trash2, ToggleLeft, ToggleRight, Loader, ZoomIn, Plus, Edit, Check, Eye, Star, Mail, RefreshCw, X, FileText, Coins, TrendingUp, Bot, Cpu, Smartphone, Phone, Sparkles, ChevronDown, ChevronUp
 } from 'lucide-react';
 
 const STATIC_CRYPTO: Record<string, { name: string; price: number }> = {
@@ -125,6 +125,18 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
   const [editingMinInvestmentSymbol, setEditingMinInvestmentSymbol] = useState<string | null>(null);
   const [minInvestmentInput, setMinInvestmentInput] = useState<string>('');
 
+  // Referral Deposit Configuration state
+  const [referralConfig, setReferralConfig] = useState<ReferralDepositConfig>({
+    enabled: true,
+    minDepositThresholdUSD: 10,
+    tiers: [
+      { id: 'tier-1', minAmount: 10, maxAmount: 99.99, referrerPercent: 5, refereePercent: 10 },
+      { id: 'tier-2', minAmount: 100, maxAmount: 499.99, referrerPercent: 7, refereePercent: 12 },
+      { id: 'tier-3', minAmount: 500, maxAmount: 10000, referrerPercent: 10, refereePercent: 15 },
+    ]
+  });
+  const [isSavingReferralConfig, setIsSavingReferralConfig] = useState(false);
+
   // Selected details for inspection/modals
   const [selectedEvidence, setSelectedEvidence] = useState<string | null>(null);
   const [selectedUserHistory, setSelectedUserHistory] = useState<UserAccount | null>(null);
@@ -156,6 +168,8 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
   const [loading, setLoading] = useState(true);
   const [actioning, setActioning] = useState<string | null>(null);
   const [feedbackMsg, setFeedbackMsg] = useState<{ type: 'success' | 'error' | 'info', text: string } | null>(null);
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
+  const toggleSection = (key: string) => setExpandedSections(prev => ({ ...prev, [key]: !prev[key] }));
 
   // Custom Confirmation Modal State
   const [confirmModal, setConfirmModal] = useState<{
@@ -407,6 +421,25 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
         };
         await setDoc(arbDocRef, defaultArb);
         setArbitrageConfig(defaultArb);
+      }
+
+      // Fetch Referral Deposit Config Settings
+      const refDepDocRef = doc(db, 'settings', 'referral_deposit_config');
+      const refDepDocSnap = await getDoc(refDepDocRef);
+      if (refDepDocSnap.exists()) {
+        setReferralConfig(refDepDocSnap.data() as ReferralDepositConfig);
+      } else {
+        const defaultRefDep: ReferralDepositConfig = {
+          enabled: true,
+          minDepositThresholdUSD: 10,
+          tiers: [
+            { id: 'tier-1', minAmount: 10, maxAmount: 99.99, referrerPercent: 5, refereePercent: 10 },
+            { id: 'tier-2', minAmount: 100, maxAmount: 499.99, referrerPercent: 7, refereePercent: 12 },
+            { id: 'tier-3', minAmount: 500, maxAmount: 10000, referrerPercent: 10, refereePercent: 15 },
+          ]
+        };
+        await setDoc(refDepDocRef, defaultRefDep);
+        setReferralConfig(defaultRefDep);
       }
 
       // Fetch Bot Templates
@@ -788,6 +821,20 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
     });
   };
 
+  // Save Referral Deposit Config Handler
+  const handleSaveReferralConfig = async () => {
+    setIsSavingReferralConfig(true);
+    try {
+      await setDoc(doc(db, 'settings', 'referral_deposit_config'), referralConfig);
+      showFeedback('success', 'Referral & Welcome Deposit Bonus settings updated successfully.');
+    } catch (err: any) {
+      console.error('Error saving referral config:', err);
+      showFeedback('error', 'Failed to save referral settings: ' + err.message);
+    } finally {
+      setIsSavingReferralConfig(false);
+    }
+  };
+
   // 2. Deposit Approval Logic
   const handleApproveDeposit = async (tx: Transaction) => {
     setActioning(tx.id);
@@ -810,11 +857,12 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
           ? tx.coinAmount 
           : tx.amount;
 
+        const depositAmountUSD = tx.amount || coinAmount || 0;
+        let updatedBalance = currentBalance;
+
         if (coinSymbol === 'USDT' || tx.type === 'deposit_p2p' || !tx.coinSymbol) {
           // Permanently credit the user's USDT wallet balance
-          transaction.update(userRef, {
-            balance: parseFloat((currentBalance + coinAmount).toFixed(2))
-          });
+          updatedBalance = parseFloat((currentBalance + coinAmount).toFixed(2));
         } else {
           // Permanently credit the specific coin into user's holdings
           const currentCoinBalance = currentHoldings[coinSymbol] || 0;
@@ -827,7 +875,96 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
           });
         }
 
-        // 2. Update transaction status to APPROVED
+        // --- FIRST DEPOSIT BONUS & REFERRAL COMMISSION LOGIC ---
+        const isFirstDeposit = !userData.hasMadeFirstDeposit;
+
+        if (isFirstDeposit) {
+          let config = referralConfig;
+          const configDocRef = doc(db, 'settings', 'referral_deposit_config');
+          const configSnap = await transaction.get(configDocRef);
+          if (configSnap.exists()) {
+            config = configSnap.data() as ReferralDepositConfig;
+          }
+
+          if (config.enabled && depositAmountUSD >= (config.minDepositThresholdUSD || 0)) {
+            // Determine reward percentages strictly from custom tier ranges
+            let referrerPct = 0;
+            let refereePct = 0;
+
+            if (config.tiers && config.tiers.length > 0) {
+              const matchedTier = config.tiers.find(
+                t => depositAmountUSD >= t.minAmount && depositAmountUSD <= t.maxAmount
+              );
+              if (matchedTier) {
+                referrerPct = matchedTier.referrerPercent;
+                refereePct = matchedTier.refereePercent;
+              }
+            }
+
+            // 1. Referee Welcome Bonus
+            const welcomeBonusAmount = parseFloat(((depositAmountUSD * refereePct) / 100).toFixed(2));
+            if (welcomeBonusAmount > 0) {
+              updatedBalance = parseFloat((updatedBalance + welcomeBonusAmount).toFixed(2));
+
+              const welcomeTxRef = doc(collection(db, 'transactions'));
+              transaction.set(welcomeTxRef, {
+                id: welcomeTxRef.id,
+                userId: tx.userId,
+                userEmail: tx.userEmail,
+                type: 'welcome_bonus',
+                amount: welcomeBonusAmount,
+                status: 'APPROVED',
+                createdAt: serverTimestamp(),
+                paymentMessage: `First Deposit Welcome Bonus (${refereePct}% of $${depositAmountUSD.toFixed(2)} deposit)`
+              });
+            }
+
+            // 2. Referrer First Deposit Commission
+            if (userData.referralSource && userData.referralSource.trim().length > 0) {
+              const refCodeStr = userData.referralSource.trim().toUpperCase();
+              const refMappingRef = doc(db, 'referralCodes', refCodeStr);
+              const refMappingSnap = await transaction.get(refMappingRef);
+
+              if (refMappingSnap.exists()) {
+                const referrerUid = refMappingSnap.data().uid;
+                if (referrerUid && referrerUid !== tx.userId) {
+                  const referrerRef = doc(db, 'users', referrerUid);
+                  const referrerSnap = await transaction.get(referrerRef);
+
+                  if (referrerSnap.exists()) {
+                    const referrerData = referrerSnap.data();
+                    const commissionAmount = parseFloat(((depositAmountUSD * referrerPct) / 100).toFixed(2));
+
+                    if (commissionAmount > 0) {
+                      const newReferrerBalance = parseFloat(((referrerData.balance || 0) + commissionAmount).toFixed(2));
+                      transaction.update(referrerRef, { balance: newReferrerBalance });
+
+                      const commissionTxRef = doc(collection(db, 'transactions'));
+                      transaction.set(commissionTxRef, {
+                        id: commissionTxRef.id,
+                        userId: referrerUid,
+                        userEmail: referrerData.email || 'Referrer',
+                        type: 'first_deposit_commission',
+                        amount: commissionAmount,
+                        status: 'APPROVED',
+                        createdAt: serverTimestamp(),
+                        paymentMessage: `Referral First Deposit Bonus (${referrerPct}% of $${depositAmountUSD.toFixed(2)} deposit by ${tx.userEmail})`
+                      });
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        // Update user record with updated balance and set hasMadeFirstDeposit: true
+        transaction.update(userRef, {
+          balance: updatedBalance,
+          hasMadeFirstDeposit: true
+        });
+
+        // Update transaction status to APPROVED
         transaction.update(txRef, {
           status: 'APPROVED'
         });
@@ -1457,75 +1594,107 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                         )}
 
                         {/* Holdings Breakdown Display */}
-                        {u.holdings && Object.entries(u.holdings).filter(([symbol, amount]) => symbol !== 'USDT' && typeof amount === 'number' && amount > 0).length > 0 && (
-                          <div className="mt-3 pt-2.5 border-t border-zinc-800/60 max-w-xl">
-                            <span className="text-[10px] text-zinc-500 font-extrabold uppercase tracking-wider block mb-1.5">Asset Holdings Breakdown</span>
-                            <div className="flex flex-wrap gap-1.5">
-                              {Object.entries(u.holdings).filter(([symbol, amount]) => symbol !== 'USDT' && typeof amount === 'number' && amount > 0).map(([symbol, amount]) => {
-                                const dbPrice = cryptoPricesList.find(p => p.symbol === symbol)?.price;
-                                const price = dbPrice !== undefined ? dbPrice : (STATIC_CRYPTO[symbol]?.price || 0);
-                                const coinAmt = amount as number;
-                                const usdValue = coinAmt * price;
-                                return (
-                                  <span key={symbol} className="text-[10px] bg-slate-800/40 border border-slate-800 hover:border-slate-700 hover:bg-slate-800/80 text-zinc-300 px-2.5 py-0.5 rounded-lg font-mono flex items-center gap-1.5 transition-all">
-                                    <span className="font-black text-zinc-400">{symbol}</span>
-                                    <span className="font-medium text-zinc-200">{coinAmt.toLocaleString(undefined, { maximumFractionDigits: 6 })}</span>
-                                    <span className="text-zinc-500 text-[9px]">(${usdValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })})</span>
-                                  </span>
-                                );
-                              })}
+                        {u.holdings && Object.entries(u.holdings).filter(([symbol, amount]) => symbol !== 'USDT' && typeof amount === 'number' && amount > 0).length > 0 && (() => {
+                          const validHoldings = Object.entries(u.holdings).filter(([symbol, amount]) => symbol !== 'USDT' && typeof amount === 'number' && amount > 0);
+                          const isExpanded = !!expandedSections[`${u.uid}_holdings`];
+                          return (
+                            <div className="mt-2.5 pt-2 border-t border-zinc-800/60 max-w-xl">
+                              <button
+                                type="button"
+                                onClick={() => toggleSection(`${u.uid}_holdings`)}
+                                className="w-full flex items-center justify-between text-[10px] text-zinc-400 font-extrabold uppercase tracking-wider bg-zinc-800/30 hover:bg-zinc-800/70 px-2.5 py-1.5 rounded-lg border border-zinc-800/80 transition-all cursor-pointer"
+                              >
+                                <span className="flex items-center gap-1.5 text-zinc-300">
+                                  <Coins size={12} className="text-amber-400 shrink-0" />
+                                  Asset Holdings Breakdown ({validHoldings.length})
+                                </span>
+                                <span className="flex items-center gap-1 text-zinc-500 font-medium text-[9px] lowercase">
+                                  {isExpanded ? 'Hide' : 'Expand'}
+                                  {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                                </span>
+                              </button>
+
+                              {isExpanded && (
+                                <div className="flex flex-wrap gap-1.5 mt-2 pl-1">
+                                  {validHoldings.map(([symbol, amount]) => {
+                                    const dbPrice = cryptoPricesList.find(p => p.symbol === symbol)?.price;
+                                    const price = dbPrice !== undefined ? dbPrice : (STATIC_CRYPTO[symbol]?.price || 0);
+                                    const coinAmt = amount as number;
+                                    const usdValue = coinAmt * price;
+                                    return (
+                                      <span key={symbol} className="text-[10px] bg-slate-800/40 border border-slate-800 hover:border-slate-700 hover:bg-slate-800/80 text-zinc-300 px-2.5 py-0.5 rounded-lg font-mono flex items-center gap-1.5 transition-all">
+                                        <span className="font-black text-zinc-400">{symbol}</span>
+                                        <span className="font-medium text-zinc-200">{coinAmt.toLocaleString(undefined, { maximumFractionDigits: 6 })}</span>
+                                        <span className="text-zinc-500 text-[9px]">(${usdValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })})</span>
+                                      </span>
+                                    );
+                                  })}
+                                </div>
+                              )}
                             </div>
-                          </div>
-                        )}
+                          );
+                        })()}
 
                         {/* MMF Investments Display */}
                         {(() => {
                           const userInvestments = investmentsList.filter(inv => inv.userId === u.uid);
                           if (userInvestments.length === 0) return null;
                           const activeInvs = userInvestments.filter(inv => inv.status === 'active');
+                          const isExpanded = !!expandedSections[`${u.uid}_mmf`];
                           return (
-                            <div className="mt-3 pt-2.5 border-t border-zinc-800/60 max-w-xl">
-                              <div className="flex justify-between items-center mb-1.5">
-                                <span className="text-[10px] text-zinc-500 font-extrabold uppercase tracking-wider flex items-center gap-1">
-                                  <Coins size={12} className="text-emerald-400" />
-                                  MMF Investment Portfolios ({userInvestments.length})
-                                </span>
+                            <div className="mt-2.5 pt-2 border-t border-zinc-800/60 max-w-xl">
+                              <div className="flex justify-between items-center bg-emerald-950/20 border border-emerald-500/20 px-2.5 py-1.5 rounded-lg">
+                                <button
+                                  type="button"
+                                  onClick={() => toggleSection(`${u.uid}_mmf`)}
+                                  className="flex items-center gap-1.5 text-[10px] text-emerald-400 font-extrabold uppercase tracking-wider hover:text-emerald-300 transition-all cursor-pointer flex-1 text-left"
+                                >
+                                  <Coins size={12} className="text-emerald-400 shrink-0" />
+                                  <span>MMF Portfolios ({userInvestments.length})</span>
+                                  <span className="text-[9px] text-emerald-500/80 font-mono font-normal ml-1">
+                                    ({activeInvs.length} Active)
+                                  </span>
+                                  {isExpanded ? <ChevronUp size={12} className="shrink-0" /> : <ChevronDown size={12} className="shrink-0" />}
+                                </button>
                                 <button
                                   id={`user-card-wipe-invs-${u.uid}`}
                                   onClick={() => handleDeleteAllInvestments(u.uid, u.email)}
-                                  className="text-[9px] text-red-400 hover:text-red-300 font-mono underline cursor-pointer"
+                                  className="text-[9px] text-red-400 hover:text-red-300 font-mono underline cursor-pointer shrink-0 ml-2"
                                 >
                                   Wipe ({userInvestments.length})
                                 </button>
                               </div>
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1">
-                                {activeInvs.map((inv: any) => {
-                                  const unlockDate = inv.unlockAt?.toDate ? inv.unlockAt.toDate().toLocaleDateString() : (inv.unlockAt ? new Date(inv.unlockAt).toLocaleDateString() : 'N/A');
-                                  return (
-                                    <div 
-                                      key={inv.id} 
-                                      className="p-2.5 rounded-xl border text-[10px] font-mono flex flex-col justify-between gap-1 bg-emerald-950/15 border-emerald-500/20 text-emerald-300"
-                                    >
-                                      <div className="flex justify-between items-center">
-                                        <span className="font-bold text-zinc-200">{inv.amount} {inv.coinSymbol}</span>
-                                        <span className="text-[8px] font-black uppercase tracking-wider px-1 py-0.25 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 animate-pulse">
-                                          {inv.status}
-                                        </span>
+
+                              {isExpanded && (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+                                  {activeInvs.map((inv: any) => {
+                                    const unlockDate = inv.unlockAt?.toDate ? inv.unlockAt.toDate().toLocaleDateString() : (inv.unlockAt ? new Date(inv.unlockAt).toLocaleDateString() : 'N/A');
+                                    return (
+                                      <div 
+                                        key={inv.id} 
+                                        className="p-2.5 rounded-xl border text-[10px] font-mono flex flex-col justify-between gap-1 bg-emerald-950/15 border-emerald-500/20 text-emerald-300"
+                                      >
+                                        <div className="flex justify-between items-center">
+                                          <span className="font-bold text-zinc-200">{inv.amount} {inv.coinSymbol}</span>
+                                          <span className="text-[8px] font-black uppercase tracking-wider px-1 py-0.25 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 animate-pulse">
+                                            {inv.status}
+                                          </span>
+                                        </div>
+                                        <div className="flex justify-between items-center text-[9px] text-zinc-500 mt-1">
+                                          <span>Rate: {inv.dailyRate}% Daily</span>
+                                          {inv.autoInvest && (
+                                            <span className="text-teal-400 font-bold">Auto-invest</span>
+                                          )}
+                                        </div>
+                                        <div className="text-[8px] text-zinc-600 border-t border-zinc-800/40 pt-1 mt-0.5 flex justify-between">
+                                          <span>End Date:</span>
+                                          <span>{unlockDate}</span>
+                                        </div>
                                       </div>
-                                      <div className="flex justify-between items-center text-[9px] text-zinc-500 mt-1">
-                                        <span>Rate: {inv.dailyRate}% Daily</span>
-                                        {inv.autoInvest && (
-                                          <span className="text-teal-400 font-bold">Auto-invest</span>
-                                        )}
-                                      </div>
-                                      <div className="text-[8px] text-zinc-600 border-t border-zinc-800/40 pt-1 mt-0.5 flex justify-between">
-                                        <span>End Date:</span>
-                                        <span>{unlockDate}</span>
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                              </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
                             </div>
                           );
                         })()}
@@ -1534,44 +1703,53 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                         {(() => {
                           const userBots = userBotsList.filter(bot => bot.userId === u.uid);
                           if (userBots.length === 0) return null;
+                          const isExpanded = !!expandedSections[`${u.uid}_bots`];
                           return (
-                            <div className="mt-3 pt-2.5 border-t border-zinc-800/60 max-w-xl">
-                              <div className="flex justify-between items-center mb-1.5">
-                                <span className="text-[10px] text-zinc-500 font-extrabold uppercase tracking-wider flex items-center gap-1">
-                                  <Bot size={12} className="text-cyan-400" />
-                                  Configured AI Trading Bots ({userBots.length})
-                                </span>
+                            <div className="mt-2.5 pt-2 border-t border-zinc-800/60 max-w-xl">
+                              <div className="flex justify-between items-center bg-cyan-950/20 border border-cyan-500/20 px-2.5 py-1.5 rounded-lg">
+                                <button
+                                  type="button"
+                                  onClick={() => toggleSection(`${u.uid}_bots`)}
+                                  className="flex items-center gap-1.5 text-[10px] text-cyan-400 font-extrabold uppercase tracking-wider hover:text-cyan-300 transition-all cursor-pointer flex-1 text-left"
+                                >
+                                  <Bot size={12} className="text-cyan-400 shrink-0" />
+                                  <span>AI Trading Bots ({userBots.length})</span>
+                                  {isExpanded ? <ChevronUp size={12} className="shrink-0" /> : <ChevronDown size={12} className="shrink-0" />}
+                                </button>
                                 <button
                                   id={`user-card-wipe-bots-${u.uid}`}
                                   onClick={() => handleDeleteAllBots(u.uid, u.email)}
-                                  className="text-[9px] text-red-400 hover:text-red-300 font-mono underline cursor-pointer"
+                                  className="text-[9px] text-red-400 hover:text-red-300 font-mono underline cursor-pointer shrink-0 ml-2"
                                 >
                                   Wipe ({userBots.length})
                                 </button>
                               </div>
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1">
-                                {userBots.map((bot: any) => (
-                                  <div 
-                                    key={bot.id} 
-                                    className="p-2.5 rounded-xl border text-[10px] font-mono flex flex-col justify-between gap-1 bg-cyan-950/15 border-cyan-500/20 text-cyan-300"
-                                  >
-                                    <div className="flex justify-between items-center">
-                                      <span className="font-bold text-zinc-200">{bot.name || 'AI Bot'}</span>
-                                      <span className={`text-[8px] font-black uppercase tracking-wider px-1 py-0.25 rounded border ${
-                                        bot.status === 'RUNNING' || bot.status === 'ACTIVE'
-                                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 animate-pulse'
-                                          : 'bg-zinc-800 text-zinc-400 border-zinc-700'
-                                      }`}>
-                                        {bot.status || 'ACTIVE'}
-                                      </span>
+
+                              {isExpanded && (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+                                  {userBots.map((bot: any) => (
+                                    <div 
+                                      key={bot.id} 
+                                      className="p-2.5 rounded-xl border text-[10px] font-mono flex flex-col justify-between gap-1 bg-cyan-950/15 border-cyan-500/20 text-cyan-300"
+                                    >
+                                      <div className="flex justify-between items-center">
+                                        <span className="font-bold text-zinc-200">{bot.name || 'AI Bot'}</span>
+                                        <span className={`text-[8px] font-black uppercase tracking-wider px-1 py-0.25 rounded border ${
+                                          bot.status === 'RUNNING' || bot.status === 'ACTIVE'
+                                            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 animate-pulse'
+                                            : 'bg-zinc-800 text-zinc-400 border-zinc-700'
+                                        }`}>
+                                          {bot.status || 'ACTIVE'}
+                                        </span>
+                                      </div>
+                                      <div className="flex justify-between items-center text-[9px] text-zinc-500 mt-1">
+                                        <span>Capital: ${bot.capitalAllocated || bot.minCapital || 50}</span>
+                                        <span>Pairs: {Array.isArray(bot.tradingPairs) ? bot.tradingPairs.join(', ') : (bot.tradingPairs || 'All')}</span>
+                                      </div>
                                     </div>
-                                    <div className="flex justify-between items-center text-[9px] text-zinc-500 mt-1">
-                                      <span>Capital: ${bot.capitalAllocated || bot.minCapital || 50}</span>
-                                      <span>Pairs: {Array.isArray(bot.tradingPairs) ? bot.tradingPairs.join(', ') : (bot.tradingPairs || 'All')}</span>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
+                                  ))}
+                                </div>
+                              )}
                             </div>
                           );
                         })()}
@@ -2925,6 +3103,181 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                       className="w-full px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-white focus:outline-none focus:ring-1 focus:ring-amber-500"
                     />
                     <p className="text-[9px] text-zinc-500 font-semibold mt-1">Users will see how to buy coins on these specific platforms and transfer/sell them to your platform to pocket the value difference.</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* First Deposit Referral & Welcome Bonus Settings Controller */}
+              <div id="referral-deposit-bonus-controller" className="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-800/80 pb-3">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="text-amber-400" size={16} />
+                    <div>
+                      <h3 className="text-xs font-black text-zinc-300 uppercase tracking-wider">Referral & Welcome First Deposit Rewards</h3>
+                      <p className="text-[10px] text-zinc-500 font-semibold mt-0.5">
+                        Configure reward commission for the referrer and welcoming bonus percentage for the new referred user on their FIRST deposit.
+                      </p>
+                    </div>
+                  </div>
+                  <div>
+                    <button
+                      id="save-referral-config-btn"
+                      onClick={handleSaveReferralConfig}
+                      disabled={isSavingReferralConfig}
+                      className="flex items-center gap-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-black text-xs rounded-xl transition-colors cursor-pointer disabled:opacity-50"
+                    >
+                      {isSavingReferralConfig ? <Loader size={12} className="animate-spin" /> : <Check size={12} />}
+                      <span>Save Referral Settings</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Toggle status */}
+                  <div className="bg-zinc-950 p-4 rounded-2xl border border-zinc-800/50 flex flex-col justify-between space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-zinc-300">Reward Status</span>
+                      <button
+                        type="button"
+                        onClick={() => setReferralConfig({ ...referralConfig, enabled: !referralConfig.enabled })}
+                        className={`px-3 py-1 text-[10px] font-black rounded-lg transition-colors cursor-pointer ${
+                          referralConfig.enabled ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-zinc-800 text-zinc-400'
+                        }`}
+                      >
+                        {referralConfig.enabled ? 'ENABLED' : 'DISABLED'}
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-zinc-500">
+                      When enabled, rewards are automatically issued when an admin approves a user's first deposit.
+                    </p>
+                  </div>
+
+                  {/* Minimum Deposit Threshold USD */}
+                  <div className="bg-zinc-950 p-4 rounded-2xl border border-zinc-800/50 space-y-1.5">
+                    <label className="text-xs font-bold text-zinc-300 block">Minimum Deposit Threshold ($)</label>
+                    <p className="text-[10px] text-zinc-500">Minimum first deposit required to qualify for any reward bonus.</p>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-amber-400 font-mono">$</span>
+                      <input
+                        type="number"
+                        step="1"
+                        min="0"
+                        value={referralConfig.minDepositThresholdUSD}
+                        onChange={(e) => setReferralConfig({ ...referralConfig, minDepositThresholdUSD: parseFloat(e.target.value) || 0 })}
+                        className="w-full px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-white font-mono focus:outline-none focus:ring-1 focus:ring-amber-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Tier Ranges Section */}
+                <div className="bg-zinc-950 p-4 rounded-2xl border border-zinc-800/50 space-y-3">
+                  <div className="flex items-center justify-between border-b border-zinc-900 pb-2">
+                    <div>
+                      <span className="text-xs font-black text-amber-400 tracking-wider uppercase">Deposit Amount Tier Ranges</span>
+                      <p className="text-[10px] text-zinc-500 font-medium">Set custom reward percentages based on deposit amount brackets.</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newTier: DepositBonusTier = {
+                          id: 'tier-' + Date.now(),
+                          minAmount: 100,
+                          maxAmount: 1000,
+                          referrerPercent: 7,
+                          refereePercent: 12
+                        };
+                        setReferralConfig({
+                          ...referralConfig,
+                          tiers: [...(referralConfig.tiers || []), newTier]
+                        });
+                      }}
+                      className="px-3 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[10px] font-bold rounded-lg transition-colors cursor-pointer flex items-center gap-1"
+                    >
+                      <Plus size={12} /> Add Tier Range
+                    </button>
+                  </div>
+
+                  <div className="space-y-2">
+                    {(!referralConfig.tiers || referralConfig.tiers.length === 0) ? (
+                      <p className="text-xs text-zinc-500 italic py-2 text-center">No deposit reward tiers configured. Click 'Add Tier Range' to create reward brackets.</p>
+                    ) : (
+                      referralConfig.tiers.map((tier, idx) => (
+                        <div key={tier.id} className="grid grid-cols-1 sm:grid-cols-5 gap-2 items-center bg-zinc-900/60 p-2.5 rounded-xl border border-zinc-850">
+                          <div>
+                            <label className="text-[9px] text-zinc-500 font-bold block mb-0.5">Min Deposit ($)</label>
+                            <input
+                              type="number"
+                              value={tier.minAmount}
+                              onChange={(e) => {
+                                const val = parseFloat(e.target.value) || 0;
+                                const updated = [...(referralConfig.tiers || [])];
+                                updated[idx].minAmount = val;
+                                setReferralConfig({ ...referralConfig, tiers: updated });
+                              }}
+                              className="w-full px-2 py-1 bg-zinc-950 border border-zinc-800 rounded text-xs text-white font-mono"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[9px] text-zinc-500 font-bold block mb-0.5">Max Deposit ($)</label>
+                            <input
+                              type="number"
+                              value={tier.maxAmount}
+                              onChange={(e) => {
+                                const val = parseFloat(e.target.value) || 0;
+                                const updated = [...(referralConfig.tiers || [])];
+                                updated[idx].maxAmount = val;
+                                setReferralConfig({ ...referralConfig, tiers: updated });
+                              }}
+                              className="w-full px-2 py-1 bg-zinc-950 border border-zinc-800 rounded text-xs text-white font-mono"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[9px] text-amber-400/80 font-bold block mb-0.5">Referrer Reward (%)</label>
+                            <input
+                              type="number"
+                              step="0.1"
+                              value={tier.referrerPercent}
+                              onChange={(e) => {
+                                const val = parseFloat(e.target.value) || 0;
+                                const updated = [...(referralConfig.tiers || [])];
+                                updated[idx].referrerPercent = val;
+                                setReferralConfig({ ...referralConfig, tiers: updated });
+                              }}
+                              className="w-full px-2 py-1 bg-zinc-950 border border-zinc-800 rounded text-xs text-amber-400 font-mono font-bold"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[9px] text-emerald-400/80 font-bold block mb-0.5">Referee Welcome (%)</label>
+                            <input
+                              type="number"
+                              step="0.1"
+                              value={tier.refereePercent}
+                              onChange={(e) => {
+                                const val = parseFloat(e.target.value) || 0;
+                                const updated = [...(referralConfig.tiers || [])];
+                                updated[idx].refereePercent = val;
+                                setReferralConfig({ ...referralConfig, tiers: updated });
+                              }}
+                              className="w-full px-2 py-1 bg-zinc-950 border border-zinc-800 rounded text-xs text-emerald-400 font-mono font-bold"
+                            />
+                          </div>
+                          <div className="flex justify-end items-end h-full pt-2 sm:pt-0">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const updated = (referralConfig.tiers || []).filter(t => t.id !== tier.id);
+                                setReferralConfig({ ...referralConfig, tiers: updated });
+                              }}
+                              className="p-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg transition-colors cursor-pointer"
+                              title="Delete Tier"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </div>
               </div>

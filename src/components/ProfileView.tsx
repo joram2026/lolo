@@ -263,6 +263,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
             uid: docSnap.id,
             displayName: uData.displayName || 'Anonymous User',
             email: uData.email || '',
+            hasMadeFirstDeposit: uData.hasMadeFirstDeposit || false,
             createdAt: uData.createdAt ? uData.createdAt.toDate() : new Date(),
           });
         });
@@ -983,6 +984,15 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                   {loadingReferred && <span className="text-zinc-400 animate-pulse font-normal lowercase">fetching...</span>}
                 </div>
 
+                {/* Encouraging Follow-up Tip */}
+                <div className="bg-amber-50 border border-amber-200/80 rounded-xl p-2.5 text-[10px] text-amber-900 leading-relaxed flex items-start gap-2">
+                  <span className="text-sm shrink-0">💡</span>
+                  <div>
+                    <span className="font-bold block">Follow up with your team!</span>
+                    Encourage your friends to make their first deposit. When they deposit, you automatically receive a percentage commission on their deposit amount!
+                  </div>
+                </div>
+
                 {loadingReferred ? (
                   <div className="text-center py-4 text-xs text-zinc-500">
                     Loading referred users...
@@ -992,7 +1002,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                     No friends have joined using your code yet.
                   </div>
                 ) : (
-                  <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+                  <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
                     {referredUsers.map((refUser) => {
                       const parts = refUser.email.split('@');
                       let obfuscatedEmail = refUser.email;
@@ -1019,13 +1029,19 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                               {obfuscatedEmail}
                             </p>
                           </div>
-                          <div className="text-right">
-                            <p className="text-[10px] text-zinc-500 font-mono">
-                              {refUser.createdAt.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                          <div className="text-right flex flex-col items-end gap-0.5">
+                            <p className="text-[10px] text-zinc-400 font-mono">
+                              Joined {refUser.createdAt.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
                             </p>
-                            <p className="text-[9px] text-emerald-600 font-semibold uppercase tracking-wider">
-                              Active
-                            </p>
+                            {refUser.hasMadeFirstDeposit ? (
+                              <span className="text-[9px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                                ✓ First Deposit Done
+                              </span>
+                            ) : (
+                              <span className="text-[9px] bg-amber-100/80 text-amber-800 font-semibold px-2 py-0.5 rounded-full">
+                                Pending 1st Deposit
+                              </span>
+                            )}
                           </div>
                         </div>
                       );

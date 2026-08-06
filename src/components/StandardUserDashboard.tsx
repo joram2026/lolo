@@ -1289,8 +1289,10 @@ export default function StandardUserDashboard({
       return;
     }
     const currentBalance = profile?.balance || 0;
-    if (capital > currentBalance) {
-      toast.error(`Insufficient USD wallet balance ($${currentBalance.toFixed(2)} available). Please deposit funds first.`, 'Insufficient Funds');
+    const lockedUSDT = getLockedAmount('USDT');
+    const freeBalance = Math.max(0, currentBalance - lockedUSDT);
+    if (capital > freeBalance) {
+      toast.error(`Insufficient available USD wallet balance ($${freeBalance.toFixed(2)} free available). Please deposit funds or wait for active trades to complete.`, 'Insufficient Funds');
       return;
     }
 
@@ -4299,7 +4301,7 @@ export default function StandardUserDashboard({
                     <div className="flex justify-between items-center">
                       <label className="text-xs font-bold block">Investment amount</label>
                       <span className={`text-[10px] font-mono font-bold ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>
-                        Available: ${(profile?.balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        Available: ${Math.max(0, (profile?.balance || 0) - getLockedAmount('USDT')).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </span>
                     </div>
                     <div className="relative">

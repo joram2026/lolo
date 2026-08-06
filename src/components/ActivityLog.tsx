@@ -4,7 +4,7 @@ import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { Transaction } from '../types';
 import { 
   ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Clock, CheckCircle2, XCircle, 
-  ChevronDown, ChevronUp, Filter, RefreshCw, Calendar, ListFilter, Gift, TrendingUp, Send, Bot
+  ChevronDown, ChevronUp, Filter, RefreshCw, Calendar, ListFilter, Gift, TrendingUp, Send, Bot, Sparkles
 } from 'lucide-react';
 
 enum OperationType {
@@ -124,7 +124,7 @@ export default function ActivityLog({ userId, isLightTheme = false }: ActivityLo
     const isBuy = tx.type === 'buy_crypto';
     const isSell = tx.type === 'sell_crypto';
     const isSwap = tx.type === 'swap_crypto';
-    const isReferral = tx.type === 'referral_reward';
+    const isReferral = tx.type === 'referral_reward' || tx.type === 'first_deposit_commission' || tx.type === 'welcome_bonus';
     const isInvestment = tx.type === 'invested' || tx.type === 'investment_earning';
     const isBot = tx.type === 'Auto Bot trade' || tx.type === 'bot_harvest' || tx.type === 'bot_trade' || tx.type === 'bot' || tx.type?.toLowerCase?.().includes('bot') || (tx.title && tx.title.toLowerCase().includes('bot'));
 
@@ -205,6 +205,22 @@ export default function ActivityLog({ userId, isLightTheme = false }: ActivityLo
           colorClass: isLightTheme ? 'text-emerald-700 font-extrabold' : 'text-emerald-400',
           bgClass: isLightTheme ? 'bg-emerald-50 border border-emerald-200 text-emerald-700' : 'bg-emerald-500/10 border-emerald-500/15 text-emerald-400',
           icon: <Gift size={16} />
+        };
+      case 'first_deposit_commission':
+        return {
+          label: 'Referral Deposit Bonus',
+          isCredit: true,
+          colorClass: isLightTheme ? 'text-emerald-700 font-extrabold' : 'text-emerald-400',
+          bgClass: isLightTheme ? 'bg-emerald-50 border border-emerald-200 text-emerald-700' : 'bg-emerald-500/10 border-emerald-500/15 text-emerald-400',
+          icon: <Gift size={16} />
+        };
+      case 'welcome_bonus':
+        return {
+          label: 'Welcome Deposit Bonus',
+          isCredit: true,
+          colorClass: isLightTheme ? 'text-emerald-700 font-extrabold' : 'text-emerald-400',
+          bgClass: isLightTheme ? 'bg-emerald-50 border border-emerald-200 text-emerald-700' : 'bg-emerald-500/10 border-emerald-500/15 text-emerald-400',
+          icon: <Sparkles size={16} />
         };
       case 'deposit_crypto':
         return {

@@ -84,12 +84,18 @@ export default function App() {
     setPath(cleanPath);
   }, []);
 
+  const isAdminEmail = (email?: string | null) => {
+    if (!email) return false;
+    const lower = email.toLowerCase();
+    return lower === 'love@gmail.com' || lower === 'joram4036@gmail.com';
+  };
+
   // Track Firebase Auth State changes
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
         setUser(currentUser);
-        if (currentUser.email === 'love@gmail.com') {
+        if (isAdminEmail(currentUser.email)) {
           // Automatically seed the starter crypto networks & merchants into Firestore if they are empty
           await seedFirestoreIfNeeded();
         }
@@ -143,7 +149,7 @@ export default function App() {
       if (path !== '/login' && path !== '/signup' && path !== '/reset') {
         navigate('/login');
       }
-    } else if (user.email === 'love@gmail.com') {
+    } else if (isAdminEmail(user.email)) {
       // Admin: only allow /admin
       if (path !== '/admin') {
         navigate('/admin');
@@ -211,8 +217,8 @@ export default function App() {
     return <AuthPage onSuccess={() => navigate('/dashboard', true)} path={path} navigate={navigate} />;
   }
 
-  // 2. Admin Authentication Bypass (love@gmail.com)
-  if (user.email === 'love@gmail.com') {
+  // 2. Admin Authentication Bypass
+  if (isAdminEmail(user.email)) {
     return <AdminPanel onLogout={handleLogout} />;
   }
 

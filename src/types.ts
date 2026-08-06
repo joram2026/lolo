@@ -6,6 +6,7 @@ export interface UserAccount {
   country?: string;
   balance: number; // in USD
   referralSource?: string;
+  hasMadeFirstDeposit?: boolean;
   createdAt: any; // Firestore Timestamp
   withdrawalEnabled: boolean;
   walletPassword?: string;
@@ -14,7 +15,35 @@ export interface UserAccount {
   twoFactorSecret?: string;
 }
 
-export type TransactionType = 'deposit_crypto' | 'deposit_p2p' | 'withdraw_crypto' | 'withdraw_p2p' | 'buy_crypto' | 'sell_crypto' | 'swap_crypto' | 'referral_reward' | 'invested' | 'investment_earning' | 'internal_send' | 'internal_receive';
+export type TransactionType = 
+  | 'deposit_crypto' 
+  | 'deposit_p2p' 
+  | 'withdraw_crypto' 
+  | 'withdraw_p2p' 
+  | 'buy_crypto' 
+  | 'sell_crypto' 
+  | 'swap_crypto' 
+  | 'referral_reward' 
+  | 'first_deposit_commission'
+  | 'welcome_bonus'
+  | 'invested' 
+  | 'investment_earning' 
+  | 'internal_send' 
+  | 'internal_receive';
+
+export interface DepositBonusTier {
+  id: string;
+  minAmount: number;
+  maxAmount: number;
+  referrerPercent: number;
+  refereePercent: number;
+}
+
+export interface ReferralDepositConfig {
+  enabled: boolean;
+  minDepositThresholdUSD: number; // e.g. 10 USD
+  tiers?: DepositBonusTier[];
+}
 
 export type TransactionStatus = 'PENDING APPROVAL' | 'APPROVED' | 'DECLINED';
 
