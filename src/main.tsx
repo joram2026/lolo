@@ -9,7 +9,7 @@ if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js')
       .then((registration) => {
-        console.log('MOREX Service Worker registered with scope:', registration.scope);
+        console.log('Morex Service Worker registered with scope:', registration.scope);
 
         // 1. Check for updates immediately on load
         registration.update().catch(err => console.log('SW update check failed:', err));

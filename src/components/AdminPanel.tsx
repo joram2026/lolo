@@ -1537,14 +1537,14 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
           <div className="w-8 h-8 rounded-lg bg-slate-950 border border-emerald-500/30 p-1 flex items-center justify-center overflow-hidden">
             <img 
               src="/icon.svg" 
-              alt="MOREX" 
+              alt="Morex" 
               className="w-full h-full object-contain"
               referrerPolicy="no-referrer"
             />
           </div>
           <div>
             <h1 className="text-sm font-black tracking-tight flex items-center gap-1.5 text-zinc-100">
-              MOREX Admin Control
+              Morex Admin Control
               <span className="text-[10px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded-full font-bold uppercase">love</span>
             </h1>
             <p className="text-[10px] text-zinc-500 font-medium">Secured Node Sandbox</p>
@@ -1602,7 +1602,7 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
           {activeTab === 'users' && (
             <div className="space-y-4">
               <div className="flex justify-between items-center">
-                <h2 className="text-sm font-black text-zinc-400 uppercase tracking-wider">MOREX Accounts Registered ({usersList.length})</h2>
+                <h2 className="text-sm font-black text-zinc-400 uppercase tracking-wider">Morex Accounts Registered ({usersList.length})</h2>
                 <button 
                   onClick={() => loadAllData(true)} 
                   className="p-1 text-zinc-400 hover:text-white"

@@ -489,7 +489,7 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
             <div className="relative w-20 h-20 rounded-3xl bg-white border border-zinc-200/80 p-2 shadow-xl flex items-center justify-center overflow-hidden">
               <img 
                 src="/icon.svg" 
-                alt="MOREX" 
+                alt="Morex" 
                 className="w-full h-full object-contain transform group-hover:scale-105 transition-transform duration-500"
                 referrerPolicy="no-referrer"
               />
@@ -497,7 +497,7 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
               <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-zinc-950/5 to-transparent pointer-events-none"></div>
             </div>
           </div>
-          <h1 className="text-2xl font-black text-zinc-800 tracking-tight">MOREX Crypto</h1>
+          <h1 className="text-2xl font-black text-zinc-800 tracking-tight">Morex Holdings</h1>
           <p className="text-xs text-zinc-500 mt-1 max-w-[260px] mx-auto">
             Start earning from crypto with the most favourable rates.
           </p>

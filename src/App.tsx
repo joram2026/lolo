@@ -198,7 +198,7 @@ export default function App() {
         <div className="relative w-20 h-20 rounded-3xl bg-white border border-amber-200 p-2.5 flex items-center justify-center overflow-hidden animate-logo-pulse mb-1">
           <img 
             src="/icon.svg" 
-            alt="MOREX" 
+            alt="Morex" 
             className="w-full h-full object-contain"
             referrerPolicy="no-referrer"
           />

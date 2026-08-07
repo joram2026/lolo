@@ -427,7 +427,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
         if (prog < 25) {
           setInstallStatusText('Establishing secure data stream...');
         } else if (prog < 60) {
-          setInstallStatusText('Downloading MOREX app bundle (3.44 MB)...');
+          setInstallStatusText('Downloading Morex app bundle (3.44 MB)...');
         } else {
           setInstallStatusText('Verifying package security integrity...');
         }
@@ -1365,7 +1365,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                   <span className="text-[10px] font-black text-zinc-500 uppercase tracking-wider block">1. Scan Google Authenticator QR Code</span>
                   <div className="flex justify-center p-3 bg-white border border-zinc-150 rounded-xl max-w-[170px] mx-auto shadow-inner">
                     <img 
-                      src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(`otpauth://totp/MOREX:${profile?.email || user.email}?secret=${temp2faSecret}&issuer=MOREX%20Crypto%20Escrow`)}`}
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(`otpauth://totp/Morex:${profile?.email || user.email}?secret=${temp2faSecret}&issuer=Morex%20Holdings%20Escrow`)}`}
                       alt="2FA QR Code"
                       className="w-36 h-36"
                       referrerPolicy="no-referrer"
@@ -1551,11 +1551,11 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
               {/* App Basic Info */}
               <div className="flex gap-4 items-start">
                 
-                {/* MOREX Rounded App Icon (Official Website Logo) */}
+                {/* Morex Rounded App Icon (Official Website Logo) */}
                 <div className="w-18 h-18 rounded-2xl bg-zinc-950 border border-zinc-200 shadow-md flex items-center justify-center shrink-0 overflow-hidden select-none">
                   <img 
                     src="/icon.svg" 
-                    alt="MOREX" 
+                    alt="Morex" 
                     className="w-full h-full object-cover"
                     referrerPolicy="no-referrer"
                   />
@@ -1564,10 +1564,10 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                 {/* Name, Subtitle & Safety */}
                 <div className="space-y-1">
                   <h1 className="text-xl font-bold text-zinc-900 leading-tight">
-                    MOREX
+                    Morex
                   </h1>
                   <h2 className="text-xs font-semibold text-[#01875f] tracking-wide uppercase">
-                    MOREX Crypto
+                    Morex Holdings
                   </h2>
                   <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 font-semibold select-none pt-0.5">
                     <ShieldCheck className="text-[#01875f]" size={12} />
@@ -1639,7 +1639,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                       {pwaLoading ? (
                         <>
                           <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                          <span>Installing MOREX...</span>
+                          <span>Installing Morex...</span>
                         </>
                       ) : (
                         <span>Install App</span>
@@ -1670,7 +1670,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                               </svg>
                             </div>
                             <div className="space-y-1.5 flex-1 text-left">
-                              <strong className="text-emerald-950 text-[12px] block font-black">🔄 Just uninstalled MOREX?</strong>
+                              <strong className="text-emerald-950 text-[12px] block font-black">🔄 Just uninstalled Morex?</strong>
                             
                               <button
                                 onClick={() => window.location.reload()}
@@ -1925,7 +1925,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                   <ChevronRight size={16} className="text-zinc-400" />
                 </div>
                 <p className="text-[10px] text-zinc-500 leading-relaxed font-sans">
-                  Welcome to MOREX, the ultimate crypto platform simulator. Tap into lightning-fast compounding cycles, safe peer-to-peer (P2P) escrows, and robust portfolio management. Designed as a high-fidelity Progressive Web App, it operates directly as a standalone app on your home screen with zero storage footprint!
+                  Welcome to Morex, the ultimate crypto platform simulator. Tap into lightning-fast compounding cycles, safe peer-to-peer (P2P) escrows, and robust portfolio management. Designed as a high-fidelity Progressive Web App, it operates directly as a standalone app on your home screen with zero storage footprint!
                 </p>
                 <div className="flex flex-wrap gap-1.5 pt-1">
                   <span className="text-[8px] bg-zinc-100 text-zinc-600 px-2 py-0.5 rounded-full font-bold">Finance</span>
@@ -1984,7 +1984,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                   <div className="absolute inset-0 bg-amber-500/10 rounded-3xl animate-pulse"></div>
                   <img 
                     src="/icon.svg" 
-                    alt="MOREX" 
+                    alt="Morex" 
                     className="w-14 h-14 object-cover relative z-10"
                     referrerPolicy="no-referrer"
                   />
@@ -1993,7 +1993,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                   Launch Standalone App
                 </h3>
                 <p className="text-[11px] text-zinc-500 mt-1.5 font-medium leading-relaxed px-2">
-                  Due to browser security policies, websites cannot launch installed apps directly. Follow these simple steps to run MOREX:
+                  Due to browser security policies, websites cannot launch installed apps directly. Follow these simple steps to run Morex:
                 </p>
               </div>
 
@@ -2016,7 +2016,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                     2
                   </div>
                   <div>
-                    <strong className="text-zinc-800 text-xs block font-bold">Find the "MOREX" Icon</strong>
+                    <strong className="text-zinc-800 text-xs block font-bold">Find the "Morex" Icon</strong>
                     <p className="text-[11px] text-zinc-500 leading-normal mt-0.5 font-medium">
                       Look for the beautiful round logo with the letter <span className="text-amber-600 font-bold">"M"</span> on your home screen or app drawer.
                     </p>
