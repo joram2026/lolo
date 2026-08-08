@@ -565,20 +565,30 @@ export default function StandardUserDashboard({
 
   // Listen to network status (online/offline)
   useEffect(() => {
+    let wasOffline = false;
+
     const handleOnline = () => {
       refetchPricesFromBackend();
-      toast.success('Connection restored! Re-synced live rates from server.', 'Online');
+      if (wasOffline) {
+        toast.success('Connection restored! Re-synced live rates from server.', 'Online');
+        wasOffline = false;
+      }
     };
     const handleOffline = () => {
+      wasOffline = true;
       setIsUsingFallbackPrices(true);
       toast.warning('No internet connection. Offline mode activated.', 'Offline');
       setCryptoPrices(mergeWithDefaultRates(STATIC_CRYPTO));
+    };
+    const handleFocus = () => {
+      // Quietly refresh rates on focus without spamming toasts
+      refetchPricesFromBackend();
     };
 
     if (typeof window !== 'undefined') {
       window.addEventListener('online', handleOnline);
       window.addEventListener('offline', handleOffline);
-      window.addEventListener('focus', handleOnline);
+      window.addEventListener('focus', handleFocus);
       if (!navigator.onLine) {
         handleOffline();
       }
@@ -588,7 +598,7 @@ export default function StandardUserDashboard({
       if (typeof window !== 'undefined') {
         window.removeEventListener('online', handleOnline);
         window.removeEventListener('offline', handleOffline);
-        window.removeEventListener('focus', handleOnline);
+        window.removeEventListener('focus', handleFocus);
       }
     };
   }, []);
@@ -929,22 +939,35 @@ export default function StandardUserDashboard({
         return Math.floor(eatMs / (1000 * 60 * 60 * 24));
       };
 
+      // Calculates how many weekdays (Mon-Fri) have elapsed between startEpoch and endEpoch (EAT timezone)
+      const getKenyanWeekdaysElapsed = (startEpoch: number, endEpoch: number): number => {
+        if (endEpoch <= startEpoch) return 0;
+        let weekdays = 0;
+        for (let d = startEpoch + 1; d <= endEpoch; d++) {
+          const dayOfWeek = (d + 4) % 7; // Epoch day 0 was Thursday (4). 0 = Sun, 6 = Sat.
+          if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+            weekdays++;
+          }
+        }
+        return weekdays;
+      };
+
       const nowDayEpoch = getKenyanDaysSinceEpoch(now);
 
-      // Filter active investments that need payments based on EAT calendar day boundary rollover (midnight)
+      // Filter active investments that need payments on weekdays (Mon–Fri) based on EAT calendar day boundary
       const needingPayment = activeInvestments.filter(inv => {
         if (inv.status !== 'active') return false;
         if (processingInvestmentsRef.current.has(inv.id)) return false;
 
         const created = inv.createdAt?.toDate ? inv.createdAt.toDate() : new Date(inv.createdAt);
         const createdDayEpoch = getKenyanDaysSinceEpoch(created);
-        const daysElapsed = Math.max(0, nowDayEpoch - createdDayEpoch);
+        const weekdaysElapsed = getKenyanWeekdaysElapsed(createdDayEpoch, nowDayEpoch);
 
         const totalDays = inv.totalDays ?? 24;
         const daysPaid = inv.daysPaid ?? 0;
 
-        // We owe payments if more calendar days have elapsed than what we have paid
-        return daysElapsed > daysPaid && daysPaid < totalDays;
+        // We owe payments if more weekdays have elapsed than what we have paid
+        return weekdaysElapsed > daysPaid && daysPaid < totalDays;
       });
 
       if (needingPayment.length === 0) return;
@@ -962,13 +985,13 @@ export default function StandardUserDashboard({
 
           const created = inv.createdAt?.toDate ? inv.createdAt.toDate() : new Date(inv.createdAt);
           const createdDayEpoch = getKenyanDaysSinceEpoch(created);
-          const daysElapsed = Math.max(0, nowDayEpoch - createdDayEpoch);
+          const weekdaysElapsed = getKenyanWeekdaysElapsed(createdDayEpoch, nowDayEpoch);
 
           const totalDays = inv.totalDays ?? 24;
           const daysPaid = inv.daysPaid ?? 0;
 
-          // Number of payouts to apply in this batch
-          const payoutsToApply = Math.min(daysElapsed, totalDays) - daysPaid;
+          // Number of payouts to apply in this batch (weekdays only)
+          const payoutsToApply = Math.min(weekdaysElapsed, totalDays) - daysPaid;
           if (payoutsToApply <= 0) continue;
 
           // Profit calculation for the payouts in this batch
@@ -2617,114 +2640,6 @@ export default function StandardUserDashboard({
               {/* TAB 1: HOME */}
           {activeTab === 'home' && (
             <>
-              {/* Search Bar */}
-              <div className="relative">
-                <span className={`absolute inset-y-0 left-0 flex items-center pl-3.5 transition-colors ${activeTab === 'home' ? 'text-zinc-400' : 'text-zinc-500'}`}>
-                  <Search size={14} />
-                </span>
-                <input
-                  id="crypto-search-bar"
-                  type="text"
-                  placeholder="Search supported crypto tokens... (Press Enter to open)"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      if (filteredCrypto.length > 0) {
-                        const firstMatch = filteredCrypto[0];
-                        setSelectedCoin(firstMatch);
-                        setTradeMessage(null);
-                        setQuickTradeAmount('');
-                        setQuickTradeType('BUY');
-                        setSearchQuery('');
-                      }
-                    }
-                  }}
-                  className={`w-full pl-9 pr-10 py-2.5 border rounded-xl text-xs focus:outline-none transition-all duration-300 ${
-                    activeTab === 'home' 
-                      ? 'bg-white border-zinc-200/80 text-zinc-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500/25 placeholder-zinc-400 shadow-xs' 
-                      : 'bg-slate-800 border-slate-700/80 text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/25 placeholder-zinc-600'
-                  }`}
-                />
-                {searchQuery && (
-                  <button
-                    id="clear-search-btn"
-                    type="button"
-                    onClick={() => setSearchQuery('')}
-                    className={`absolute inset-y-0 right-0 flex items-center pr-3.5 cursor-pointer transition-colors ${
-                      activeTab === 'home' ? 'text-zinc-400 hover:text-zinc-700' : 'text-zinc-400 hover:text-white'
-                    }`}
-                    title="Clear Search"
-                  >
-                    <X size={14} />
-                  </button>
-                )}
-
-                {/* Floating Search Dropdown overlay */}
-                {searchQuery.trim() !== '' && (
-                  <div className={`absolute left-0 right-0 mt-1.5 rounded-2xl border shadow-2xl z-50 max-h-72 overflow-y-auto ${
-                    isLightTheme
-                      ? 'bg-white border-zinc-200/95 text-zinc-800 shadow-amber-500/10'
-                      : 'bg-slate-900 border-slate-750 text-white shadow-black/40'
-                  }`}>
-                    {filteredCrypto.length > 0 ? (
-                      <div className="p-1.5 flex flex-col gap-0.5">
-                        <div className={`text-[10px] font-black uppercase tracking-wider px-3 py-1.5 ${
-                          isLightTheme ? 'text-zinc-400 border-b border-zinc-100' : 'text-zinc-500 border-b border-slate-800/80'
-                        }`}>
-                          Search Results ({filteredCrypto.length})
-                        </div>
-                        {filteredCrypto.map(coin => (
-                          <div
-                            key={coin.symbol}
-                            onClick={() => {
-                              setSelectedCoin(coin);
-                              setTradeMessage(null);
-                              setQuickTradeAmount('');
-                              setQuickTradeType('BUY');
-                              setSearchQuery('');
-                            }}
-                            className={`flex items-center justify-between p-2.5 rounded-xl cursor-pointer transition-all duration-150 ${
-                              isLightTheme
-                                ? 'hover:bg-amber-500/10 text-zinc-800 hover:text-amber-900'
-                                : 'hover:bg-slate-850 text-zinc-200 hover:text-white'
-                            }`}
-                          >
-                            <div className="flex items-center gap-2.5 min-w-0">
-                              <CoinIcon symbol={coin.symbol} className="w-7 h-7 shrink-0" />
-                              <div className="min-w-0">
-                                <span className="font-bold text-xs block truncate leading-tight">{coin.name}</span>
-                                <span className={`text-[9px] font-extrabold uppercase tracking-wider block mt-0.5 ${
-                                  isLightTheme ? 'text-zinc-400' : 'text-zinc-500'
-                                }`}>{coin.symbol}</span>
-                              </div>
-                            </div>
-                            <div className="text-right shrink-0">
-                              <span className="font-bold text-xs font-mono block leading-tight">
-                                ${coin.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
-                              </span>
-                              <span className={`inline-flex items-center gap-0.5 text-[9px] font-bold mt-0.5 ${
-                                coin.change24h >= 0 
-                                  ? (isLightTheme ? 'text-emerald-600' : 'text-emerald-400') 
-                                  : (isLightTheme ? 'text-rose-600' : 'text-rose-400')
-                              }`}>
-                                {coin.change24h >= 0 ? <TrendingUp size={9} /> : <TrendingDown size={9} />}
-                                <span>{coin.change24h >= 0 ? '+' : ''}{coin.change24h.toFixed(2)}%</span>
-                              </span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="p-5 text-center flex flex-col items-center justify-center gap-1">
-                        <span className={`text-xs font-bold ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>No tokens found</span>
-                        <span className={`text-[10px] ${isLightTheme ? 'text-zinc-400' : 'text-zinc-500'}`}>Try searching for Bitcoin, Ethereum, Tether, etc.</span>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
               {/* Wallet Card */}
               <div id="wallet-balance-card" className="relative overflow-hidden rounded-3xl bg-gradient-to-tr from-amber-600 via-amber-500 to-yellow-500 p-6 text-white shadow-xl shadow-amber-500/10">
                 {/* Micro Ambient Details */}
@@ -4800,7 +4715,7 @@ export default function StandardUserDashboard({
                                   {/* Bottom Row: Duration Progress Bar */}
                                   <div className="space-y-1.5">
                                     <div className="flex justify-between items-center text-[10px] font-bold select-none font-mono">
-                                      <span className={isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}>Signal Duration Progress</span>
+                                      <span className={isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}>Signal Duration Progress (Mon–Fri)</span>
                                       <span className={isLightTheme ? 'text-zinc-800' : 'text-zinc-200'}>{inv.daysPaid ?? 0} / {inv.totalDays ?? 24} Days ({Math.round(progressPercentage)}%)</span>
                                     </div>
                                     <div className={`w-full h-2 rounded-full overflow-hidden p-[1px] border ${
@@ -4952,7 +4867,7 @@ export default function StandardUserDashboard({
                               : 'bg-slate-950 border-slate-800 focus:border-emerald-500 text-white'
                           }`}
                         />
-                        <p className={`text-[9px] ${isLightTheme ? 'text-zinc-600' : 'text-zinc-500'}`}>Minimum duration is 24 days. Daily signal profits accrue instantly to your main account.</p>
+                        <p className={`text-[9px] ${isLightTheme ? 'text-zinc-600' : 'text-zinc-500'}`}>Minimum duration is 24 trading days. Daily signal profits accrue on weekdays (Mon–Fri) instantly to your account balance.</p>
                       </div>
 
                       {/* Profit preview calculator */}
@@ -4963,7 +4878,7 @@ export default function StandardUserDashboard({
                             : 'bg-slate-950/40 border-slate-850'
                         }`}>
                           <div className="flex justify-between items-center text-[10px]">
-                            <span className="text-zinc-500 font-bold uppercase tracking-wider">Daily Yield</span>
+                            <span className="text-zinc-500 font-bold uppercase tracking-wider">DAILY PROFIT</span>
                             <span className={`font-bold font-mono ${isLightTheme ? 'text-emerald-700 font-extrabold' : 'text-emerald-400'}`}>
                               +{(parseFloat(investmentAmount) * ((selectedCoinForInvestment.investmentRate ?? 5.0) / 100)).toFixed(4)} {selectedCoinForInvestment.symbol}
                             </span>
@@ -4971,7 +4886,7 @@ export default function StandardUserDashboard({
                           <div className={`flex justify-between items-center text-[10px] border-t pt-2 ${
                             isLightTheme ? 'border-amber-200/60' : 'border-slate-850/60'
                           }`}>
-                            <span className="text-zinc-500 font-bold uppercase tracking-wider">Total {parseInt(investmentDays) || 24} Days Yield</span>
+                            <span className="text-zinc-500 font-bold uppercase tracking-wider">TOTAL {parseInt(investmentDays) || 24} DAYS PROFIT</span>
                             <span className={`font-bold font-mono ${isLightTheme ? 'text-emerald-700 font-extrabold' : 'text-emerald-400'}`}>
                               +{(parseFloat(investmentAmount) * ((selectedCoinForInvestment.investmentRate ?? 5.0) / 100) * (parseInt(investmentDays) || 24)).toFixed(4)} {selectedCoinForInvestment.symbol}
                             </span>

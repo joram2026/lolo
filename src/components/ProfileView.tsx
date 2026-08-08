@@ -709,7 +709,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                 <span className="text-zinc-500">Wallet Status</span>
                 <span className="font-semibold flex items-center gap-1 text-emerald-600">
                   <Shield size={12} />
-                  {profile?.withdrawalEnabled ? 'Active / Approved' : 'Suspended by Admin'}
+                  {profile?.withdrawalEnabled ? 'Active / Approved' : 'Suspended'}
                 </span>
               </div>
             </div>

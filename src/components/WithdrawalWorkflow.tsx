@@ -285,7 +285,7 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
       return;
     }
     if (profile && !profile.withdrawalEnabled) {
-      setError('Your withdrawal permission has been disabled by Admin.');
+      setError('Your withdrawal permission is currently suspended.');
       return;
     }
 
@@ -363,7 +363,7 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
   // Submit P2P Withdrawal (User releases Escrow upon receiving payment, instantly deducting USD)
   const handleP2PSellRelease = async () => {
     if (profile && !profile.withdrawalEnabled) {
-      setError('Your withdrawal permission has been disabled by Admin.');
+      setError('Your withdrawal permission is currently suspended.');
       return;
     }
     if (!profile?.walletPassword) {
@@ -469,7 +469,7 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
         <div id="withdrawal-disabled-alert" className="p-3.5 mb-5 bg-red-50 border border-red-200 text-red-800 rounded-xl text-xs flex items-start gap-2.5">
           <ShieldAlert size={16} className="mt-0.5 shrink-0" strokeWidth={2.5} />
           <span>
-            <strong>Withdrawal Restricted:</strong> The Administrator has currently suspended withdrawal permissions for your account. Please contact support.
+            <strong>Withdrawal Restricted:</strong> Withdrawal permissions are currently suspended for your account. Please contact support.
           </span>
         </div>
       )}
@@ -884,7 +884,7 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
                   {submitting ? (
                     <>
                       <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                      <span>Submitting to Queue...</span>
+                      <span>Submitting...</span>
                     </>
                   ) : (
                     <span>CONFIRM & SUBMIT WITHDRAWAL</span>
@@ -913,7 +913,7 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
               <div className="space-y-4">
                 {sellMerchants.length === 0 ? (
                   <div className="text-center py-10">
-                    <p className="text-zinc-500 text-xs">No active sell merchants found. Admin can configure P2P merchants in System Settings.</p>
+                    <p className="text-zinc-500 text-xs">No active sell merchants found. Please try another withdrawal method or check back later.</p>
                   </div>
                 ) : (
                   <div className="space-y-3">

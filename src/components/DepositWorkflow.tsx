@@ -809,7 +809,7 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
                 {submitting ? (
                   <>
                     <RefreshCw size={15} className="animate-spin text-white" />
-                    <span>Submitting to Admin Queue...</span>
+                    <span>Submitting...</span>
                   </>
                 ) : (
                   <>
@@ -839,7 +839,7 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
               <div className="space-y-4">
                 {buyMerchants.length === 0 ? (
                   <div className="text-center py-10">
-                    <p className="text-zinc-500 text-xs">No active buy merchants found. Admin can configure P2P merchants in System Settings.</p>
+                    <p className="text-zinc-500 text-xs">No active buy merchants found. Please try another deposit method or check back later.</p>
                   </div>
                 ) : (
                   <div className="space-y-3">

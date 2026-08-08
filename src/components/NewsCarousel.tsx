@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { NewsItem, CryptoPrice } from '../types';
-import { Zap, ChevronLeft, ChevronRight, Sparkles, TrendingUp, ShieldCheck } from 'lucide-react';
+import { CryptoPrice, ReferralDepositConfig } from '../types';
+import { ChevronLeft, ChevronRight, Gift, Users } from 'lucide-react';
+import { db } from '../firebase';
+import { doc, onSnapshot } from 'firebase/firestore';
 
 const FALLBACK_CRYPTO = [
   { name: 'Bitcoin', symbol: 'BTC', price: 94250.30, change24h: 3.45 },
@@ -16,201 +18,246 @@ interface NewsCarouselProps {
 
 export default function NewsCarousel({ cryptoPrices = FALLBACK_CRYPTO }: NewsCarouselProps) {
   const [activeIndex, setActiveIndex] = useState(0);
+  const [refConfig, setRefConfig] = useState<ReferralDepositConfig | null>(null);
 
-  // Generate dynamic, daily-updated, encouraging market news based on current crypto prices
-  const dailyNews = useMemo(() => {
+  // Subscribe to live referral deposit config from Firestore backend
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, 'settings', 'referral_deposit_config'), (snap) => {
+      if (snap.exists()) {
+        const data = snap.data() as ReferralDepositConfig;
+        if (data.tiers && data.tiers.length > 0) {
+          setRefConfig(data);
+        }
+      }
+    }, (err) => {
+      console.error('Error subscribing to referral config in NewsCarousel:', err);
+    });
+    return () => unsub();
+  }, []);
+
+  const tiers = useMemo(() => {
+    if (refConfig && refConfig.tiers && refConfig.tiers.length > 0) {
+      return refConfig.tiers;
+    }
+    // Default fallback bonus tiers if not yet set in backend settings
+    return [
+      { id: 't1', minAmount: 10, maxAmount: 99.99, refereePercent: 4, referrerPercent: 4 },
+      { id: 't2', minAmount: 100, maxAmount: 499.99, refereePercent: 5, referrerPercent: 5 },
+      { id: 't3', minAmount: 500, maxAmount: 10000, refereePercent: 6, referrerPercent: 6 }
+    ];
+  }, [refConfig]);
+
+  const [brandImgSrc, setBrandImgSrc] = useState<string>('/morexpage.png');
+
+  // Generate 5 dynamic slides
+  const slides = useMemo(() => {
     const today = new Date();
-    // Unique deterministic seed per calendar day in 2026
     const daySeed = today.getFullYear() * 372 + today.getMonth() * 31 + today.getDate();
-    const dateStr = today.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-    
-    // Calculate market indicators from actual dynamic price data
-    const activePrices = cryptoPrices.length > 0 ? cryptoPrices : FALLBACK_CRYPTO;
-    const avgChange = activePrices.reduce((acc, c) => acc + c.change24h, 0) / activePrices.length;
-    const isBullish = avgChange >= 0;
-    
-    // Find the highest performing coin today
-    const sorted = [...activePrices].sort((a, b) => b.change24h - a.change24h);
-    const topGainer = sorted[0] || { name: 'Bitcoin', symbol: 'BTC', price: 94000, change24h: 3.4 };
-    
-    const sources = [
-      'Coindesk Live', 'Cointelegraph Daily', 'Bloomberg Crypto', 
-      'Secure Tech Intel', 'Blockworks Research', 'Decrypt News'
-    ];
-    
-    const images = {
-      market: 'https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?auto=format&fit=crop&w=600&q=80',
-      gainer: 'https://images.unsplash.com/photo-1642790106117-e829e14a795f?auto=format&fit=crop&w=600&q=80',
-      escrow: 'https://images.unsplash.com/photo-1559526324-4b87b5e36e44?auto=format&fit=crop&w=600&q=80',
-      macro: 'https://images.unsplash.com/photo-1516245834210-c4c142787335?auto=format&fit=crop&w=600&q=80'
-    };
-
-    const selectTemplate = (arr: string[], indexSeed: number) => {
-      return arr[Math.abs(indexSeed) % arr.length];
-    };
-
-    // 1. Market Sentiment (Category Seed: 0) - Always formulated encouragingly
-    const marketTemplatesBullish = [
-      `Crypto Market Rally Builds: General index climbs an average +${avgChange.toFixed(2)}% today as solid buying interest and P2P liquidity drive global momentum.`,
-      `Investor Sentiment Bullish: Major digital networks register a strong +${avgChange.toFixed(2)}% average increase, reflecting high trader confidence and stable growth.`,
-      `Momentum Accelerates: Key tokens break out with a solid average return of +${avgChange.toFixed(2)}%, establishing highly robust support ranges for the next wave.`
-    ];
-    
-    const marketTemplatesBearish = [
-      `Resilient Support Zones Hold: Traders leverage today's minor consolidation of ${avgChange.toFixed(2)}% as a healthy accumulation zone for strategic mid-term holdings.`,
-      `Smart Money Inflows Rise: Despite temporary 24h market consolidation (${avgChange.toFixed(2)}%), on-chain data shows long-term investors steadily increasing their positions.`,
-      `Healthy Consolidation Phase: Indices level off by ${avgChange.toFixed(2)}% today, establishing a highly stable baseline designed to fuel the next major recovery cycle.`
-    ];
-    
-    const marketHeadline = isBullish 
-      ? selectTemplate(marketTemplatesBullish, daySeed) 
-      : selectTemplate(marketTemplatesBearish, daySeed);
-
-    // 2. Top Gainer Spotlight (Category Seed: 1)
-    const gainerTemplates = [
-      `Spotlight on ${topGainer.name} (${topGainer.symbol}): Leading today's recovery with a spectacular +${topGainer.change24h.toFixed(2)}% breakout!`,
-      `Utility & Demand Surge: Trading velocity for ${topGainer.symbol} climbs +${topGainer.change24h.toFixed(2)}% in 24h, showcasing strong network utility and investor backing.`,
-      `${topGainer.name} (${topGainer.symbol}) Outperforms Competitors: Attracting high wallet liquidity with a dynamic +${topGainer.change24h.toFixed(2)}% increase today.`
-    ];
-    const gainerHeadline = selectTemplate(gainerTemplates, daySeed + 1);
-
-    // 3. Secure Escrow & Local P2P Ecosystem (Category Seed: 2)
-    const escrowTemplates = [
-      `P2P Security Standard Milestones: Decentralized Escrow completes record Mobile Money swaps today, securing transactions with absolute escrow safety.`,
-      `Airtel & MTN Mobile Money Volume Soars: High-performance secure escrow nodes deliver under-2-minute trade completions for seamless local exchange.`,
-      `Safeguarding Financial Inclusion: Rapid merchant growth on secure P2P networks establishes deep market liquidity, safeguarding retail deposits from volatility.`
-    ];
-    const escrowHeadline = selectTemplate(escrowTemplates, daySeed + 2);
-
-    // 4. Macro Positive News (Category Seed: 3)
-    const macroTemplates = [
-      `On-Chain Transaction Volumes Peak: Decentralized network activity hits record weekly highs, cementing blockchain as a key tool for global payments.`,
-      `USDT Stablecoin Supply Reaches New Heights: Circulation holds stable above $115B, providing ample sideline capital to support the digital asset economy.`,
-      `Layer-2 Transaction Fees Plunge: Network scaling innovations slash micro-payment fees, unlocking next-gen utility for day-to-day retail users.`
-    ];
-    const macroHeadline = selectTemplate(macroTemplates, daySeed + 3);
 
     return [
       {
-        id: `daily-market-${daySeed}`,
-        title: marketHeadline,
-        source: selectTemplate(sources, daySeed),
-        time: `Published Today`,
-        image: images.market
+        id: `slide-brand-${daySeed}`,
+        type: 'brand',
+        title: '',
+        subtitle: '',
+        source: 'Morex Global Command Center',
+        time: 'Live View',
+        image: brandImgSrc,
+        fallbackImage: '/morex_slide_brand.svg',
+        badgeTag: 'Morex Brand'
       },
       {
-        id: `daily-gainer-${daySeed}`,
-        title: gainerHeadline,
-        source: selectTemplate(sources, daySeed + 1),
-        time: `Published Today`,
-        image: images.gainer
+        id: `slide-deposit-bonus-${daySeed}`,
+        type: 'deposit_bonus',
+        title: 'First Deposit Welcome Bonus Badges',
+        subtitle: 'Fund your wallet to unlock instant cash rewards credited upon deposit.',
+        source: 'Morex Deposit Promotion',
+        time: 'Active Offer',
+        image: '/morex_slide_deposit_bonus.svg',
+        badgeTag: '1st Deposit Bonus'
       },
       {
-        id: `daily-escrow-${daySeed}`,
-        title: escrowHeadline,
-        source: 'Secure Intel Network',
-        time: `Updated Live`,
-        image: images.escrow
+        id: `slide-referral-bonus-${daySeed}`,
+        type: 'referral_bonus',
+        title: 'Referee First Deposit Commission Badges',
+        subtitle: 'Invite friends to Morex Holdings and receive direct cash commissions.',
+        source: 'Morex Partner Program',
+        time: 'Referral Rewards',
+        image: '/morex_slide_referral_bonus.svg',
+        badgeTag: 'Referral Commission'
       },
       {
-        id: `daily-macro-${daySeed}`,
-        title: macroHeadline,
-        source: selectTemplate(sources, daySeed + 3),
-        time: `Published Today`,
-        image: images.macro
+        id: `slide-bot-logic-${daySeed}`,
+        type: 'bot_logic',
+        title: '',
+        subtitle: '',
+        source: 'Morex Quant Bot Engine',
+        time: '24/7 Active',
+        image: '/morex_slide_bot_logic.svg',
+        badgeTag: 'Bot Trading Logic'
+      },
+      {
+        id: `slide-signals-logic-${daySeed}`,
+        type: 'signals_logic',
+        title: '',
+        subtitle: '',
+        source: 'Morex Signal Engine',
+        time: 'Live Signals',
+        image: '/morex_slide_signals_logic.svg',
+        badgeTag: 'Signals Logic'
       }
     ];
-  }, [cryptoPrices]);
+  }, [brandImgSrc]);
 
-  // Slideshow interval
+  // Slideshow auto advance interval
   useEffect(() => {
     const timer = setInterval(() => {
-      setActiveIndex((prev) => (prev + 1) % dailyNews.length);
-    }, 7000);
+      setActiveIndex((prev) => (prev + 1) % slides.length);
+    }, 6500);
     return () => clearInterval(timer);
-  }, [dailyNews.length]);
+  }, [slides.length]);
 
   const handlePrev = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setActiveIndex((prev) => (prev === 0 ? dailyNews.length - 1 : prev - 1));
+    setActiveIndex((prev) => (prev === 0 ? slides.length - 1 : prev - 1));
   };
 
   const handleNext = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setActiveIndex((prev) => (prev + 1) % dailyNews.length);
+    setActiveIndex((prev) => (prev + 1) % slides.length);
   };
 
-  const activeSlide = dailyNews[activeIndex] || dailyNews[0];
+  const activeSlide = slides[activeIndex] || slides[0];
+  const isBadgeOverlaySlide = activeSlide.type === 'deposit_bonus' || activeSlide.type === 'referral_bonus';
 
   return (
-    <div id="news-carousel-container" className="relative w-full overflow-hidden rounded-2xl bg-slate-900 border border-slate-800 text-white h-48 sm:h-52">
-      {/* Background Image with Overlay */}
-      <div 
-        className="absolute inset-0 bg-cover bg-center transition-all duration-700 ease-in-out"
+    <div id="news-carousel-container" className="relative w-full max-w-xl mx-auto overflow-hidden rounded-2xl bg-zinc-950 border border-amber-500/30 text-white shadow-2xl aspect-[3/1] min-h-[140px] xs:min-h-[160px] sm:min-h-[180px] flex flex-col justify-center">
+      {/* Image Banner Background */}
+      <img
+        key={activeSlide.id}
+        src={activeSlide.image}
+        alt={activeSlide.badgeTag || 'Morex Slide'}
+        onError={(e) => {
+          if (activeSlide.type === 'brand' && brandImgSrc !== '/morex_slide_brand.svg') {
+            setBrandImgSrc('/morex_slide_brand.svg');
+          } else if (activeSlide.fallbackImage) {
+            e.currentTarget.src = activeSlide.fallbackImage;
+          }
+        }}
+        className="absolute inset-0 w-full h-full object-contain sm:object-cover object-center transition-all duration-700 ease-in-out"
         style={{ 
-          backgroundImage: `url(${activeSlide.image})`,
-          filter: 'brightness(0.22) contrast(1.15)'
+          filter: isBadgeOverlaySlide ? 'brightness(0.32) contrast(1.15)' : 'brightness(1.0) contrast(1.05)'
         }}
       />
-      
-      {/* Dynamic Heat/Visual Accents */}
-      <div className="absolute top-3 left-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-[10px] uppercase tracking-wider font-bold text-amber-400">
-        <Zap size={10} className="animate-pulse" />
-        Market News
-      </div>
 
-      <div className="absolute top-3 right-3 flex items-center gap-1 px-2.5 py-1 rounded-full bg-yellow-500/10 border border-yellow-500/20 text-[9px] font-bold text-yellow-400 tracking-wide">
-        <Sparkles size={10} className="animate-pulse" />
-        Daily Updated
-      </div>
+      {/* Dark gradient backdrop overlay for text/badge readability */}
+      {isBadgeOverlaySlide && (
+        <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/95 via-zinc-950/80 to-zinc-950/60 pointer-events-none" />
+      )}
 
-      {/* Content Container */}
-      <div className="absolute inset-0 flex flex-col justify-end p-5 md:p-6 select-none">
-        <div className="text-[10px] font-bold text-slate-400 mb-1 flex items-center gap-1.5">
-          <span className="text-slate-300 uppercase tracking-wide">{activeSlide.source}</span>
-          <span className="w-1 h-1 rounded-full bg-slate-750"></span>
-          <span className="font-mono text-slate-400">{activeSlide.time}</span>
-        </div>
-        <h3 className="text-xs sm:text-sm font-bold text-slate-100 tracking-tight leading-snug max-w-[95%] md:max-w-[85%] min-h-[40px] flex items-center">
-          {activeSlide.title}
-        </h3>
-        
-        {/* Navigation Dots and Arrow Controls */}
-        <div className="flex items-center justify-between mt-4">
-          <div className="flex gap-1.5">
-            {dailyNews.map((_, idx) => (
-              <button
-                key={idx}
-                id={`carousel-dot-${idx}`}
-                onClick={() => setActiveIndex(idx)}
-                className={`h-1.5 rounded-full transition-all duration-300 ${
-                  idx === activeIndex ? 'w-5 bg-amber-500' : 'w-1.5 bg-slate-700'
-                }`}
-                aria-label={`Go to slide ${idx + 1}`}
-              />
+      {/* FLOATING SIDE NAVIGATION ARROWS */}
+      <button 
+        id="carousel-prev"
+        onClick={handlePrev}
+        className="absolute left-1.5 sm:left-2.5 top-1/2 -translate-y-1/2 z-20 p-1 sm:p-1.5 rounded-full bg-zinc-950/80 border border-amber-500/35 text-amber-400 hover:text-amber-300 hover:bg-zinc-900/90 hover:scale-105 active:scale-95 transition-all backdrop-blur-md shadow-lg cursor-pointer"
+        aria-label="Previous slide"
+      >
+        <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+      </button>
+
+      <button 
+        id="carousel-next"
+        onClick={handleNext}
+        className="absolute right-1.5 sm:right-2.5 top-1/2 -translate-y-1/2 z-20 p-1 sm:p-1.5 rounded-full bg-zinc-950/80 border border-amber-500/35 text-amber-400 hover:text-amber-300 hover:bg-zinc-900/90 hover:scale-105 active:scale-95 transition-all backdrop-blur-md shadow-lg cursor-pointer"
+        aria-label="Next slide"
+      >
+        <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+      </button>
+
+      {/* DYNAMIC BADGES OVERLAY (FOR DEPOSIT BONUS & REFERRAL COMMISSION SLIDES) */}
+      {activeSlide.type === 'deposit_bonus' && (
+        <div className="relative z-10 px-6 xs:px-8 sm:px-12 py-2 sm:py-3 pb-5 sm:pb-6 select-none flex-1 flex flex-col justify-center">
+          <div className="flex items-center gap-1 sm:gap-1.5 mb-0.5 sm:mb-1">
+            <Gift className="text-amber-400 shrink-0 w-3 h-3 sm:w-3.5 sm:h-3.5" />
+            <span className="text-[8px] xs:text-[9px] sm:text-[10px] font-extrabold text-amber-400 uppercase tracking-widest truncate">
+              FIRST DEPOSIT REWARDS
+            </span>
+          </div>
+          <h3 className="text-[11px] xs:text-xs sm:text-sm font-extrabold text-white tracking-tight leading-snug truncate">
+            {activeSlide.title}
+          </h3>
+          <p className="text-[9px] xs:text-[10px] sm:text-xs text-zinc-300/90 font-medium mb-1.5 sm:mb-2.5 line-clamp-1 sm:line-clamp-2">
+            {activeSlide.subtitle}
+          </p>
+
+          {/* Dynamic Badges from Backend */}
+          <div className="grid grid-cols-3 gap-1 sm:gap-2">
+            {tiers.map((t, idx) => (
+              <div key={t.id || idx} className="bg-zinc-900/90 border border-amber-500/40 rounded-lg sm:rounded-xl p-1 sm:p-2 text-center backdrop-blur-md shadow-lg flex flex-col justify-between hover:border-amber-400/70 transition-colors min-w-0">
+                <span className="block text-[7px] xs:text-[8px] sm:text-[9px] text-zinc-300 font-bold uppercase tracking-wider truncate">
+                  DEP ${t.minAmount} – {t.maxAmount >= 9999 ? 'MAX' : `$${t.maxAmount}`}
+                </span>
+                <span className="block text-[10px] xs:text-xs sm:text-sm font-black text-amber-400 font-mono mt-0.5 leading-none">
+                  +{t.refereePercent}% Cash
+                </span>
+                <span className="block text-[7px] xs:text-[8px] text-amber-300/80 font-semibold mt-0.5 truncate">
+                  Welcome Bonus
+                </span>
+              </div>
             ))}
           </div>
-          
-          <div className="flex items-center gap-1 bg-slate-950/60 border border-slate-800/80 rounded-lg p-0.5">
-            <button 
-              id="carousel-prev"
-              onClick={handlePrev}
-              className="p-1 text-slate-400 hover:text-white transition-colors cursor-pointer"
-            >
-              <ChevronLeft size={16} />
-            </button>
-            <span className="text-[10px] font-mono font-bold text-slate-500 px-1 select-none">
-              {activeIndex + 1}/{dailyNews.length}
+        </div>
+      )}
+
+      {activeSlide.type === 'referral_bonus' && (
+        <div className="relative z-10 px-6 xs:px-8 sm:px-12 py-2 sm:py-3 pb-5 sm:pb-6 select-none flex-1 flex flex-col justify-center">
+          <div className="flex items-center gap-1 sm:gap-1.5 mb-0.5 sm:mb-1">
+            <Users className="text-amber-400 shrink-0 w-3 h-3 sm:w-3.5 sm:h-3.5" />
+            <span className="text-[8px] xs:text-[9px] sm:text-[10px] font-extrabold text-amber-400 uppercase tracking-widest truncate">
+              PARTNER PROGRAM
             </span>
-            <button 
-              id="carousel-next"
-              onClick={handleNext}
-              className="p-1 text-slate-400 hover:text-white transition-colors cursor-pointer"
-            >
-              <ChevronRight size={16} />
-            </button>
+          </div>
+          <h3 className="text-[11px] xs:text-xs sm:text-sm font-extrabold text-white tracking-tight leading-snug truncate">
+            {activeSlide.title}
+          </h3>
+          <p className="text-[9px] xs:text-[10px] sm:text-xs text-zinc-300/90 font-medium mb-1.5 sm:mb-2.5 line-clamp-1 sm:line-clamp-2">
+            {activeSlide.subtitle}
+          </p>
+
+          {/* Dynamic Badges from Backend */}
+          <div className="grid grid-cols-3 gap-1 sm:gap-2">
+            {tiers.map((t, idx) => (
+              <div key={t.id || idx} className="bg-zinc-900/90 border border-amber-500/40 rounded-lg sm:rounded-xl p-1 sm:p-2 text-center backdrop-blur-md shadow-lg flex flex-col justify-between hover:border-amber-400/70 transition-colors min-w-0">
+                <span className="block text-[7px] xs:text-[8px] sm:text-[9px] text-zinc-300 font-bold uppercase tracking-wider truncate">
+                  REF DEP ${t.minAmount} – {t.maxAmount >= 9999 ? 'MAX' : `$${t.maxAmount}`}
+                </span>
+                <span className="block text-[10px] xs:text-xs sm:text-sm font-black text-amber-400 font-mono mt-0.5 leading-none">
+                  +{t.referrerPercent}% Commission
+                </span>
+                <span className="block text-[7px] xs:text-[8px] text-amber-300/80 font-semibold mt-0.5 truncate">
+                  Direct Cash
+                </span>
+              </div>
+            ))}
           </div>
         </div>
+      )}
+
+      {/* FLOATING SUBTLE DOTS OVERLAY */}
+      <div className="absolute bottom-1.5 sm:bottom-2 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1 sm:gap-1.5 px-2 py-0.5 rounded-full bg-zinc-950/70 border border-amber-500/20 backdrop-blur-sm">
+        {slides.map((_, idx) => (
+          <button
+            key={idx}
+            id={`carousel-dot-${idx}`}
+            onClick={() => setActiveIndex(idx)}
+            className={`h-1 sm:h-1.5 rounded-full transition-all duration-300 cursor-pointer ${
+              idx === activeIndex 
+                ? 'w-4 sm:w-5 bg-gradient-to-r from-amber-400 to-amber-500 shadow-sm shadow-amber-500/50' 
+                : 'w-1 sm:w-1.5 bg-zinc-600/80 hover:bg-zinc-400'
+            }`}
+            aria-label={`Go to slide ${idx + 1}`}
+          />
+        ))}
       </div>
     </div>
   );

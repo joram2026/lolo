@@ -29,6 +29,8 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [phone, setPhone] = useState('');
   const [resetNewPassword, setResetNewPassword] = useState('');
   const [resetConfirmPassword, setResetConfirmPassword] = useState('');
@@ -38,12 +40,10 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
   const [isCountryOpen, setIsCountryOpen] = useState(false);
 
   const COUNTRIES = [
-    { code: 'Kenya', name: 'Kenya', flag: '🇰🇪', p2p: true },
-    { code: 'Nigeria', name: 'Nigeria', flag: '🇳🇬', p2p: false },
-    { code: 'Ghana', name: 'Ghana', flag: '🇬🇭', p2p: false },
-    { code: 'UAE', name: 'UAE', flag: '🇦🇪', p2p: false },
-    { code: 'USA', name: 'USA', flag: '🇺🇸', p2p: false },
-    { code: 'South Africa', name: 'South Africa', flag: '🇿🇦', p2p: false },
+    { code: 'Kenya', name: 'Kenya', flag: '🇰🇪', dialCode: '+254' },
+    { code: 'Nigeria', name: 'Nigeria', flag: '🇳🇬', dialCode: '+234' },
+    { code: 'Ghana', name: 'Ghana', flag: '🇬🇭', dialCode: '+233' },
+    { code: 'South Africa', name: 'South Africa', flag: '🇿🇦', dialCode: '+27' },
   ];
   const [referral, setReferral] = useState(() => localStorage.getItem('pending_referral_code') || '');
   const referralNotifiedRef = React.useRef(false);
@@ -169,6 +169,13 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
         }, 3000);
 
       } else if (isSignUp) {
+        if (!password || password.length < 6) {
+          throw new Error('Password must be at least 6 characters.');
+        }
+        if (password !== confirmPassword) {
+          throw new Error('Passwords do not match. Please verify that your password confirmation matches.');
+        }
+
         // Clear referral/code parameters from the URL before signing in to prevent immediate automatic sign-out
         navigate('/signup', true);
 
@@ -239,13 +246,17 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
 
         const trimmedReferral = referral.trim().toUpperCase();
 
+        const selectedCountryObj = COUNTRIES.find(c => c.code === country) || COUNTRIES[0];
+        const rawPhone = phone.trim().replace(/^0+/, '');
+        const formattedPhone = rawPhone.startsWith('+') ? rawPhone : `${selectedCountryObj.dialCode} ${rawPhone}`;
+
         // Initialize user document in firestore with starting values, the unique referral code, and the accountPassword field
         const docRef = doc(db, 'users', user.uid);
         await setDoc(docRef, {
           uid: user.uid,
           email: formattedEmail,
           displayName: displayName.trim() || formattedEmail.split('@')[0],
-          phone: phone.trim(),
+          phone: formattedPhone,
           country: country,
           balance: 0.0, // Initial wallet balance starts at $0
           referralSource: trimmedReferral,
@@ -612,11 +623,9 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
                       <div className="flex items-center gap-2.5 min-w-0">
                         <span className="text-base leading-none shrink-0">{COUNTRIES.find(c => c.code === country)?.flag || '🇰🇪'}</span>
                         <span className="font-semibold text-zinc-800 truncate">{COUNTRIES.find(c => c.code === country)?.name || country}</span>
-                        {country === 'Kenya' && (
-                          <span className="text-[10px] bg-emerald-100 text-emerald-800 font-extrabold px-1.5 py-0.5 rounded-md border border-emerald-200 shrink-0">
-                            P2P Deposit & Withdraw
-                          </span>
-                        )}
+                        <span className="text-[10px] bg-zinc-200/80 text-zinc-700 font-bold font-mono px-1.5 py-0.5 rounded shrink-0">
+                          {COUNTRIES.find(c => c.code === country)?.dialCode || '+254'}
+                        </span>
                       </div>
                       <ChevronDown size={15} className={`text-zinc-400 shrink-0 transition-transform duration-200 ${isCountryOpen ? 'rotate-180 text-amber-500' : ''}`} />
                     </button>
@@ -635,7 +644,7 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
                             return (
                               <button
                                 key={c.code}
-                                id={`auth-country-opt-${c.code.toLowerCase()}`}
+                                id={`auth-country-opt-${c.code.toLowerCase().replace(/\s+/g, '-')}`}
                                 type="button"
                                 onClick={() => {
                                   setCountry(c.code);
@@ -650,11 +659,9 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
                                 <div className="flex items-center gap-2.5">
                                   <span className="text-base leading-none">{c.flag}</span>
                                   <span>{c.name}</span>
-                                  {c.code === 'Kenya' && (
-                                    <span className="text-[9px] bg-emerald-100 text-emerald-800 font-extrabold px-1.5 py-0.5 rounded border border-emerald-200">
-                                      P2P Available
-                                    </span>
-                                  )}
+                                  <span className="text-[10px] font-mono text-zinc-500 font-semibold">
+                                    ({c.dialCode})
+                                  </span>
                                 </div>
                                 {isSelected && <Check size={14} className="text-amber-600 shrink-0 stroke-[3]" />}
                               </button>
@@ -694,20 +701,22 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
                 {isSignUp && !isReset && (
                   <div className="space-y-1">
                     <label htmlFor="auth-phone" className="text-xs font-semibold text-zinc-600 cursor-pointer">Phone Number</label>
-                    <div className="relative">
-                      <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-zinc-400 pointer-events-none z-10">
-                        <Phone size={15} />
-                      </span>
+                    <div className="relative flex items-center">
+                      <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none z-10 gap-1.5">
+                        <span className="text-sm leading-none">{COUNTRIES.find(c => c.code === country)?.flag || '🇰🇪'}</span>
+                        <span className="text-xs font-bold text-zinc-600 font-mono">{COUNTRIES.find(c => c.code === country)?.dialCode || '+254'}</span>
+                        <span className="h-4 w-[1px] bg-zinc-200 ml-0.5" />
+                      </div>
                       <input
                         id="auth-phone"
                         name="phone"
                         type="tel"
                         required
                         autoComplete="tel"
-                        placeholder="+254 700 000000"
+                        placeholder="700 000 000"
                         value={phone}
                         onChange={(e) => setPhone(e.target.value)}
-                        className="w-full pl-9 pr-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 placeholder-zinc-400 text-zinc-800"
+                        className="w-full pl-24 pr-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 placeholder-zinc-400 text-zinc-800 font-medium"
                       />
                     </div>
                   </div>
@@ -809,6 +818,38 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
                         title={showPassword ? "Hide password" : "Show password"}
                       >
                         {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Confirm Password Field - Sign Up Only */}
+                {isSignUp && !isReset && (
+                  <div className="space-y-1">
+                    <label htmlFor="auth-confirm-password" className="text-xs font-semibold text-zinc-600 cursor-pointer">Confirm Password</label>
+                    <div className="relative">
+                      <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-zinc-400 pointer-events-none z-10">
+                        <Lock size={15} />
+                      </span>
+                      <input
+                        id="auth-confirm-password"
+                        name="confirmPassword"
+                        type={showConfirmPassword ? 'text' : 'password'}
+                        required
+                        minLength={6}
+                        autoComplete="new-password"
+                        placeholder="••••••••"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        className="w-full pl-9 pr-10 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 placeholder-zinc-400 text-zinc-800"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        className="absolute inset-y-0 right-0 flex items-center pr-3 text-zinc-400 hover:text-zinc-600 focus:outline-none cursor-pointer z-10"
+                        title={showConfirmPassword ? "Hide password" : "Show password"}
+                      >
+                        {showConfirmPassword ? <EyeOff size={15} /> : <Eye size={15} />}
                       </button>
                     </div>
                   </div>
