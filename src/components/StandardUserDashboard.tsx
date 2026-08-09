@@ -621,9 +621,20 @@ export default function StandardUserDashboard({
     return { lockedCapital, freeTransferrable };
   };
 
+  const getWalletBalance = (prof?: UserAccount | null): number => {
+    if (!prof) return 0;
+    if (typeof prof.balance === 'number' && !isNaN(prof.balance)) {
+      return prof.balance;
+    }
+    if (typeof prof.usdtBalance === 'number' && !isNaN(prof.usdtBalance)) {
+      return prof.usdtBalance;
+    }
+    return 0;
+  };
+
   const handleConfirmTransferIn = async () => {
     const amount = parseFloat(transferAmountInput);
-    const walletBal = profile?.usdtBalance ?? profile?.balance ?? 0;
+    const walletBal = getWalletBalance(profile);
     if (!amount || isNaN(amount) || amount <= 0) {
       toast.error('Please enter a valid transfer amount greater than 0.', 'Invalid Amount');
       return;
@@ -692,7 +703,7 @@ export default function StandardUserDashboard({
     setIsTransferring(true);
     try {
       const userRef = doc(db, 'users', user.uid);
-      const currentWalletBal = profile?.usdtBalance ?? profile?.balance ?? 0;
+      const currentWalletBal = getWalletBalance(profile);
       const newWalletBal = currentWalletBal + amount;
       const newTradeBal = Math.max(0, tradeBal - amount);
 
@@ -1197,7 +1208,7 @@ export default function StandardUserDashboard({
     }
   };
 
-  const totalBalance = profile?.balance || 0;
+  const totalBalance = getWalletBalance(profile);
 
   // Real-time helper for standard user's asset holdings
   const getCoinHolding = (symbol: string): number => {
@@ -1207,7 +1218,7 @@ export default function StandardUserDashboard({
       }
     }
     if (symbol === 'USDT') {
-      return profile?.balance || 0;
+      return getWalletBalance(profile);
     }
     if (profile?.holdings && profile.holdings[symbol] !== undefined) {
       return profile.holdings[symbol];
@@ -1353,7 +1364,7 @@ export default function StandardUserDashboard({
       needingPayment.forEach(inv => processingInvestmentsRef.current.add(inv.id));
 
       try {
-        let runningBalance = profile.balance || 0;
+        let runningBalance = getWalletBalance(profile);
         const runningHoldings = { ...(profile.holdings || {}) };
 
         for (const inv of needingPayment) {
@@ -1395,6 +1406,7 @@ export default function StandardUserDashboard({
           const userRef = doc(db, 'users', user.uid);
           await updateDoc(userRef, {
             balance: parseFloat(runningBalance.toFixed(2)),
+            usdtBalance: parseFloat(runningBalance.toFixed(2)),
             holdings: runningHoldings
           });
 
@@ -1445,7 +1457,7 @@ export default function StandardUserDashboard({
     let unlockedAmount = 0;
 
     if (def.symbol === 'USDT') {
-      const walletBal = profile?.usdtBalance ?? profile?.balance ?? 0;
+      const walletBal = getWalletBalance(profile);
       const tradeBal = profile?.tradeBalance ?? 0;
       const activeInvUSDT = getLockedAmount('USDT');
       
@@ -1520,7 +1532,7 @@ export default function StandardUserDashboard({
     }
 
     const price = coin.price;
-    const cashBalance = profile?.balance || 0;
+    const cashBalance = getWalletBalance(profile);
     const lockedUSDT = getLockedAmount('USDT');
     const unlockedCashBalance = Math.max(0, cashBalance - lockedUSDT);
     const coinHolding = getCoinHolding(symbol);
@@ -1548,6 +1560,7 @@ export default function StandardUserDashboard({
         const userRef = doc(db, 'users', user.uid);
         await updateDoc(userRef, {
           balance: parseFloat(newCashBalance.toFixed(2)),
+          usdtBalance: parseFloat(newCashBalance.toFixed(2)),
           holdings: newHoldings
         });
 
@@ -1596,6 +1609,7 @@ export default function StandardUserDashboard({
         const userRef = doc(db, 'users', user.uid);
         await updateDoc(userRef, {
           balance: parseFloat(newCashBalance.toFixed(2)),
+          usdtBalance: parseFloat(newCashBalance.toFixed(2)),
           holdings: newHoldings
         });
 
@@ -1804,9 +1818,11 @@ export default function StandardUserDashboard({
         const refund = tradeAmount + tradeProfit;
         if (refund > 0) {
           const userRef = doc(db, 'users', user.uid);
-          const currentUsdt = profile?.usdtBalance ?? profile?.balance ?? 0;
+          const currentWallet = getWalletBalance(profile);
+          const newBal = parseFloat((currentWallet + refund).toFixed(2));
           await updateDoc(userRef, {
-            usdtBalance: parseFloat((currentUsdt + refund).toFixed(2))
+            balance: newBal,
+            usdtBalance: newBal
           });
         }
 
@@ -1888,7 +1904,7 @@ export default function StandardUserDashboard({
       toast.error(`Minimum capital requirement for ${selectedBotTemplate.name} is $${minRequired}`, 'Invalid Capital');
       return;
     }
-    const currentBalance = profile?.balance || 0;
+    const currentBalance = getWalletBalance(profile);
     const lockedUSDT = getLockedAmount('USDT');
     const freeBalance = Math.max(0, currentBalance - lockedUSDT);
     if (capital > freeBalance) {
@@ -1900,7 +1916,7 @@ export default function StandardUserDashboard({
     try {
       const userRef = doc(db, 'users', user.uid);
       const newBalance = currentBalance - capital;
-      await updateDoc(userRef, { balance: newBalance });
+      await updateDoc(userRef, { balance: newBalance, usdtBalance: newBalance });
 
       const winRatioRange = selectedBotTemplate.winRatioRange || '95%';
       const winProfitRange = selectedBotTemplate.winProfitRange || '1.5% - 2.5%';
@@ -1979,8 +1995,9 @@ export default function StandardUserDashboard({
     const profitEarned = Math.max(1.5, parseFloat((bot.capital * 0.02 * (Math.random() * 0.8 + 0.6)).toFixed(2)));
     try {
       const userRef = doc(db, 'users', user.uid);
-      const currentBalance = profile?.balance || 0;
-      await updateDoc(userRef, { balance: currentBalance + profitEarned });
+      const currentBalance = getWalletBalance(profile);
+      const newBal = currentBalance + profitEarned;
+      await updateDoc(userRef, { balance: newBal, usdtBalance: newBal });
 
       const botRef = doc(db, 'user_bots', bot.id);
       await updateDoc(botRef, { accruedProfit: (bot.accruedProfit || 0) + profitEarned });
@@ -2021,8 +2038,9 @@ export default function StandardUserDashboard({
     const totalReturnAmount = capital + accruedProfit;
     try {
       const userRef = doc(db, 'users', user.uid);
-      const currentBalance = profile?.balance || 0;
-      await updateDoc(userRef, { balance: currentBalance + totalReturnAmount });
+      const currentBalance = getWalletBalance(profile);
+      const newBal = currentBalance + totalReturnAmount;
+      await updateDoc(userRef, { balance: newBal, usdtBalance: newBal });
 
       const botRef = doc(db, 'user_bots', bot.id);
       await updateDoc(botRef, { status: 'STOPPED', capital: 0, accruedProfit: 0 });
@@ -2100,7 +2118,7 @@ export default function StandardUserDashboard({
 
     const currentHoldings = profile?.holdings || {};
     const newHoldings = { ...currentHoldings };
-    let newBalance = profile?.balance || 0;
+    let newBalance = getWalletBalance(profile);
 
     // Deduct from source
     if (tradeFrom === 'USDT') {
@@ -2120,6 +2138,7 @@ export default function StandardUserDashboard({
       const userRef = doc(db, 'users', user.uid);
       await updateDoc(userRef, {
         balance: parseFloat(newBalance.toFixed(2)),
+        usdtBalance: parseFloat(newBalance.toFixed(2)),
         holdings: newHoldings
       });
 
@@ -2977,7 +2996,7 @@ export default function StandardUserDashboard({
             <RunningBotView
               bot={activeRunningBot}
               user={user}
-              userBalance={profile?.balance || 0}
+              userBalance={getWalletBalance(profile)}
               isLightTheme={isLightTheme}
               isOffline={isUsingFallbackPrices || Boolean(pricesLoadError) || (typeof navigator !== 'undefined' && !navigator.onLine)}
               onBack={() => setActiveRunningBot(null)}
@@ -4797,7 +4816,7 @@ export default function StandardUserDashboard({
                     <div className="flex justify-between items-center">
                       <label className="text-xs font-bold block">Investment amount</label>
                       <span className={`text-[10px] font-mono font-bold ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>
-                        Available: ${Math.max(0, (profile?.balance || 0) - getLockedAmount('USDT')).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        Available: ${Math.max(0, getWalletBalance(profile) - getLockedAmount('USDT')).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </span>
                     </div>
                     <div className="relative">
@@ -5627,7 +5646,7 @@ export default function StandardUserDashboard({
                         <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/20 text-white text-[11px] font-medium backdrop-blur-xs">
                           <span className="text-white/80">Wallet Balance:</span>
                           <strong className="text-white font-mono font-bold">
-                            $ {(profile?.usdtBalance ?? profile?.balance ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            $ {getWalletBalance(profile).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </strong>
                         </div>
 
@@ -6591,7 +6610,7 @@ export default function StandardUserDashboard({
               <div className="flex items-center justify-between">
                 <span className={`font-semibold ${isLightTheme ? 'text-zinc-600' : 'text-zinc-400'}`}>Wallet Balance:</span>
                 <span className={`font-extrabold font-mono text-sm ${isLightTheme ? 'text-zinc-900' : 'text-white'}`}>
-                  ${(profile?.usdtBalance ?? profile?.balance ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className={`text-[10px] font-medium ${isLightTheme ? 'text-zinc-400' : 'text-zinc-500'}`}>USD</span>
+                  ${getWalletBalance(profile).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className={`text-[10px] font-medium ${isLightTheme ? 'text-zinc-400' : 'text-zinc-500'}`}>USD</span>
                 </span>
               </div>
               <div className={`flex items-center justify-between border-t pt-2.5 ${
@@ -6633,7 +6652,7 @@ export default function StandardUserDashboard({
                   onClick={() => {
                     const { freeTransferrable } = getCopyTradeLockedAndFree();
                     const maxVal = transferModalType === 'IN' 
-                      ? (profile?.usdtBalance ?? profile?.balance ?? 0)
+                      ? getWalletBalance(profile)
                       : freeTransferrable;
                     setTransferAmountInput(maxVal.toString());
                   }}

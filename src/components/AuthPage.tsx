@@ -259,6 +259,7 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
           phone: formattedPhone,
           country: country,
           balance: 0.0, // Initial wallet balance starts at $0
+          usdtBalance: 0.0,
           referralSource: trimmedReferral,
           uniqueCode: generatedCode,
           createdAt: serverTimestamp(),
@@ -316,7 +317,8 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
 
               // Credit referrer's balance by the calculated tiered USDT
               await updateDoc(doc(db, 'users', referrerUid), {
-                balance: increment(rewardAmount)
+                balance: increment(rewardAmount),
+                usdtBalance: increment(rewardAmount)
               });
 
               // Create an approved referral reward transaction record
@@ -452,6 +454,7 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
             email: formattedEmail,
             displayName: formattedEmail.split('@')[0],
             balance: 0.0,
+            usdtBalance: 0.0,
             referralSource: '',
             createdAt: serverTimestamp(),
             withdrawalEnabled: true,

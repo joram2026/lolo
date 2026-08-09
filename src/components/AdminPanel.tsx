@@ -40,8 +40,15 @@ const SUPPORTED_COINS = [
   { id: 'doge', name: 'DOGE Coin (DOGE)', symbol: 'DOGE' }
 ];
 
+const getUserWalletBalance = (u: any): number => {
+  if (!u) return 0;
+  if (typeof u.balance === 'number' && !isNaN(u.balance)) return u.balance;
+  if (typeof u.usdtBalance === 'number' && !isNaN(u.usdtBalance)) return u.usdtBalance;
+  return 0;
+};
+
 const calculateTotalPortfolio = (u: UserAccount, pricesList?: CryptoPrice[]): number => {
-  let total = (u.usdtBalance ?? u.balance ?? 0) + (u.tradeBalance ?? 0);
+  let total = getUserWalletBalance(u) + (u.tradeBalance ?? 0);
   if (u.holdings) {
     Object.entries(u.holdings).forEach(([symbol, amount]) => {
       if (symbol === 'USDT') return;
@@ -921,7 +928,7 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
         }
 
         // --- STEP 2: ALL COMPUTATIONS & WRITES ONLY ---
-        const currentBalance = userData.balance || 0;
+        const currentBalance = getUserWalletBalance(userData);
         const currentHoldings: Record<string, number> = userData.holdings || {};
 
         const coinSymbol = tx.coinSymbol ? tx.coinSymbol.toUpperCase() : 'USDT';
@@ -985,8 +992,9 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
             const commissionAmount = parseFloat(((depositAmountUSD * referrerPct) / 100).toFixed(2));
 
             if (commissionAmount > 0) {
-              const newReferrerBalance = parseFloat(((referrerData.balance || 0) + commissionAmount).toFixed(2));
-              transaction.update(referrerRef, { balance: newReferrerBalance });
+              const currentRefBal = getUserWalletBalance(referrerData);
+              const newReferrerBalance = parseFloat((currentRefBal + commissionAmount).toFixed(2));
+              transaction.update(referrerRef, { balance: newReferrerBalance, usdtBalance: newReferrerBalance });
 
               const commissionTxRef = doc(collection(db, 'transactions'));
               transaction.set(commissionTxRef, {
@@ -1006,6 +1014,7 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
         // Prepare user updates payload
         const userUpdatePayload: any = {
           balance: updatedBalance,
+          usdtBalance: updatedBalance,
           hasMadeFirstDeposit: true
         };
         if (updatedHoldings) {
@@ -1088,9 +1097,11 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
           const coinSym = tx.coinSymbol ? tx.coinSymbol.toUpperCase() : 'USDT';
 
           if (coinSym === 'USDT') {
-            const currentBalance = userData.balance || 0;
+            const currentBalance = getUserWalletBalance(userData);
+            const newBal = parseFloat((currentBalance + tx.amount).toFixed(2));
             transaction.update(userRef, {
-              balance: parseFloat((currentBalance + tx.amount).toFixed(2))
+              balance: newBal,
+              usdtBalance: newBal
             });
           } else {
             const currentHoldings = userData.holdings || {};
@@ -1148,9 +1159,11 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                 const coinSym = txObj.coinSymbol ? txObj.coinSymbol.toUpperCase() : 'USDT';
 
                 if (coinSym === 'USDT') {
-                  const currentBalance = userData.balance || 0;
+                  const currentBalance = getUserWalletBalance(userData);
+                  const newBal = parseFloat((currentBalance + txObj.amount).toFixed(2));
                   transaction.update(userRef, {
-                    balance: parseFloat((currentBalance + txObj.amount).toFixed(2))
+                    balance: newBal,
+                    usdtBalance: newBal
                   });
                 } else {
                   const currentHoldings = userData.holdings || {};
@@ -1993,7 +2006,7 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                         <div className="flex gap-5 text-right">
                           <div className="border-r border-zinc-800/85 pr-5">
                             <span className="text-[10px] text-zinc-500 block uppercase font-extrabold tracking-wider">USDT Wallet</span>
-                            <span className="text-base font-black text-emerald-400 font-mono">${u.balance?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                            <span className="text-base font-black text-emerald-400 font-mono">${getUserWalletBalance(u).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                           </div>
                           <div>
                             <span className="text-[10px] text-zinc-500 block uppercase font-extrabold tracking-wider">Total Assets</span>
