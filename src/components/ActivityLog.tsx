@@ -294,6 +294,32 @@ export default function ActivityLog({ userId, isLightTheme = false }: ActivityLo
           bgClass: isLightTheme ? 'bg-emerald-50 border border-emerald-200 text-emerald-750' : 'bg-emerald-500/10 border-emerald-500/15 text-emerald-400',
           icon: <TrendingUp size={16} />
         };
+      case 'copy_trade_payout':
+        return {
+          label: 'Copy Trade Payout',
+          isCredit: true,
+          colorClass: isLightTheme ? 'text-emerald-700 font-extrabold' : 'text-emerald-400',
+          bgClass: isLightTheme ? 'bg-emerald-50 border border-emerald-200 text-emerald-700' : 'bg-emerald-500/10 border-emerald-500/15 text-emerald-400',
+          icon: <TrendingUp size={16} />
+        };
+      case 'trade_balance_transfer_in':
+      case 'copy_trade_transfer_in':
+        return {
+          label: 'Copy Trade Transfer In',
+          isCredit: true,
+          colorClass: isLightTheme ? 'text-emerald-700 font-extrabold' : 'text-emerald-400',
+          bgClass: isLightTheme ? 'bg-emerald-50 border border-emerald-200 text-emerald-700' : 'bg-emerald-500/10 border-emerald-500/15 text-emerald-400',
+          icon: <ArrowRightLeft size={16} />
+        };
+      case 'trade_balance_transfer_out':
+      case 'copy_trade_transfer_out':
+        return {
+          label: 'Copy Trade Transfer Out',
+          isCredit: false,
+          colorClass: isLightTheme ? 'text-amber-700 font-extrabold' : 'text-amber-400',
+          bgClass: isLightTheme ? 'bg-amber-50 border border-amber-200 text-amber-800' : 'bg-amber-500/10 border-amber-500/15 text-amber-400',
+          icon: <ArrowRightLeft size={16} />
+        };
       case 'internal_send':
         return {
           label: 'Internal Send',

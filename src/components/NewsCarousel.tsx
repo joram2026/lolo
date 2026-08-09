@@ -97,14 +97,14 @@ export default function NewsCarousel({ cryptoPrices = FALLBACK_CRYPTO }: NewsCar
         badgeTag: 'Bot Trading Logic'
       },
       {
-        id: `slide-signals-logic-${daySeed}`,
-        type: 'signals_logic',
-        title: '',
-        subtitle: '',
-        source: 'Morex Signal Engine',
-        time: 'Live Signals',
+        id: `slide-copy-trading-${daySeed}`,
+        type: 'copy_trading',
+        title: 'Verified Copy Trader Lead Experts',
+        subtitle: 'Follow top expert traders and automatically copy high-accuracy market signals.',
+        source: 'Morex Copy Trading Engine',
+        time: 'Live Copy Trading',
         image: '/morex_slide_signals_logic.svg',
-        badgeTag: 'Signals Logic'
+        badgeTag: 'Copy Trading'
       }
     ];
   }, [brandImgSrc]);

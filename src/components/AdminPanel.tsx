@@ -6,7 +6,8 @@ import {
   collection, doc, getDocs, updateDoc, deleteDoc, runTransaction, 
   setDoc, query, orderBy, serverTimestamp, writeBatch, getDoc 
 } from 'firebase/firestore';
-import { UserAccount, Transaction, CryptoNetwork, P2PMerchant, CryptoPrice, ArbitrageConfig, BotTemplate, DepositBonusTier, ReferralDepositConfig } from '../types';
+import { UserAccount, Transaction, CryptoNetwork, P2PMerchant, CryptoPrice, ArbitrageConfig, BotTemplate, DepositBonusTier, ReferralDepositConfig, CopyTraderLead } from '../types';
+import { DEFAULT_COPY_LEADS } from '../data/copyTraders';
 import { fetchLivePriceFromBinance, fetchAllLivePrices, syncLiveCryptoPrices } from '../utils/cryptoApi';
 import { 
   Users, CheckCircle2, XCircle, Settings, ShieldAlert, Key, 
@@ -40,7 +41,7 @@ const SUPPORTED_COINS = [
 ];
 
 const calculateTotalPortfolio = (u: UserAccount, pricesList?: CryptoPrice[]): number => {
-  let total = u.balance || 0;
+  let total = (u.usdtBalance ?? u.balance ?? 0) + (u.tradeBalance ?? 0);
   if (u.holdings) {
     Object.entries(u.holdings).forEach(([symbol, amount]) => {
       if (symbol === 'USDT') return;
@@ -113,17 +114,29 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
   const [editingPriceSymbol, setEditingPriceSymbol] = useState<string | null>(null);
   const [priceForm, setPriceForm] = useState<{ price: string; change24h: string }>({ price: '', change24h: '' });
 
-  // Crypto MMF / Signal rate settings states
-  const [editingRateSymbol, setEditingRateSymbol] = useState<string | null>(null);
-  const [rateInput, setRateInput] = useState<string>('');
-
-  // Trading Signal Win Rate states
-  const [editingWinRateSymbol, setEditingWinRateSymbol] = useState<string | null>(null);
-  const [winRateInput, setWinRateInput] = useState<string>('');
-
-  // Crypto MMF minimum investment states
-  const [editingMinInvestmentSymbol, setEditingMinInvestmentSymbol] = useState<string | null>(null);
-  const [minInvestmentInput, setMinInvestmentInput] = useState<string>('');
+  // Copy Trading Lead Experts states
+  const [copyLeadsList, setCopyLeadsList] = useState<CopyTraderLead[]>([]);
+  const [editingLead, setEditingLead] = useState<CopyTraderLead | null>(null);
+  const [isAddLeadModalOpen, setIsAddLeadModalOpen] = useState(false);
+  const [isSavingLead, setIsSavingLead] = useState(false);
+  const [leadForm, setLeadForm] = useState({
+    name: '',
+    photoUrl: '',
+    description: '',
+    signalsPerDay: '2 signals/day',
+    winRate: '98.5%',
+    minCapital: '50',
+    maxCapital: '10000',
+    analysisCommission: '10',
+    dayProfitRate: '2.0',
+    contractDurationDays: '30',
+    tradingPairs: 'BTC/USDT, ETH/USDT, SOL/USDT, XRP/USDT',
+    sig1Time: '13:00',
+    sig1Code: 'SIG1300',
+    sig2Time: '20:00',
+    sig2Code: 'SIG2000',
+    riskLevel: 'Low Risk'
+  });
 
   // Referral Deposit Configuration state
   const [referralConfig, setReferralConfig] = useState<ReferralDepositConfig>({
@@ -162,6 +175,13 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
     minLimit: '500',
     maxLimit: '500000'
   });
+
+  const [editingRateSymbol, setEditingRateSymbol] = useState<string | null>(null);
+  const [rateInput, setRateInput] = useState<string>('');
+  const [editingWinRateSymbol, setEditingWinRateSymbol] = useState<string | null>(null);
+  const [winRateInput, setWinRateInput] = useState<string>('');
+  const [editingMinInvestmentSymbol, setEditingMinInvestmentSymbol] = useState<string | null>(null);
+  const [minInvestmentInput, setMinInvestmentInput] = useState<string>('');
 
   const toast = useToast();
   const [customWipeUID, setCustomWipeUID] = useState('');
@@ -501,6 +521,22 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
         ...d.data()
       }));
       setUserBotsList(uBotsList);
+
+      // Fetch Copy Trader Leads
+      const copyLeadsSnap = await getDocs(collection(db, 'copy_trader_leads'));
+      let leads = copyLeadsSnap.docs.map(d => ({ id: d.id, ...d.data() } as CopyTraderLead));
+
+      if (leads.length === 0) {
+        for (const defaultLead of DEFAULT_COPY_LEADS) {
+          try {
+            await setDoc(doc(db, 'copy_trader_leads', defaultLead.id), defaultLead);
+          } catch (e) {
+            console.error("Error seeding copy lead:", e);
+          }
+        }
+        leads = [...DEFAULT_COPY_LEADS];
+      }
+      setCopyLeadsList(leads);
 
     } catch (err: any) {
       console.error("Error loading admin data: ", err);
@@ -1478,6 +1514,137 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
       console.error(err);
       showFeedback('error', 'Failed to update minimum investment amount: ' + err.message);
     }
+  };
+
+  // Copy Trader Leads Handlers
+  const handleOpenAddLead = () => {
+    setEditingLead(null);
+    setLeadForm({
+      name: '',
+      photoUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=400',
+      description: '',
+      signalsPerDay: '2 signals/day',
+      winRate: '98.5%',
+      minCapital: '50',
+      maxCapital: '10000',
+      analysisCommission: '10',
+      dayProfitRate: '2.0',
+      contractDurationDays: '30',
+      tradingPairs: 'BTC/USDT, ETH/USDT, SOL/USDT, XRP/USDT',
+      sig1Time: '13:00',
+      sig1Code: 'SIG1300',
+      sig2Time: '20:00',
+      sig2Code: 'SIG2000',
+      riskLevel: 'Low Risk'
+    });
+    setIsAddLeadModalOpen(true);
+  };
+
+  const handleOpenEditLead = (lead: CopyTraderLead) => {
+    setEditingLead(lead);
+    const sig1 = lead.signals?.[0];
+    const sig2 = lead.signals?.[1];
+
+    setLeadForm({
+      name: lead.name || '',
+      photoUrl: lead.photoUrl || '',
+      description: lead.description || '',
+      signalsPerDay: lead.signalsPerDay || '2 signals/day',
+      winRate: lead.winRate || '98.5%',
+      minCapital: (lead.minCapital ?? 50).toString(),
+      maxCapital: (lead.maxCapital ?? 10000).toString(),
+      analysisCommission: (lead.analysisCommission ?? 10).toString(),
+      dayProfitRate: (lead.dayProfitRate ?? 2.0).toString(),
+      contractDurationDays: (lead.contractDurationDays ?? 30).toString(),
+      tradingPairs: lead.tradingPairs ? lead.tradingPairs.join(', ') : 'BTC/USDT, ETH/USDT, SOL/USDT, XRP/USDT',
+      sig1Time: sig1?.time || '13:00',
+      sig1Code: sig1?.code || 'SIG1300',
+      sig2Time: sig2?.time || '20:00',
+      sig2Code: sig2?.code || 'SIG2000',
+      riskLevel: lead.riskLevel || 'Low Risk'
+    });
+    setIsAddLeadModalOpen(true);
+  };
+
+  const handleSaveLead = async () => {
+    if (!leadForm.name.trim()) {
+      showFeedback('error', 'Please enter expert trader name');
+      return;
+    }
+    if (!leadForm.description.trim()) {
+      showFeedback('error', 'Please enter professional description');
+      return;
+    }
+
+    setIsSavingLead(true);
+    try {
+      const pairs = leadForm.tradingPairs
+        ? leadForm.tradingPairs.split(',').map(s => s.trim().toUpperCase()).filter(Boolean)
+        : ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'XRP/USDT'];
+
+      const signalsList = [
+        { id: 'sig-1', time: leadForm.sig1Time.trim() || '13:00', code: leadForm.sig1Code.trim() || 'SIG1300' },
+        { id: 'sig-2', time: leadForm.sig2Time.trim() || '20:00', code: leadForm.sig2Code.trim() || 'SIG2000' }
+      ];
+
+      const leadData: Partial<CopyTraderLead> = {
+        name: leadForm.name.trim(),
+        photoUrl: leadForm.photoUrl.trim() || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=400',
+        description: leadForm.description.trim(),
+        signalsPerDay: `${signalsList.length} signals/day`,
+        winRate: leadForm.winRate.trim() || '98.5%',
+        minCapital: parseFloat(leadForm.minCapital) || 50,
+        maxCapital: parseFloat(leadForm.maxCapital) || 10000,
+        analysisCommission: parseFloat(leadForm.analysisCommission) || 10,
+        dayProfitRate: parseFloat(leadForm.dayProfitRate) || 2.0,
+        contractDurationDays: parseInt(leadForm.contractDurationDays) || 30,
+        tradingPairs: pairs,
+        signals: signalsList,
+        riskLevel: leadForm.riskLevel || 'Low Risk',
+        updatedAt: new Date().toISOString()
+      };
+
+      if (editingLead) {
+        await updateDoc(doc(db, 'copy_trader_leads', editingLead.id), leadData);
+        showFeedback('success', `Copy Trader Lead "${leadForm.name}" updated successfully.`);
+      } else {
+        const newId = 'lead-' + Date.now();
+        await setDoc(doc(db, 'copy_trader_leads', newId), {
+          id: newId,
+          ...leadData,
+          createdAt: new Date().toISOString()
+        });
+        showFeedback('success', `New Copy Trader Lead "${leadForm.name}" added successfully.`);
+      }
+
+      setIsAddLeadModalOpen(false);
+      setEditingLead(null);
+      await loadAllData(true);
+    } catch (err: any) {
+      console.error(err);
+      showFeedback('error', 'Failed to save Copy Trader Lead: ' + err.message);
+    } finally {
+      setIsSavingLead(false);
+    }
+  };
+
+  const handleDeleteLead = (lead: CopyTraderLead) => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Delete Copy Trader Lead',
+      message: `Are you sure you want to delete lead expert "${lead.name}"? Users will no longer see this trader card.`,
+      danger: true,
+      onConfirm: async () => {
+        try {
+          await deleteDoc(doc(db, 'copy_trader_leads', lead.id));
+          showFeedback('success', `Deleted lead trader "${lead.name}".`);
+          await loadAllData(true);
+        } catch (err: any) {
+          console.error(err);
+          showFeedback('error', 'Failed to delete lead trader: ' + err.message);
+        }
+      }
+    });
   };
 
   const handleSaveArbitrageConfig = async () => {
@@ -2711,243 +2878,74 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                 </div>
               </div>
 
-              {/* Crypto MMF / Signal Profit Rates Controller */}
-              <div id="crypto-mmf-rates-controller" className="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 space-y-4">
+              {/* Copy Trading Lead Traders Controller */}
+              <div id="copy-trading-leads-controller" className="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-800/80 pb-3">
                   <div className="flex items-center gap-2">
-                    <TrendingUp className="text-emerald-400" size={16} />
+                    <Users className="text-emerald-400" size={16} />
                     <div>
-                      <h3 className="text-xs font-black text-zinc-300 uppercase tracking-wider">Trading Signal Daily Yield Rates</h3>
-                      <p className="text-[10px] text-zinc-500 font-semibold mt-0.5">Define the daily profit percentage rate for each cryptocurrency trading signal.</p>
+                      <h3 className="text-xs font-black text-zinc-300 uppercase tracking-wider">Copy Trading Lead Experts ({copyLeadsList.length})</h3>
+                      <p className="text-[10px] text-zinc-500 font-semibold mt-0.5">Manage lead expert traders displayed on the user Copy Trading dashboard. Define name, profile photo, professional description, and signals per day.</p>
                     </div>
                   </div>
+                  <button
+                    id="add-new-lead-trader-btn"
+                    onClick={handleOpenAddLead}
+                    className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-black text-[11px] rounded-xl transition-all shadow-md shadow-emerald-500/10 cursor-pointer self-start sm:self-auto shrink-0"
+                  >
+                    <Plus size={14} />
+                    <span>Add Lead Trader</span>
+                  </button>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-                  {cryptoPricesList.map((cp) => {
-                    const isEditingRate = editingRateSymbol === cp.symbol;
-                    const dailyRate = cp.investmentRate ?? 5.0;
-
-                    return (
-                      <div key={`rate-${cp.symbol}`} className="bg-zinc-950 p-3.5 rounded-2xl border border-zinc-900/60 flex flex-col justify-between space-y-3 relative overflow-hidden">
-                        <div className="absolute top-0 left-0 right-0 h-[2px] bg-emerald-500/50" />
-                        
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <span className="text-[10px] text-zinc-500 font-bold block">{cp.name}</span>
-                            <span className="text-xs font-black text-zinc-200 font-mono tracking-wider">{cp.symbol}</span>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {copyLeadsList.map((lead) => (
+                    <div key={lead.id} className="bg-zinc-950 border border-zinc-800/80 rounded-2xl p-4 flex flex-col justify-between space-y-3 relative overflow-hidden">
+                      <div className="flex items-start gap-3">
+                        <img 
+                          src={lead.photoUrl} 
+                          alt={lead.name}
+                          className="w-12 h-12 rounded-full object-cover border-2 border-emerald-500/40 shrink-0"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=400';
+                          }}
+                        />
+                        <div className="space-y-1 min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <h4 className="text-sm font-black text-zinc-100 truncate">{lead.name}</h4>
+                            <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 shrink-0 font-mono">
+                              {lead.winRate || '98.5%'} Win
+                            </span>
                           </div>
-                          <div className="text-right">
-                            <span className="text-[9px] text-zinc-500 block">Daily Yield</span>
-                            <span className="text-sm font-black text-emerald-400 font-mono">{dailyRate}%</span>
+                          <div className="flex items-center gap-2 text-[10px] text-zinc-400 font-mono">
+                            <span className="text-amber-400 font-bold">⚡ {lead.signalsPerDay}</span>
+                            <span>•</span>
+                            <span>Min Capital: ${lead.minCapital ?? 100}</span>
                           </div>
+                          <p className="text-[11px] text-zinc-400 line-clamp-2 leading-snug">
+                            {lead.description}
+                          </p>
                         </div>
-
-                        {!isEditingRate ? (
-                          <button
-                            id={`edit-rate-btn-${cp.symbol}`}
-                            onClick={() => {
-                              setEditingRateSymbol(cp.symbol);
-                              setRateInput(dailyRate.toString());
-                            }}
-                            className="w-full py-2 bg-zinc-900 hover:bg-zinc-850 text-zinc-300 hover:text-white font-bold text-[10px] rounded-xl border border-zinc-800 transition-colors cursor-pointer"
-                          >
-                            Edit Rate
-                          </button>
-                        ) : (
-                          <div className="space-y-2 pt-2 border-t border-zinc-900/80">
-                            <div className="space-y-1">
-                              <label className="text-[9px] text-zinc-500 font-semibold block">Daily % Rate</label>
-                              <input
-                                id={`input-rate-${cp.symbol}`}
-                                type="number"
-                                step="any"
-                                value={rateInput}
-                                onChange={(e) => setRateInput(e.target.value)}
-                                className="w-full px-2 py-1 bg-zinc-900 border border-zinc-800 rounded text-[11px] text-white font-mono focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                              />
-                            </div>
-                            <div className="flex gap-1">
-                              <button
-                                id={`save-rate-btn-${cp.symbol}`}
-                                onClick={() => handleSaveInvestmentRate(cp.symbol)}
-                                className="flex-1 py-1 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-black text-[9px] rounded transition-colors cursor-pointer"
-                              >
-                                Save
-                              </button>
-                              <button
-                                id={`cancel-rate-btn-${cp.symbol}`}
-                                onClick={() => setEditingRateSymbol(null)}
-                                className="px-2 py-1 bg-zinc-900 hover:bg-zinc-850 text-zinc-400 text-[9px] rounded transition-colors cursor-pointer"
-                              >
-                                X
-                              </button>
-                            </div>
-                          </div>
-                        )}
                       </div>
-                    );
-                  })}
-                </div>
-              </div>
 
-              {/* Trading Signals Win Ratio Controller */}
-              <div id="trading-signal-win-ratios-controller" className="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-800/80 pb-3">
-                  <div className="flex items-center gap-2">
-                    <Sparkles className="text-amber-400" size={16} />
-                    <div>
-                      <h3 className="text-xs font-black text-zinc-300 uppercase tracking-wider">Trading Signal Win Ratios</h3>
-                      <p className="text-[10px] text-zinc-500 font-semibold mt-0.5">Define the accuracy win ratio percentage displayed on trading signal cards.</p>
+                      <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-900">
+                        <button
+                          onClick={() => handleOpenEditLead(lead)}
+                          className="flex items-center gap-1 px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 font-bold text-[10px] rounded-lg border border-zinc-800 transition-colors cursor-pointer"
+                        >
+                          <Edit size={12} />
+                          <span>Edit Details</span>
+                        </button>
+                        <button
+                          onClick={() => handleDeleteLead(lead)}
+                          className="flex items-center gap-1 px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 font-bold text-[10px] rounded-lg border border-red-500/20 transition-colors cursor-pointer"
+                        >
+                          <Trash2 size={12} />
+                          <span>Delete</span>
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-                  {cryptoPricesList.map((cp) => {
-                    const isEditingWin = editingWinRateSymbol === cp.symbol;
-                    const winRateVal = cp.winRate ?? 96.0;
-
-                    return (
-                      <div key={`winrate-${cp.symbol}`} className="bg-zinc-950 p-3.5 rounded-2xl border border-zinc-900/60 flex flex-col justify-between space-y-3 relative overflow-hidden">
-                        <div className="absolute top-0 left-0 right-0 h-[2px] bg-amber-500/50" />
-                        
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <span className="text-[10px] text-zinc-500 font-bold block">{cp.name}</span>
-                            <span className="text-xs font-black text-zinc-200 font-mono tracking-wider">{cp.symbol}</span>
-                          </div>
-                          <div className="text-right">
-                            <span className="text-[9px] text-zinc-500 block">Win Ratio</span>
-                            <span className="text-sm font-black text-amber-400 font-mono">{winRateVal}%</span>
-                          </div>
-                        </div>
-
-                        {!isEditingWin ? (
-                          <button
-                            id={`edit-winrate-btn-${cp.symbol}`}
-                            onClick={() => {
-                              setEditingWinRateSymbol(cp.symbol);
-                              setWinRateInput(winRateVal.toString());
-                            }}
-                            className="w-full py-2 bg-zinc-900 hover:bg-zinc-850 text-zinc-300 hover:text-white font-bold text-[10px] rounded-xl border border-zinc-800 transition-colors cursor-pointer"
-                          >
-                            Edit Win Ratio
-                          </button>
-                        ) : (
-                          <div className="space-y-2 pt-2 border-t border-zinc-900/80">
-                            <div className="space-y-1">
-                              <label className="text-[9px] text-zinc-500 font-semibold block">Win % Ratio</label>
-                              <input
-                                id={`input-winrate-${cp.symbol}`}
-                                type="number"
-                                step="any"
-                                value={winRateInput}
-                                onChange={(e) => setWinRateInput(e.target.value)}
-                                className="w-full px-2 py-1 bg-zinc-900 border border-zinc-800 rounded text-[11px] text-white font-mono focus:outline-none focus:ring-1 focus:ring-amber-500"
-                              />
-                            </div>
-                            <div className="flex gap-1">
-                              <button
-                                id={`save-winrate-btn-${cp.symbol}`}
-                                onClick={() => handleSaveWinRate(cp.symbol)}
-                                className="flex-1 py-1 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-black text-[9px] rounded transition-colors cursor-pointer"
-                              >
-                                Save
-                              </button>
-                              <button
-                                id={`cancel-winrate-btn-${cp.symbol}`}
-                                onClick={() => setEditingWinRateSymbol(null)}
-                                className="px-2 py-1 bg-zinc-900 hover:bg-zinc-850 text-zinc-400 text-[9px] rounded transition-colors cursor-pointer"
-                              >
-                                X
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Crypto MMF Minimum Investment Controller */}
-              <div id="crypto-mmf-min-investments-controller" className="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-800/80 pb-3">
-                  <div className="flex items-center gap-2">
-                    <Coins className="text-emerald-400" size={16} />
-                    <div>
-                      <h3 className="text-xs font-black text-zinc-300 uppercase tracking-wider">Crypto MMF Minimum Investments</h3>
-                      <p className="text-[10px] text-zinc-500 font-semibold mt-0.5">Define the minimum investment amount allowed for each cryptocurrency coin.</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-                  {cryptoPricesList.map((cp) => {
-                    const isEditingMin = editingMinInvestmentSymbol === cp.symbol;
-                    const minVal = cp.minInvestment ?? 10.0;
-
-                    return (
-                      <div key={`min-invest-${cp.symbol}`} className="bg-zinc-950 p-3.5 rounded-2xl border border-zinc-900/60 flex flex-col justify-between space-y-3 relative overflow-hidden">
-                        <div className="absolute top-0 left-0 right-0 h-[2px] bg-teal-500/50" />
-                        
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <span className="text-[10px] text-zinc-500 font-bold block">{cp.name}</span>
-                            <span className="text-xs font-black text-zinc-200 font-mono tracking-wider">{cp.symbol}</span>
-                          </div>
-                          <div className="text-right">
-                            <span className="text-[9px] text-zinc-500 block">Min Amount</span>
-                            <span className="text-sm font-black text-teal-400 font-mono">{minVal}</span>
-                          </div>
-                        </div>
-
-                        {!isEditingMin ? (
-                          <button
-                            id={`edit-min-btn-${cp.symbol}`}
-                            onClick={() => {
-                              setEditingMinInvestmentSymbol(cp.symbol);
-                              setMinInvestmentInput(minVal.toString());
-                            }}
-                            className="w-full py-2 bg-zinc-900 hover:bg-zinc-850 text-zinc-300 hover:text-white font-bold text-[10px] rounded-xl border border-zinc-800 transition-colors cursor-pointer"
-                          >
-                            Edit Min Limit
-                          </button>
-                        ) : (
-                          <div className="space-y-2 pt-2 border-t border-zinc-900/80">
-                            <div className="space-y-1">
-                              <label className="text-[9px] text-zinc-500 font-semibold block">Min Limit</label>
-                              <input
-                                id={`input-min-${cp.symbol}`}
-                                type="number"
-                                step="any"
-                                value={minInvestmentInput}
-                                onChange={(e) => setMinInvestmentInput(e.target.value)}
-                                className="w-full px-2 py-1 bg-zinc-900 border border-zinc-800 rounded text-[11px] text-white font-mono focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                              />
-                            </div>
-                            <div className="flex gap-1">
-                              <button
-                                id={`save-min-btn-${cp.symbol}`}
-                                onClick={() => handleSaveMinInvestment(cp.symbol)}
-                                className="flex-1 py-1 bg-teal-500 hover:bg-teal-400 text-zinc-950 font-black text-[9px] rounded transition-colors cursor-pointer"
-                              >
-                                Save
-                              </button>
-                              <button
-                                id={`cancel-min-btn-${cp.symbol}`}
-                                onClick={() => setEditingMinInvestmentSymbol(null)}
-                                className="px-2 py-1 bg-zinc-900 hover:bg-zinc-850 text-zinc-400 text-[9px] rounded transition-colors cursor-pointer"
-                              >
-                                X
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+                  ))}
                 </div>
               </div>
 
@@ -4058,6 +4056,248 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
             <h4 className="text-xs font-black text-zinc-400 mb-3 text-center uppercase tracking-wider">Verification - Evidence Screenshot</h4>
             <img src={selectedEvidence} alt="Evidence document" className="max-h-[70vh] object-contain mx-auto rounded-xl border border-zinc-800" />
             <p className="text-[10px] text-zinc-500 text-center mt-3 font-semibold">Tap anywhere to close magnifier</p>
+          </div>
+        </div>
+      )}
+
+      {/* Add / Edit Copy Trader Lead Modal */}
+      {isAddLeadModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl max-w-lg w-full p-6 space-y-4 relative shadow-2xl">
+            <button
+              onClick={() => setIsAddLeadModalOpen(false)}
+              className="absolute top-4 right-4 p-1.5 text-zinc-400 hover:text-white rounded-full hover:bg-zinc-800 transition-colors cursor-pointer"
+            >
+              <X size={18} />
+            </button>
+
+            <div className="flex items-center gap-2 border-b border-zinc-800 pb-3">
+              <Users size={18} className="text-emerald-400" />
+              <h3 className="text-sm font-black text-white uppercase tracking-wider">
+                {editingLead ? 'Edit Lead Expert Trader' : 'Add New Lead Expert Trader'}
+              </h3>
+            </div>
+
+            <div className="space-y-3 max-h-[70vh] overflow-y-auto pr-1">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Expert Name *</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Alex 'Apex' Rivers"
+                  value={leadForm.name}
+                  onChange={(e) => setLeadForm({ ...leadForm, name: e.target.value })}
+                  className="w-full p-3 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-white focus:outline-none focus:border-emerald-500 font-mono"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Profile Photo URL *</label>
+                <input
+                  type="text"
+                  placeholder="https://..."
+                  value={leadForm.photoUrl}
+                  onChange={(e) => setLeadForm({ ...leadForm, photoUrl: e.target.value })}
+                  className="w-full p-3 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-white focus:outline-none focus:border-emerald-500 font-mono"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Professional Description *</label>
+                <textarea
+                  rows={3}
+                  placeholder="Enter professional trading background, strategy, and experience..."
+                  value={leadForm.description}
+                  onChange={(e) => setLeadForm({ ...leadForm, description: e.target.value })}
+                  className="w-full p-3 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-white focus:outline-none focus:border-emerald-500 resize-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Signals Per Day *</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 8 - 12 signals/day"
+                    value={leadForm.signalsPerDay}
+                    onChange={(e) => setLeadForm({ ...leadForm, signalsPerDay: e.target.value })}
+                    className="w-full p-3 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-white focus:outline-none focus:border-emerald-500 font-mono"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Win Rate %</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 98.5%"
+                    value={leadForm.winRate}
+                    onChange={(e) => setLeadForm({ ...leadForm, winRate: e.target.value })}
+                    className="w-full p-3 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-white focus:outline-none focus:border-emerald-500 font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Min Trade Amount ($ USD) *</label>
+                  <input
+                    type="number"
+                    placeholder="e.g. 50"
+                    value={leadForm.minCapital}
+                    onChange={(e) => setLeadForm({ ...leadForm, minCapital: e.target.value })}
+                    className="w-full p-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-white focus:outline-none focus:border-emerald-500 font-mono"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Max Trade Amount ($ USD) *</label>
+                  <input
+                    type="number"
+                    placeholder="e.g. 10000"
+                    value={leadForm.maxCapital}
+                    onChange={(e) => setLeadForm({ ...leadForm, maxCapital: e.target.value })}
+                    className="w-full p-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-white focus:outline-none focus:border-emerald-500 font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Analysis Commission (%) *</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    placeholder="e.g. 10"
+                    value={leadForm.analysisCommission}
+                    onChange={(e) => setLeadForm({ ...leadForm, analysisCommission: e.target.value })}
+                    className="w-full p-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-white focus:outline-none focus:border-emerald-500 font-mono"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">1 Day Profit Rate (%) *</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    placeholder="e.g. 2.0"
+                    value={leadForm.dayProfitRate}
+                    onChange={(e) => setLeadForm({ ...leadForm, dayProfitRate: e.target.value })}
+                    className="w-full p-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-white focus:outline-none focus:border-emerald-500 font-mono"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Contract Duration (Days) *</label>
+                  <input
+                    type="number"
+                    placeholder="e.g. 30"
+                    value={leadForm.contractDurationDays}
+                    onChange={(e) => setLeadForm({ ...leadForm, contractDurationDays: e.target.value })}
+                    className="w-full p-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-white focus:outline-none focus:border-emerald-500 font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Supported Trading Pairs (Comma-separated) *</label>
+                <input
+                  type="text"
+                  placeholder="BTC/USDT, ETH/USDT, SOL/USDT, XRP/USDT"
+                  value={leadForm.tradingPairs}
+                  onChange={(e) => setLeadForm({ ...leadForm, tradingPairs: e.target.value })}
+                  className="w-full p-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-white focus:outline-none focus:border-emerald-500 font-mono"
+                />
+              </div>
+
+              {/* Signals Config */}
+              <div className="p-3 bg-zinc-950/70 border border-zinc-850 rounded-2xl space-y-2">
+                <span className="text-[10px] font-black uppercase text-amber-400 tracking-wider block">Daily Trading Signals Schedule & Admin Codes</span>
+                
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-bold text-zinc-500 uppercase block">Signal 1 Time (HH:MM)</label>
+                    <input
+                      type="text"
+                      placeholder="13:00"
+                      value={leadForm.sig1Time}
+                      onChange={(e) => setLeadForm({ ...leadForm, sig1Time: e.target.value })}
+                      className="w-full p-2 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-white font-mono"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-bold text-zinc-500 uppercase block">Signal 1 Code</label>
+                    <input
+                      type="text"
+                      placeholder="SIG1300"
+                      value={leadForm.sig1Code}
+                      onChange={(e) => setLeadForm({ ...leadForm, sig1Code: e.target.value })}
+                      className="w-full p-2 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-amber-400 font-mono font-bold uppercase"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-bold text-zinc-500 uppercase block">Signal 2 Time (HH:MM)</label>
+                    <input
+                      type="text"
+                      placeholder="20:00"
+                      value={leadForm.sig2Time}
+                      onChange={(e) => setLeadForm({ ...leadForm, sig2Time: e.target.value })}
+                      className="w-full p-2 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-white font-mono"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-bold text-zinc-500 uppercase block">Signal 2 Code</label>
+                    <input
+                      type="text"
+                      placeholder="SIG2000"
+                      value={leadForm.sig2Code}
+                      onChange={(e) => setLeadForm({ ...leadForm, sig2Code: e.target.value })}
+                      className="w-full p-2 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-amber-400 font-mono font-bold uppercase"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Risk Level</label>
+                <select
+                  value={leadForm.riskLevel}
+                  onChange={(e) => setLeadForm({ ...leadForm, riskLevel: e.target.value })}
+                  className="w-full p-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-white focus:outline-none focus:border-emerald-500"
+                >
+                  <option value="Very Low Risk">Very Low Risk</option>
+                  <option value="Low Risk">Low Risk</option>
+                  <option value="Moderate">Moderate</option>
+                  <option value="High Yield">High Yield</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-zinc-800">
+              <button
+                type="button"
+                onClick={() => setIsAddLeadModalOpen(false)}
+                className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold text-xs rounded-xl transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isSavingLead}
+                onClick={handleSaveLead}
+                className="px-5 py-2 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-black text-xs rounded-xl transition-colors cursor-pointer flex items-center gap-1.5"
+              >
+                {isSavingLead ? (
+                  <>
+                    <Loader size={12} className="animate-spin" />
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <span>Save Lead Trader</span>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

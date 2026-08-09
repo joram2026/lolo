@@ -5,6 +5,9 @@ export interface UserAccount {
   phone?: string;
   country?: string;
   balance: number; // in USD
+  usdtBalance?: number;
+  tradeBalance?: number;
+  lockedCopyTradeCapital?: number; // Capital locked in copy trade contracts
   referralSource?: string;
   hasMadeFirstDeposit?: boolean;
   createdAt: any; // Firestore Timestamp
@@ -158,4 +161,52 @@ export interface UserBot {
   totalTrades: number;
   losses: number;
   createdAt: any;
+}
+
+export interface SignalSchedule {
+  id: string;
+  time: string; // e.g. "13:00" or "1:00 PM"
+  code: string; // e.g. "SIG1300"
+}
+
+export interface CopyTraderLead {
+  id: string;
+  name: string;
+  photoUrl: string;
+  description: string;
+  signalsPerDay: string; // e.g. "2 signals/day"
+  winRate?: string; // e.g. "98.4%"
+  copiersCount?: number;
+  minCapital?: number; // e.g. 50
+  maxCapital?: number; // e.g. 10000
+  analysisCommission?: number; // % e.g. 10
+  dayProfitRate?: number; // % e.g. 2.0
+  contractDurationDays?: number; // e.g. 30 (excluding Sundays)
+  tradingPairs?: string[]; // e.g. ["BTC/USDT", "ETH/USDT", "SOL/USDT"]
+  signals?: SignalSchedule[]; // list of signals per day with time and code
+  riskLevel?: string; // e.g. "Low Risk", "Moderate", "High"
+  createdAt?: any;
+  updatedAt?: any;
+}
+
+export interface UserCopyTrade {
+  id: string;
+  userId: string;
+  userEmail: string;
+  leadId: string;
+  leadName: string;
+  leadPhotoUrl?: string;
+  tradingPair: string;
+  amount: number;
+  signalCode: string;
+  signalTime: string;
+  grossProfit: number;
+  commissionDeducted: number;
+  netProfit: number;
+  status: 'COMPLETED' | 'ACTIVE' | 'EXPIRED';
+  contractCapital?: number;
+  contractStartDate?: any;
+  contractDurationDays?: number;
+  createdAt: any;
+  updatedAt?: any;
 }

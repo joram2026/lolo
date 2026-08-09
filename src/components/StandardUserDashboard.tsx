@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion } from 'motion/react';
 import { db } from '../firebase';
 import { doc, getDoc, onSnapshot, collection, query, where, getDocs, updateDoc, addDoc, serverTimestamp } from 'firebase/firestore';
-import { UserAccount, Transaction, CryptoPrice, ArbitrageConfig } from '../types';
+import { UserAccount, Transaction, CryptoPrice, ArbitrageConfig, CopyTraderLead, UserCopyTrade } from '../types';
+import { DEFAULT_COPY_LEADS } from '../data/copyTraders';
 import { useToast } from '../context/ToastContext';
 import NewsCarousel from './NewsCarousel';
 import ActivityLog from './ActivityLog';
@@ -11,11 +12,12 @@ import {
   User, LogOut, ArrowRightLeft, ShieldCheck, Activity, Wallet, 
   HelpCircle, RefreshCw, Coins, ArrowRight, MessageSquare, AlertCircle,
   History, ArrowLeft, X, ChevronDown, Check, Lock, Unlock, Eye, EyeOff, Sparkles, BookOpen, Zap, Send,
-  Cpu, Play, Pause, Bot, Crown, Gift, ListFilter, CheckCircle2
+  Cpu, Play, Pause, Bot, Crown, Gift, ListFilter, CheckCircle, CheckCircle2, Users, Globe, Clock
 } from 'lucide-react';
 import { RunningBotView } from './RunningBotView';
 import { getTradingPairConfig, TradingPairBadge, DEFAULT_BOT_TRADING_PAIRS } from '../utils/pairUtils';
 import { syncLiveCryptoPrices } from '../utils/cryptoApi';
+import { getUserTimezoneInfo, formatSignalTimeForCountry } from '../utils/timezones';
 
 interface StandardUserDashboardProps {
   user: any;
@@ -97,6 +99,15 @@ interface CoinIconProps {
 
 export function CoinIcon({ symbol, className = "w-9 h-9" }: CoinIconProps) {
   const [failed, setFailed] = useState(false);
+
+  if (symbol && symbol.toUpperCase() === 'TRADED') {
+    return (
+      <div className={`${className} rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white border border-emerald-400/40 shrink-0 shadow-xs`}>
+        <Activity size={18} className="text-white" />
+      </div>
+    );
+  }
+
   const logoUrl = getCoinLogoUrl(symbol);
 
   if (failed || !logoUrl) {
@@ -199,6 +210,113 @@ function CustomCoinSelect({ value, onChange, coins, isLightTheme = false }: Cust
                   <span className={`font-mono text-xs ${isLightTheme ? 'text-zinc-500 font-medium' : 'text-zinc-400'}`}>
                     ${coin.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
                   </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface TradingPairSelectorProps {
+  value: string;
+  onChange: (value: string) => void;
+  pairs: string[];
+  isLightTheme?: boolean;
+}
+
+function TradingPairSelector({ value, onChange, pairs, isLightTheme = false }: TradingPairSelectorProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    window.addEventListener('click', handleOutsideClick);
+    return () => window.removeEventListener('click', handleOutsideClick);
+  }, [isOpen]);
+
+  return (
+    <div ref={containerRef} className="relative select-none">
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className={`w-full flex items-center justify-between pl-3.5 pr-4 py-3.5 rounded-xl border-2 text-xs sm:text-sm font-black font-mono cursor-pointer transition-all ${
+          isLightTheme 
+            ? 'bg-white hover:bg-zinc-50 border-zinc-300 text-zinc-900 shadow-xs' 
+            : 'bg-slate-950 hover:bg-slate-900 border-slate-800 text-white shadow-sm'
+        } ${isOpen ? 'ring-4 ring-amber-500/20 border-amber-500' : ''}`}
+      >
+        <div className="flex items-center gap-2.5">
+          <div className={`w-7 h-7 rounded-lg flex items-center justify-center font-mono text-xs font-black shrink-0 ${
+            isLightTheme ? 'bg-amber-500 text-slate-950 shadow-xs' : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+          }`}>
+            {value.charAt(0)}
+          </div>
+          <span className="font-mono font-black text-xs sm:text-sm">{value}</span>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <span className={`text-[10px] font-bold font-mono uppercase tracking-wider px-2 py-0.5 rounded-md ${
+            isLightTheme ? 'bg-zinc-100 text-zinc-600' : 'bg-slate-900 text-zinc-400'
+          }`}>
+            SPOT
+          </span>
+          <ChevronDown size={18} className={`text-amber-500 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+        </div>
+      </button>
+
+      {isOpen && (
+        <div className={`absolute left-0 right-0 mt-1.5 p-1.5 rounded-xl border-2 shadow-2xl z-50 animate-in fade-in duration-150 ${
+          isLightTheme 
+            ? 'bg-white border-zinc-200 shadow-zinc-300/50' 
+            : 'bg-slate-950 border-slate-800 shadow-black/80'
+        }`}>
+          <div className="text-[10px] font-black uppercase tracking-wider px-2.5 py-1.5 text-zinc-400 border-b border-zinc-100 dark:border-slate-850 mb-1 flex items-center justify-between">
+            <span>Available Markets</span>
+            <span>{pairs.length} Pairs</span>
+          </div>
+
+          <div className="space-y-1 max-h-52 overflow-y-auto">
+            {pairs.map((pair) => {
+              const isSelected = pair === value;
+              const coinLetter = pair.charAt(0);
+              return (
+                <button
+                  key={pair}
+                  type="button"
+                  onClick={() => {
+                    onChange(pair);
+                    setIsOpen(false);
+                  }}
+                  className={`w-full flex items-center justify-between p-2.5 rounded-lg text-xs font-black font-mono transition-all text-left cursor-pointer ${
+                    isSelected
+                      ? 'bg-amber-500 text-slate-950 shadow-xs font-black'
+                      : isLightTheme
+                        ? 'text-zinc-800 hover:bg-amber-50 hover:text-amber-950'
+                        : 'text-zinc-200 hover:bg-slate-900 hover:text-white'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className={`w-6 h-6 rounded-md flex items-center justify-center text-[10px] font-bold ${
+                      isSelected
+                        ? 'bg-slate-950 text-amber-400'
+                        : isLightTheme ? 'bg-zinc-100 text-zinc-700' : 'bg-slate-900 text-zinc-400'
+                    }`}>
+                      {coinLetter}
+                    </div>
+                    <span>{pair}</span>
+                  </div>
+
+                  {isSelected && (
+                    <Check size={16} className="text-slate-950 font-black shrink-0" />
+                  )}
                 </button>
               );
             })}
@@ -378,6 +496,232 @@ export default function StandardUserDashboard({
   const [isBalanceBlurred, setIsBalanceBlurred] = useState<boolean>(false);
   const [isEarnBalanceBlurred, setIsEarnBalanceBlurred] = useState<boolean>(false);
   const [earnDisplayMode, setEarnDisplayMode] = useState<'USD' | 'CRYPTO'>('USD');
+
+  // Copy Trading Lead Experts & Active User Copy Trades states
+  const [copyLeads, setCopyLeads] = useState<CopyTraderLead[]>([]);
+  const [userCopyTrades, setUserCopyTrades] = useState<UserCopyTrade[]>([]);
+  const [selectedLeadForCopy, setSelectedLeadForCopy] = useState<CopyTraderLead | null>(null);
+  const [copyTradeStep, setCopyTradeStep] = useState<1 | 2 | 3>(1);
+  const [copyTradePair, setCopyTradePair] = useState<string>('BTC/USDT');
+  const [copyTradeAmountInput, setCopyTradeAmountInput] = useState<string>('50');
+  const [copySignalCodeInput, setCopySignalCodeInput] = useState<string>('');
+  const [isSubmittingCopy, setIsSubmittingCopy] = useState<boolean>(false);
+
+  // Trade Balance Transfer states (Transfer In / Transfer Out for Copy Signals)
+  const [transferModalType, setTransferModalType] = useState<'IN' | 'OUT' | null>(null);
+  const [transferAmountInput, setTransferAmountInput] = useState<string>('');
+  const [isTransferring, setIsTransferring] = useState<boolean>(false);
+
+  // Helper to determine active signal window for expert (1 hour valid duration from start time)
+  const getActiveSignalForLead = (lead: CopyTraderLead) => {
+    if (!lead.signals || lead.signals.length === 0) return null;
+    
+    const now = new Date();
+    const pad = (n: number) => n.toString().padStart(2, '0');
+
+    // Get today's date in Kenya (Africa/Nairobi UTC+3)
+    let kenyaDateParts: number[];
+    try {
+      kenyaDateParts = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Africa/Nairobi',
+        year: 'numeric',
+        month: 'numeric',
+        day: 'numeric',
+      }).format(now).split('/').map(Number);
+    } catch {
+      kenyaDateParts = [now.getMonth() + 1, now.getDate(), now.getFullYear()];
+    }
+
+    const m = pad(kenyaDateParts[0]);
+    const d = pad(kenyaDateParts[1]);
+    const y = kenyaDateParts[2];
+
+    for (const sig of lead.signals) {
+      if (!sig.time) continue;
+      const parts = sig.time.split(':');
+      if (parts.length < 2) continue;
+      const sigHour = parseInt(parts[0], 10);
+      const sigMin = parseInt(parts[1], 10);
+      if (isNaN(sigHour) || isNaN(sigMin)) continue;
+
+      // ISO string representing signal start time in Kenya Time (UTC+03:00)
+      const isoKenya = `${y}-${m}-${d}T${pad(sigHour)}:${pad(sigMin)}:00+03:00`;
+      const sigStartMs = new Date(isoKenya).getTime();
+
+      // 1 hour window = 3600000 ms
+      if (now.getTime() >= sigStartMs && now.getTime() < sigStartMs + 3600000) {
+        return sig;
+      }
+    }
+    return null;
+  };
+
+  // Helper to check if a specific signal code or signal time has already been executed today by the user
+  const isSignalExecutedToday = (lead: CopyTraderLead, signal: { time: string; code: string }) => {
+    if (!lead || !signal || !userCopyTrades) return false;
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    return userCopyTrades.some((trade) => {
+      const isSameLead = trade.leadId === lead.id || trade.leadName === lead.name;
+      if (!isSameLead) return false;
+
+      const tradeCode = (trade.signalCode || '').toUpperCase();
+      const targetCode = (signal.code || '').toUpperCase();
+      const isSameSignal = (targetCode && tradeCode === targetCode) || trade.signalTime === signal.time;
+      if (!isSameSignal) return false;
+
+      const tradeDate = trade.createdAt?.seconds 
+        ? new Date(trade.createdAt.seconds * 1000) 
+        : new Date(trade.createdAt || 0);
+
+      return tradeDate >= todayStart;
+    });
+  };
+
+  // Helper to calculate locked contract capital and free transferrable amount on copy trading
+  const getCopyTradeLockedAndFree = () => {
+    const tradeBal = profile?.tradeBalance ?? 0;
+    const now = new Date();
+    const activeContractCapitalByLead: Record<string, number> = {};
+
+    (userCopyTrades || []).forEach((trade) => {
+      const leadKey = trade.leadId || trade.leadName || 'default-lead';
+      const capital = trade.contractCapital || trade.amount || 0;
+      if (capital > 0) {
+        const durationDays = trade.contractDurationDays || 30;
+        const startDate = trade.contractStartDate?.seconds 
+          ? new Date(trade.contractStartDate.seconds * 1000) 
+          : trade.createdAt?.seconds 
+          ? new Date(trade.createdAt.seconds * 1000) 
+          : new Date(trade.createdAt || Date.now());
+        
+        let workdaysCount = 0;
+        let curr = new Date(startDate);
+        while (curr < now) {
+          if (curr.getDay() !== 0) { // Exclude Sundays
+            workdaysCount++;
+          }
+          curr.setDate(curr.getDate() + 1);
+        }
+
+        if (workdaysCount < durationDays) {
+          activeContractCapitalByLead[leadKey] = Math.max(
+            activeContractCapitalByLead[leadKey] || 0,
+            capital
+          );
+        }
+      }
+    });
+
+    const rawLockedCapital = Object.values(activeContractCapitalByLead).reduce((a, b) => a + b, 0);
+    const lockedCapital = Math.min(rawLockedCapital, tradeBal);
+    const freeTransferrable = Math.max(0, tradeBal - lockedCapital);
+
+    return { lockedCapital, freeTransferrable };
+  };
+
+  const handleConfirmTransferIn = async () => {
+    const amount = parseFloat(transferAmountInput);
+    const walletBal = profile?.usdtBalance ?? profile?.balance ?? 0;
+    if (!amount || isNaN(amount) || amount <= 0) {
+      toast.error('Please enter a valid transfer amount greater than 0.', 'Invalid Amount');
+      return;
+    }
+    if (amount > walletBal) {
+      toast.error(`Insufficient wallet balance. You have $${walletBal.toFixed(2)} available in your system wallet.`, 'Insufficient Funds');
+      return;
+    }
+
+    setIsTransferring(true);
+    try {
+      const userRef = doc(db, 'users', user.uid);
+      const newWalletBal = Math.max(0, walletBal - amount);
+      const currentTradeBal = profile?.tradeBalance ?? 0;
+      const newTradeBal = currentTradeBal + amount;
+
+      await updateDoc(userRef, {
+        balance: parseFloat(newWalletBal.toFixed(2)),
+        usdtBalance: parseFloat(newWalletBal.toFixed(2)),
+        tradeBalance: parseFloat(newTradeBal.toFixed(2))
+      });
+
+      await addDoc(collection(db, 'transactions'), {
+        userId: user.uid,
+        userEmail: user.email || '',
+        type: 'trade_balance_transfer_in',
+        amount: amount,
+        status: 'APPROVED',
+        createdAt: new Date(),
+        paymentMessage: `Transferred $${amount.toFixed(2)} USD from Wallet Balance to Trade Balance`
+      });
+
+      toast.success(`Successfully transferred $${amount.toFixed(2)} USD into your Trade Balance!`, 'Transfer Complete');
+      setTransferModalType(null);
+      setTransferAmountInput('');
+    } catch (err: any) {
+      console.error('Transfer in error:', err);
+      toast.error(`Failed to complete transfer: ${err.message}`, 'Transfer Error');
+    } finally {
+      setIsTransferring(false);
+    }
+  };
+
+  const handleConfirmTransferOut = async () => {
+    const amount = parseFloat(transferAmountInput);
+    const tradeBal = profile?.tradeBalance ?? 0;
+    if (!amount || isNaN(amount) || amount <= 0) {
+      toast.error('Please enter a valid transfer amount greater than 0.', 'Invalid Amount');
+      return;
+    }
+    if (amount > tradeBal) {
+      toast.error(`Insufficient trade balance. You have $${tradeBal.toFixed(2)} in your trade balance.`, 'Insufficient Funds');
+      return;
+    }
+
+    const { lockedCapital, freeTransferrable } = getCopyTradeLockedAndFree();
+
+    if (amount > freeTransferrable) {
+      toast.error(
+        `Cannot transfer out locked contract capital ($${lockedCapital.toFixed(2)}) until the contract duration is complete. Maximum available to transfer out is $${freeTransferrable.toFixed(2)}.`,
+        'Capital Locked'
+      );
+      return;
+    }
+
+    setIsTransferring(true);
+    try {
+      const userRef = doc(db, 'users', user.uid);
+      const currentWalletBal = profile?.usdtBalance ?? profile?.balance ?? 0;
+      const newWalletBal = currentWalletBal + amount;
+      const newTradeBal = Math.max(0, tradeBal - amount);
+
+      await updateDoc(userRef, {
+        balance: parseFloat(newWalletBal.toFixed(2)),
+        usdtBalance: parseFloat(newWalletBal.toFixed(2)),
+        tradeBalance: parseFloat(newTradeBal.toFixed(2))
+      });
+
+      await addDoc(collection(db, 'transactions'), {
+        userId: user.uid,
+        userEmail: user.email || '',
+        type: 'trade_balance_transfer_out',
+        amount: amount,
+        status: 'APPROVED',
+        createdAt: new Date(),
+        paymentMessage: `Transferred $${amount.toFixed(2)} USD from Trade Balance to Wallet Balance`
+      });
+
+      toast.success(`Successfully transferred $${amount.toFixed(2)} USD from Trade Balance back to Wallet Balance!`, 'Transfer Complete');
+      setTransferModalType(null);
+      setTransferAmountInput('');
+    } catch (err: any) {
+      console.error('Transfer out error:', err);
+      toast.error(`Failed to complete transfer: ${err.message}`, 'Transfer Error');
+    } finally {
+      setIsTransferring(false);
+    }
+  };
 
   // Active Coin for Dedicated Quick Arbitrage Guide Page
   const [arbitrageGuideCoin, setArbitrageGuideCoin] = useState<{
@@ -728,6 +1072,34 @@ export default function StandardUserDashboard({
       setBotTemplates(tpls);
     });
 
+    // Real-time listener for Copy Trader Leads
+    const copyLeadsCol = collection(db, 'copy_trader_leads');
+    const unsubscribeCopyLeads = onSnapshot(copyLeadsCol, (snapshot) => {
+      let leads = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as CopyTraderLead));
+      if (leads.length === 0) {
+        leads = [...DEFAULT_COPY_LEADS];
+      }
+      setCopyLeads(leads);
+    }, (err) => {
+      console.error("Error fetching copy trader leads:", err);
+      setCopyLeads([...DEFAULT_COPY_LEADS]);
+    });
+
+    // Real-time listener for User Copy Trades
+    const copyTradesCol = collection(db, 'user_copy_trades');
+    const copyTradesQuery = query(copyTradesCol, where('userId', '==', user.uid));
+    const unsubscribeCopyTrades = onSnapshot(copyTradesQuery, (snapshot) => {
+      const trades = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as UserCopyTrade));
+      trades.sort((a, b) => {
+        const aTime = a.createdAt?.seconds ? a.createdAt.seconds * 1000 : new Date(a.createdAt || 0).getTime();
+        const bTime = b.createdAt?.seconds ? b.createdAt.seconds * 1000 : new Date(b.createdAt || 0).getTime();
+        return bTime - aTime;
+      });
+      setUserCopyTrades(trades);
+    }, (err) => {
+      console.error("Error fetching user copy trades:", err);
+    });
+
     return () => {
       unsubscribeUser();
       unsubscribeTx();
@@ -736,6 +1108,8 @@ export default function StandardUserDashboard({
       unsubscribeArbitrage();
       unsubscribeBots();
       unsubscribeTemplates();
+      unsubscribeCopyLeads();
+      unsubscribeCopyTrades();
     };
   }, [user.uid]);
 
@@ -814,6 +1188,9 @@ export default function StandardUserDashboard({
       case 'swap_crypto': return 'Swap / Convert';
       case 'internal_send': return 'Internal Send';
       case 'internal_receive': return 'Internal Receive';
+      case 'copy_trade_payout': return 'Copy Trade Payout';
+      case 'trade_balance_transfer_in': return 'Copy Trade Transfer In';
+      case 'trade_balance_transfer_out': return 'Copy Trade Transfer Out';
       case 'invested': return 'Trade Signal';
       case 'investment_earning': return 'Signal Earning';
       default: return type;
@@ -1062,9 +1439,25 @@ export default function StandardUserDashboard({
   const userAssets = ASSET_ALLOCATION_DEFS.map(def => {
     const coinInfo = cryptoPrices.find(c => c.symbol === def.symbol);
     const price = coinInfo ? coinInfo.price : 0;
-    const coinAmount = getCoinHolding(def.symbol);
-    const lockedAmount = getLockedAmount(def.symbol);
-    const unlockedAmount = Math.max(0, coinAmount - lockedAmount);
+    
+    let coinAmount = 0;
+    let lockedAmount = 0;
+    let unlockedAmount = 0;
+
+    if (def.symbol === 'USDT') {
+      const walletBal = profile?.usdtBalance ?? profile?.balance ?? 0;
+      const tradeBal = profile?.tradeBalance ?? 0;
+      const activeInvUSDT = getLockedAmount('USDT');
+      
+      unlockedAmount = walletBal;
+      lockedAmount = tradeBal + activeInvUSDT;
+      coinAmount = unlockedAmount + lockedAmount;
+    } else {
+      coinAmount = getCoinHolding(def.symbol);
+      lockedAmount = getLockedAmount(def.symbol);
+      unlockedAmount = Math.max(0, coinAmount - lockedAmount);
+    }
+
     const usdValue = coinAmount * price; // Amount * Live Price = USDT equivalent!
     return {
       symbol: def.symbol,
@@ -1240,6 +1633,190 @@ export default function StandardUserDashboard({
     }
   };
   const swapMessage = swapMessageState;
+
+  // Helper to get latest contract or trade amount for a lead trader if user already has one
+  const getLatestContractAmountForLead = (lead: CopyTraderLead): number => {
+    const leadTrades = (userCopyTrades || []).filter(
+      (t) => t.leadId === lead.id || (t.leadName && t.leadName.toLowerCase() === lead.name.toLowerCase())
+    );
+    if (leadTrades.length > 0) {
+      // userCopyTrades is sorted newest first
+      const latest = leadTrades[0];
+      const cap = latest.contractCapital || latest.amount;
+      if (cap && cap > 0) return cap;
+    }
+    return lead.minCapital ?? 50;
+  };
+
+  // Copy Trade Handlers
+  const handleOpenCopyModal = (lead: CopyTraderLead) => {
+    setActiveTab('earn');
+    setSelectedLeadForCopy(lead);
+    setCopyTradeStep(1);
+    const defaultPair = lead.tradingPairs && lead.tradingPairs.length > 0 ? lead.tradingPairs[0] : 'BTC/USDT';
+    setCopyTradePair(defaultPair);
+
+    const initialAmount = getLatestContractAmountForLead(lead);
+    setCopyTradeAmountInput(initialAmount.toString());
+
+    setCopySignalCodeInput('');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    if (selectedLeadForCopy) {
+      const latestAmt = getLatestContractAmountForLead(selectedLeadForCopy);
+      if (latestAmt > 0) {
+        setCopyTradeAmountInput(latestAmt.toString());
+      }
+    }
+  }, [selectedLeadForCopy?.id, userCopyTrades.length]);
+
+  const handleExecuteCopyTrade = async () => {
+    if (!selectedLeadForCopy) return;
+
+    // 1. Time & Signal Window Check
+    const activeSignal = getActiveSignalForLead(selectedLeadForCopy);
+    if (!activeSignal) {
+      toast.error('Trade duration over', 'Signal Expired');
+      return;
+    }
+
+    // 2. Signal Code Validation
+    if (!copySignalCodeInput.trim()) {
+      toast.error('Please enter the unique signal code provided by the expert.', 'Signal Code Required');
+      return;
+    }
+
+    if (copySignalCodeInput.trim().toUpperCase() !== activeSignal.code.toUpperCase()) {
+      toast.error('Invalid signal code for current signal window. Please check the active code from expert.', 'Invalid Signal Code');
+      return;
+    }
+
+    // 2b. One-time Execution Check per Signal per Day
+    if (isSignalExecutedToday(selectedLeadForCopy, activeSignal)) {
+      toast.error(
+        `You have already executed the signal code (${activeSignal.code}) for ${selectedLeadForCopy.name} today. Each signal code can only be used once per day.`,
+        'Signal Already Executed'
+      );
+      return;
+    }
+
+    // 3. Amount Validation
+    const amount = parseFloat(copyTradeAmountInput);
+    const minCap = selectedLeadForCopy.minCapital ?? 50;
+    const maxCap = selectedLeadForCopy.maxCapital ?? 10000;
+
+    if (isNaN(amount) || amount < minCap) {
+      toast.error(`Trade amount must be at least $${minCap}.`, 'Invalid Trade Amount');
+      return;
+    }
+
+    if (amount > maxCap) {
+      toast.error(`Trade amount cannot exceed $${maxCap}.`, 'Exceeds Maximum');
+      return;
+    }
+
+    const tradeBal = profile?.tradeBalance ?? 0;
+    if (amount > tradeBal) {
+      toast.error(`Insufficient Copy Trade Balance ($${tradeBal.toFixed(2)} USD available). Please transfer funds from your Wallet into your Copy Trade Balance.`, 'Insufficient Trade Balance');
+      return;
+    }
+
+    setIsSubmittingCopy(true);
+    try {
+      // 4. Calculate Profits and Commissions
+      const numSignals = selectedLeadForCopy.signals?.length || 2;
+      const dayRate = selectedLeadForCopy.dayProfitRate ?? 2.0;
+      const signalProfitPercent = dayRate / numSignals; // e.g. 2% / 2 = 1%
+      const grossProfit = amount * (signalProfitPercent / 100);
+      const commissionPct = selectedLeadForCopy.analysisCommission ?? 10;
+      const commissionDeducted = grossProfit * (commissionPct / 100);
+      const netProfit = grossProfit - commissionDeducted;
+
+      // 5. Update User's Trade Balance
+      const userRef = doc(db, 'users', user.uid);
+      const newTradeBal = tradeBal + netProfit;
+      await updateDoc(userRef, {
+        tradeBalance: parseFloat(newTradeBal.toFixed(2))
+      });
+
+      // 6. Record Copy Trade Log
+      const newTradeId = `copy-${Date.now()}`;
+      await addDoc(collection(db, 'user_copy_trades'), {
+        id: newTradeId,
+        userId: user.uid,
+        userEmail: user.email || '',
+        leadId: selectedLeadForCopy.id,
+        leadName: selectedLeadForCopy.name,
+        leadPhotoUrl: selectedLeadForCopy.photoUrl,
+        tradingPair: copyTradePair,
+        amount: amount,
+        signalCode: copySignalCodeInput.trim().toUpperCase(),
+        signalTime: activeSignal.time,
+        grossProfit: parseFloat(grossProfit.toFixed(2)),
+        commissionDeducted: parseFloat(commissionDeducted.toFixed(2)),
+        netProfit: parseFloat(netProfit.toFixed(2)),
+        status: 'COMPLETED',
+        contractCapital: amount,
+        contractStartDate: new Date(),
+        contractDurationDays: selectedLeadForCopy.contractDurationDays || 30,
+        createdAt: new Date().toISOString()
+      });
+
+      // 7. Add Transaction record
+      await addDoc(collection(db, 'transactions'), {
+        userId: user.uid,
+        userEmail: user.email || '',
+        type: 'copy_trade_payout',
+        amount: netProfit,
+        status: 'APPROVED',
+        createdAt: new Date(),
+        paymentMessage: `Copy Trade Signal Executed (${copyTradePair}) with ${selectedLeadForCopy.name}. Profit: +$${netProfit.toFixed(2)} USD (Gross $${grossProfit.toFixed(2)} - Analysis Commission $${commissionDeducted.toFixed(2)})`
+      });
+
+      toast.success(
+        `Signal Executed! Profit credited: +$${netProfit.toFixed(2)} USD (Gross $${grossProfit.toFixed(2)} less ${commissionPct}% Analysis Commission $${commissionDeducted.toFixed(2)}). New Copy Trade Balance: $${newTradeBal.toFixed(2)}.`,
+        'Trade Successful'
+      );
+
+      setSelectedLeadForCopy(null);
+      setCopySignalCodeInput('');
+    } catch (err: any) {
+      console.error("Copy trade error:", err);
+      toast.error(`Failed to execute copy trade: ${err.message}`, 'Trade Execution Error');
+    } finally {
+      setIsSubmittingCopy(false);
+    }
+  };
+
+  const handleStopCopyTrade = async (trade: UserCopyTrade) => {
+    try {
+      if (trade.id) {
+        await updateDoc(doc(db, 'user_copy_trades', trade.id), {
+          status: 'STOPPED',
+          stoppedAt: new Date().toISOString()
+        });
+
+        // Refund capital + profit
+        const tradeAmount = trade.amount || trade.contractCapital || 0;
+        const tradeProfit = trade.netProfit || 0;
+        const refund = tradeAmount + tradeProfit;
+        if (refund > 0) {
+          const userRef = doc(db, 'users', user.uid);
+          const currentUsdt = profile?.usdtBalance ?? profile?.balance ?? 0;
+          await updateDoc(userRef, {
+            usdtBalance: parseFloat((currentUsdt + refund).toFixed(2))
+          });
+        }
+
+        toast.success(`Copy trading for ${trade.leadName} stopped. $${refund.toFixed(2)} returned to your balance.`, 'Copy Trade Stopped');
+      }
+    } catch (err: any) {
+      console.error("Error stopping copy trade:", err);
+      toast.error(`Failed to stop copy trade: ${err.message}`, 'Error');
+    }
+  };
 
   const BOT_TEMPLATES = [
     {
@@ -2304,11 +2881,15 @@ export default function StandardUserDashboard({
   const isHideHeader = 
     Boolean(arbitrageGuideCoin) || 
     Boolean(activeRunningBot) || 
-    (activeTab === 'trade' && botHubView !== 'menu');
+    (activeTab === 'trade' && botHubView !== 'menu') ||
+    activeTab === 'earn';
 
   const isHideFooter = 
-    isHideHeader || 
-    (activeTab === 'earn' && mmfSubView === 'form');
+    Boolean(arbitrageGuideCoin) || 
+    Boolean(activeRunningBot) || 
+    (activeTab === 'trade' && botHubView !== 'menu') ||
+    (activeTab === 'earn' && mmfSubView === 'form') ||
+    Boolean(selectedLeadForCopy);
 
   return (
     <div 
@@ -2391,7 +2972,7 @@ export default function StandardUserDashboard({
           <span className="text-xs text-zinc-500 font-semibold">Decrypting wallet keys...</span>
         </div>
       ) : (
-        <main className={`max-w-4xl mx-auto px-4 space-y-6 ${arbitrageGuideCoin || activeRunningBot ? 'pt-4' : 'mt-5'}`}>
+        <main className={`max-w-4xl mx-auto px-4 space-y-6 ${isHideHeader ? 'pt-4' : 'mt-5'}`}>
           {activeRunningBot ? (
             <RunningBotView
               bot={activeRunningBot}
@@ -2974,8 +3555,8 @@ export default function StandardUserDashboard({
                               </span>
                             </div>
                             <div className={`flex items-center gap-1 font-bold ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>
-                              <Lock size={11} className={`${isLightTheme ? 'text-amber-600' : 'text-amber-400'} shrink-0`} />
-                              <span>Invested:</span>
+                              <Activity size={11} className={`${isLightTheme ? 'text-amber-600' : 'text-amber-400'} shrink-0`} />
+                              <span>Traded:</span>
                               <span className={`${isLightTheme ? 'text-amber-600' : 'text-amber-400'} font-extrabold`}>
                                 {asset.lockedAmount.toLocaleString(undefined, {
                                   minimumFractionDigits: asset.symbol === 'BTC' || asset.symbol === 'ETH' ? 4 : 2,
@@ -4312,11 +4893,964 @@ export default function StandardUserDashboard({
             </div>
           )}
 
-          {/* TAB 4: EARN (VERIFIED TRADING SIGNALS) */}
           {activeTab === 'earn' && (
-            <div className="space-y-5 animate-fade-in">
-              {/* Earn Specific Interactive Wallet Card */}
-              {mmfSubView !== 'form' && (
+            selectedLeadForCopy ? (
+              <div id="copy-trade-execution-page" className="space-y-6 animate-fade-in">
+                {/* Top Back Navigation Bar */}
+                <div className="flex flex-row items-center justify-between gap-2 sm:gap-3 pb-3 border-b border-zinc-200 dark:border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedLeadForCopy(null)}
+                    className={`inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-2xl font-black text-[11px] sm:text-xs uppercase tracking-wider transition-all cursor-pointer shadow-xs shrink-0 whitespace-nowrap ${
+                      isLightTheme 
+                        ? 'bg-zinc-100 hover:bg-zinc-200 text-zinc-800 border border-zinc-200' 
+                        : 'bg-slate-800 hover:bg-slate-700 text-zinc-200 border border-slate-700'
+                    }`}
+                  >
+                    <ArrowLeft size={15} className="shrink-0" />
+                    <span className="hidden sm:inline">Back to Expert Traders</span>
+                    <span className="sm:hidden">Back to Experts</span>
+                  </button>
+                  <span className={`px-2.5 sm:px-3 py-1 rounded-full text-[10px] sm:text-xs font-extrabold font-mono shrink-0 whitespace-nowrap ${
+                    isLightTheme ? 'bg-amber-100 text-amber-900 border border-amber-200' : 'bg-amber-500/10 text-amber-300 border border-amber-500/20'
+                  }`}>
+                    <span className="hidden xs:inline">Expert Trading Terminal</span>
+                    <span className="xs:hidden">Trading Terminal</span>
+                  </span>
+                </div>
+
+                {/* Main Page Content Card */}
+                <div className={`w-full p-5 sm:p-7 rounded-3xl border shadow-xl space-y-6 ${
+                  isLightTheme ? 'bg-white border-zinc-200 text-zinc-900 shadow-slate-900/5' : 'bg-slate-900 border-slate-800 text-white shadow-black/40'
+                }`}>
+                  {/* Page Header */}
+                  <div className={`flex items-center justify-between pb-4 border-b ${
+                    isLightTheme ? 'border-zinc-200' : 'border-slate-800'
+                  }`}>
+                    <div className="flex items-center gap-3">
+                      <div className="w-14 h-14 rounded-2xl overflow-hidden border-2 border-amber-500/80 shadow-md shrink-0">
+                        <img 
+                          src={selectedLeadForCopy.photoUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80'} 
+                          alt={selectedLeadForCopy.name} 
+                          className="w-full h-full object-cover"
+                          referrerPolicy="no-referrer"
+                        />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className={`font-extrabold text-lg sm:text-xl tracking-tight ${isLightTheme ? 'text-zinc-900' : 'text-white'}`}>
+                            {selectedLeadForCopy.name}
+                          </h3>
+                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase font-mono ${
+                            isLightTheme ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                          }`}>
+                            {selectedLeadForCopy.winRate}% Win
+                          </span>
+                        </div>
+                        <p className={`text-xs font-medium mt-0.5 ${isLightTheme ? 'text-zinc-600' : 'text-zinc-400'}`}>
+                          Copy Trade Terminal • Step {copyTradeStep} of 3
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 3-Step Process Stepper Tabs */}
+                  <div className={`grid grid-cols-3 gap-1.5 p-1.5 rounded-2xl border text-xs font-mono ${
+                    isLightTheme ? 'bg-zinc-100 border-zinc-200' : 'bg-slate-950 border-slate-800'
+                  }`}>
+                    <button
+                      type="button"
+                      onClick={() => setCopyTradeStep(1)}
+                      className={`py-2 px-2 sm:px-3 rounded-xl font-extrabold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                        copyTradeStep === 1
+                          ? 'bg-amber-500 text-slate-950 shadow-xs'
+                          : copyTradeStep > 1
+                          ? isLightTheme ? 'text-zinc-800 bg-white/80' : 'text-zinc-200 bg-slate-900/80'
+                          : isLightTheme ? 'text-zinc-500 hover:text-zinc-800' : 'text-zinc-400 hover:text-zinc-200'
+                      }`}
+                    >
+                      <span className="w-4 h-4 rounded-full bg-slate-950/20 flex items-center justify-center text-[10px] font-black shrink-0">1</span>
+                      <span className="truncate hidden xs:inline font-sans font-bold">1. Overview</span>
+                      <span className="truncate xs:hidden font-sans font-bold">Overview</span>
+                      {copyTradeStep > 1 && <CheckCircle size={13} className="shrink-0 text-emerald-600 dark:text-emerald-400" />}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setCopyTradeStep(2)}
+                      className={`py-2 px-2 sm:px-3 rounded-xl font-extrabold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                        copyTradeStep === 2
+                          ? 'bg-amber-500 text-slate-950 shadow-xs'
+                          : copyTradeStep > 2
+                          ? isLightTheme ? 'text-zinc-800 bg-white/80' : 'text-zinc-200 bg-slate-900/80'
+                          : isLightTheme ? 'text-zinc-500 hover:text-zinc-800' : 'text-zinc-400 hover:text-zinc-200'
+                      }`}
+                    >
+                      <span className="w-4 h-4 rounded-full bg-slate-950/20 flex items-center justify-center text-[10px] font-black shrink-0">2</span>
+                      <span className="truncate hidden xs:inline font-sans font-bold">2. Capital & Pair</span>
+                      <span className="truncate xs:hidden font-sans font-bold">Capital</span>
+                      {copyTradeStep > 2 && <CheckCircle size={13} className="shrink-0 text-emerald-600 dark:text-emerald-400" />}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setCopyTradeStep(3)}
+                      className={`py-2 px-2 sm:px-3 rounded-xl font-extrabold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                        copyTradeStep === 3
+                          ? 'bg-amber-500 text-slate-950 shadow-xs'
+                          : isLightTheme ? 'text-zinc-500 hover:text-zinc-800' : 'text-zinc-400 hover:text-zinc-200'
+                      }`}
+                    >
+                      <span className="w-4 h-4 rounded-full bg-slate-950/20 flex items-center justify-center text-[10px] font-black shrink-0">3</span>
+                      <span className="truncate hidden xs:inline font-sans font-bold">3. Signal & Run</span>
+                      <span className="truncate xs:hidden font-sans font-bold">Signal</span>
+                    </button>
+                  </div>
+
+                  {/* STEP 1: Expert Overview & Schedule */}
+                  {copyTradeStep === 1 && (
+                    <div className="space-y-5 animate-fade-in">
+                      {/* Expert Description Section */}
+                      <div className={`p-4.5 rounded-2xl border space-y-2 text-xs ${
+                        isLightTheme ? 'bg-amber-50/80 border-amber-200/80 text-zinc-900' : 'bg-slate-950/80 border-slate-800 text-white'
+                      }`}>
+                        <span className={`text-[10px] font-black uppercase tracking-wider block ${
+                          isLightTheme ? 'text-amber-800' : 'text-amber-400'
+                        }`}>About Expert Trader</span>
+                        <p className={`leading-relaxed ${isLightTheme ? 'text-zinc-700' : 'text-zinc-300'}`}>
+                          {selectedLeadForCopy.description || 'Professional cryptocurrency lead trader with proven track record in high-frequency algorithmic signals and strict risk management protocols.'}
+                        </p>
+                      </div>
+
+                      {/* Key Trader Parameters */}
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                        <div className={`p-3.5 rounded-2xl border ${isLightTheme ? 'bg-zinc-50 border-zinc-200' : 'bg-slate-950/80 border-slate-800'}`}>
+                          <span className={`text-[9px] font-black uppercase tracking-wider block ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>Min Trade Capital</span>
+                          <span className={`font-extrabold font-mono text-base mt-0.5 block ${isLightTheme ? 'text-zinc-900' : 'text-white'}`}>
+                            ${selectedLeadForCopy.minCapital ?? 50} USD
+                          </span>
+                        </div>
+                        <div className={`p-3.5 rounded-2xl border ${isLightTheme ? 'bg-zinc-50 border-zinc-200' : 'bg-slate-950/80 border-slate-800'}`}>
+                          <span className={`text-[9px] font-black uppercase tracking-wider block ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>Max Trade Capital</span>
+                          <span className={`font-extrabold font-mono text-base mt-0.5 block ${isLightTheme ? 'text-zinc-900' : 'text-white'}`}>
+                            ${selectedLeadForCopy.maxCapital ?? 10000} USD
+                          </span>
+                        </div>
+                        <div className={`p-3.5 rounded-2xl border ${isLightTheme ? 'bg-amber-50/80 border-amber-200' : 'bg-amber-500/10 border-amber-500/20'}`}>
+                          <span className={`text-[9px] font-black uppercase tracking-wider block ${isLightTheme ? 'text-amber-900' : 'text-amber-400'}`}>Analysis Commission</span>
+                          <span className={`font-extrabold font-mono text-base mt-0.5 block ${isLightTheme ? 'text-amber-700' : 'text-amber-300'}`}>
+                            {selectedLeadForCopy.analysisCommission ?? 10}% cut
+                          </span>
+                        </div>
+                        <div className={`p-3.5 rounded-2xl border ${isLightTheme ? 'bg-emerald-50/80 border-emerald-200' : 'bg-emerald-500/10 border-emerald-500/20'}`}>
+                          <span className={`text-[9px] font-black uppercase tracking-wider block ${isLightTheme ? 'text-emerald-900' : 'text-emerald-400'}`}>1 Day Profit Rate</span>
+                          <span className={`font-extrabold font-mono text-base mt-0.5 block ${isLightTheme ? 'text-emerald-700' : 'text-emerald-300'}`}>
+                            {selectedLeadForCopy.dayProfitRate ?? 2.0}% / day
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Trading Times & Signal Windows */}
+                      <div className={`p-4 sm:p-5 rounded-2xl border space-y-3 ${
+                        isLightTheme ? 'bg-zinc-50 border-zinc-200' : 'bg-slate-950 border-slate-800'
+                      }`}>
+                        {(() => {
+                          const userCountry = profile?.country || 'Kenya';
+                          const userTzInfo = getUserTimezoneInfo(userCountry);
+                          const isNotKenya = userTzInfo.timeZone !== 'Africa/Nairobi' && userTzInfo.label.toLowerCase() !== 'kenya';
+
+                          return (
+                            <>
+                              <div className="flex items-center justify-between flex-wrap gap-2">
+                                <span className={`text-xs font-extrabold uppercase tracking-wider ${isLightTheme ? 'text-zinc-700' : 'text-zinc-300'}`}>
+                                  Trading Times & Daily Signals
+                                </span>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold font-mono flex items-center gap-1.5 ${
+                                    isLightTheme ? 'bg-amber-100 text-amber-900 border border-amber-200' : 'bg-amber-500/10 text-amber-300 border border-amber-500/20'
+                                  }`}>
+                                    <Globe size={11} className="shrink-0 text-amber-600 dark:text-amber-400" />
+                                    <span>{userTzInfo.flag} {userTzInfo.label} Time ({userTzInfo.code})</span>
+                                  </span>
+                                  <span className={`text-[10px] font-bold font-mono ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                                    Contract: {selectedLeadForCopy.contractDurationDays ?? 30} Days (Excl. Sundays)
+                                  </span>
+                                </div>
+                              </div>
+
+                              {isNotKenya && (
+                                <div className={`p-3 rounded-xl text-xs font-medium flex items-start gap-2.5 ${
+                                  isLightTheme ? 'bg-amber-50/90 text-amber-900 border border-amber-200/80' : 'bg-amber-500/10 text-amber-300 border border-amber-500/20'
+                                }`}>
+                                  <Clock size={15} className="shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" />
+                                  <div className="leading-snug">
+                                    <span className="font-extrabold">Automated Timezone Conversion:</span> Signals are published in <strong>Kenyan Time (EAT)</strong>. Below, we've converted each signal time to your local time in <strong>{userTzInfo.flag} {userTzInfo.label} ({userTzInfo.code})</strong> based on your registration country.
+                                  </div>
+                                </div>
+                              )}
+                            </>
+                          );
+                        })()}
+
+                        {selectedLeadForCopy.signals && selectedLeadForCopy.signals.length > 0 ? (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                            {selectedLeadForCopy.signals.map((sig, idx) => {
+                              const activeSig = getActiveSignalForLead(selectedLeadForCopy);
+                              const isActive = activeSig && activeSig.time === sig.time;
+                              const isExecuted = isSignalExecutedToday(selectedLeadForCopy, sig);
+                              const fmtSig = formatSignalTimeForCountry(sig.time, profile?.country);
+
+                              return (
+                                <div 
+                                  key={idx}
+                                  className={`p-3.5 rounded-xl border transition-all flex items-center justify-between ${
+                                    isExecuted
+                                      ? isLightTheme ? 'bg-zinc-100/80 border-zinc-200 text-zinc-500' : 'bg-slate-900/60 border-slate-800 text-zinc-500'
+                                      : isActive
+                                      ? isLightTheme ? 'bg-emerald-100/90 border-emerald-400 text-emerald-950 shadow-xs' : 'bg-emerald-500/20 border-emerald-500 text-emerald-200 shadow-sm'
+                                      : isLightTheme ? 'bg-white border-zinc-200 text-zinc-800' : 'bg-slate-900 border-slate-800 text-zinc-300'
+                                  }`}
+                                >
+                                  <div className="min-w-0 flex-1 pr-2">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      {fmtSig.isDifferentCountry ? (
+                                        <>
+                                          <span className="text-xs sm:text-sm font-black font-mono tracking-tight text-amber-700 dark:text-amber-300">
+                                            {fmtSig.localTimeStr}
+                                          </span>
+                                          <span className={`text-[9px] font-extrabold font-mono px-1.5 py-0.5 rounded ${
+                                            isLightTheme ? 'bg-amber-100 text-amber-900 border border-amber-200' : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                                          }`}>
+                                            {fmtSig.userCountryInfo.flag} {fmtSig.userCountryInfo.code}
+                                          </span>
+                                        </>
+                                      ) : (
+                                        <span className="text-xs sm:text-sm font-black font-mono tracking-tight">
+                                          {sig.time || '12:00'} EAT
+                                        </span>
+                                      )}
+
+                                      {isExecuted ? (
+                                        <span className="px-1.5 py-0.5 rounded-full bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 text-[9px] font-black uppercase tracking-wider flex items-center gap-1">
+                                          <CheckCircle size={10} className="text-emerald-500" /> Executed
+                                        </span>
+                                      ) : isActive ? (
+                                        <span className="px-1.5 py-0.5 rounded-full bg-emerald-500 text-slate-950 text-[9px] font-black uppercase tracking-wider animate-pulse">
+                                          Active Window (1h)
+                                        </span>
+                                      ) : (
+                                        <span className={`text-[10px] font-semibold ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                                          (1h Window)
+                                        </span>
+                                      )}
+                                    </div>
+
+                                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                      <span className={`text-[10px] font-medium ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                                        Signal #{idx + 1}
+                                      </span>
+                                      {fmtSig.isDifferentCountry && (
+                                        <span className={`text-[10px] font-bold font-mono ${isLightTheme ? 'text-zinc-600' : 'text-zinc-400'}`}>
+                                          (Kenya: <strong>{sig.time || '12:00'} EAT</strong>)
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  <div className="text-right shrink-0">
+                                    <span className={`text-[9px] font-extrabold block uppercase ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>Profit Share</span>
+                                    <span className={`text-xs font-extrabold font-mono ${
+                                      isExecuted ? 'text-zinc-400 line-through' : isLightTheme ? 'text-emerald-700' : 'text-emerald-400'
+                                    }`}>
+                                      +{( (selectedLeadForCopy.dayProfitRate ?? 2.0) / (selectedLeadForCopy.signals.length || 1) ).toFixed(2)}%
+                                    </span>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <p className={`text-xs italic ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>No trading signals scheduled by expert.</p>
+                        )}
+                      </div>
+
+                      {/* Step 1 Actions */}
+                      <div className="pt-3 flex flex-col sm:flex-row gap-2.5 sm:gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedLeadForCopy(null)}
+                          className={`w-full sm:flex-1 py-3 px-4 rounded-xl border text-xs sm:text-sm font-bold cursor-pointer transition-all flex items-center justify-center gap-2 active:scale-[0.98] whitespace-nowrap ${
+                            isLightTheme ? 'bg-zinc-100 hover:bg-zinc-200 border-zinc-200 text-zinc-700' : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-zinc-200'
+                          }`}
+                        >
+                          <ArrowLeft size={16} className="shrink-0" />
+                          <span>Back to Experts</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setCopyTradeStep(2)}
+                          className="w-full sm:flex-1 py-3 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs sm:text-sm shadow-md shadow-amber-500/20 border border-amber-400 cursor-pointer transition-all flex items-center justify-center gap-2 active:scale-[0.98] whitespace-nowrap"
+                        >
+                          <span>Next</span>
+                          <ArrowRight size={16} className="shrink-0" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* STEP 2: Configure Capital & Pair */}
+                  {copyTradeStep === 2 && (
+                    <div className="space-y-5 animate-fade-in">
+                      <div className="flex items-center justify-between pb-2 border-b border-zinc-200/80 dark:border-slate-800">
+                        <h4 className={`text-xs font-extrabold uppercase tracking-wider ${isLightTheme ? 'text-amber-800' : 'text-amber-400'}`}>
+                          Step 2: Configure Trading Pair & Capital Amount
+                        </h4>
+                      </div>
+
+                      {/* Trading Pair Selection */}
+                      <div className="space-y-2.5">
+                        <div className="flex items-center justify-between">
+                          <label className={`text-xs font-black uppercase tracking-wider block ${isLightTheme ? 'text-zinc-700' : 'text-zinc-300'}`}>
+                            Select Trading Pair
+                          </label>
+                          <span className={`text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full ${
+                            isLightTheme ? 'bg-amber-100 text-amber-900 border border-amber-200' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                          }`}>
+                            Active: {copyTradePair}
+                          </span>
+                        </div>
+
+                        {/* Custom Modern Dropdown Selector (No native OS select wheel) */}
+                        <TradingPairSelector
+                          value={copyTradePair}
+                          onChange={(val) => setCopyTradePair(val)}
+                          pairs={
+                            selectedLeadForCopy.tradingPairs && selectedLeadForCopy.tradingPairs.length > 0
+                              ? selectedLeadForCopy.tradingPairs
+                              : ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'XRP/USDT']
+                          }
+                          isLightTheme={isLightTheme}
+                        />
+
+
+                      </div>
+
+                      {/* Capital Breakdown & Quick Amount Selection */}
+                      {(() => {
+                        const { lockedCapital: leadLockedCap } = getCopyTradeLockedAndFree();
+                        const totalBal = profile?.tradeBalance ?? 0;
+                        const freeProfits = Math.max(0, totalBal - leadLockedCap);
+                        const inputAmt = parseFloat(copyTradeAmountInput) || 0;
+                        
+                        const isHigherThanLocked = leadLockedCap > 0 && inputAmt > (leadLockedCap + 0.001);
+                        const isEqualToLocked = leadLockedCap > 0 && Math.abs(inputAmt - leadLockedCap) < 0.01;
+                        const isFullBalance = totalBal > 0 && Math.abs(inputAmt - totalBal) < 0.01;
+                        const extraIncludedProfit = inputAmt > leadLockedCap ? Math.min(inputAmt - leadLockedCap, freeProfits) : 0;
+
+                        return (
+                          <div className="space-y-3">
+                            {/* Quick Amount Selection Block */}
+                            {leadLockedCap > 0 && freeProfits > 0 && (
+                              <div className={`p-3.5 sm:p-4 rounded-2xl border space-y-2.5 ${
+                                isLightTheme ? 'bg-zinc-100/80 border-zinc-200/90' : 'bg-slate-950 border-slate-800'
+                              }`}>
+                                <div className="flex items-center justify-between">
+                                  <span className={`text-[10px] font-black uppercase tracking-wider block ${isLightTheme ? 'text-zinc-600' : 'text-zinc-400'}`}>
+                                    Quick Allocation Strategy:
+                                  </span>
+                                  <span className={`text-[10px] font-extrabold font-mono ${isLightTheme ? 'text-amber-800' : 'text-amber-400'}`}>
+                                    Free Profit: +${freeProfits.toFixed(2)}
+                                  </span>
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                  {/* Principal Only Button (Blue / Protection Theme) */}
+                                  <button
+                                    type="button"
+                                    onClick={() => setCopyTradeAmountInput(leadLockedCap.toFixed(2))}
+                                    className={`py-3 px-3.5 rounded-xl text-xs font-extrabold transition-all border-2 cursor-pointer flex items-center justify-between gap-2 active:scale-[0.98] ${
+                                      isEqualToLocked
+                                        ? 'bg-blue-600 text-white border-blue-500 shadow-md ring-2 ring-blue-400/40'
+                                        : isLightTheme 
+                                          ? 'bg-blue-50/90 hover:bg-blue-100/90 border-blue-200 text-blue-950' 
+                                          : 'bg-blue-950/40 hover:bg-blue-900/60 border-blue-800/80 text-blue-100'
+                                    }`}
+                                  >
+                                    <div className="flex items-center gap-2 truncate">
+                                      <div className={`p-1.5 rounded-lg shrink-0 ${
+                                        isEqualToLocked ? 'bg-white/20 text-white' : 'bg-blue-500/20 text-blue-600 dark:text-blue-400'
+                                      }`}>
+                                        <Lock size={15} />
+                                      </div>
+                                      <div className="text-left truncate">
+                                        <div className="flex items-center gap-1.5">
+                                          <span className="font-extrabold text-xs truncate">Principal Only</span>
+                                        </div>
+                                        <span className={`text-[9px] font-semibold block leading-none mt-0.5 ${
+                                          isEqualToLocked ? 'text-blue-100' : isLightTheme ? 'text-blue-700' : 'text-blue-300'
+                                        }`}>
+                                          Original Capital
+                                        </span>
+                                      </div>
+                                    </div>
+                                    <span className="font-mono text-xs sm:text-sm font-black shrink-0 ml-1">
+                                      ${leadLockedCap.toFixed(2)}
+                                    </span>
+                                  </button>
+
+                                  {/* Re-invest Profits Button (Emerald / Growth Theme) */}
+                                  <button
+                                    type="button"
+                                    onClick={() => setCopyTradeAmountInput(totalBal.toFixed(2))}
+                                    className={`py-3 px-3.5 rounded-xl text-xs font-extrabold transition-all border-2 cursor-pointer flex items-center justify-between gap-2 active:scale-[0.98] ${
+                                      isFullBalance
+                                        ? 'bg-emerald-600 text-white border-emerald-500 shadow-md ring-2 ring-emerald-400/40'
+                                        : isLightTheme 
+                                          ? 'bg-emerald-50/90 hover:bg-emerald-100/90 border-emerald-200 text-emerald-950' 
+                                          : 'bg-emerald-950/40 hover:bg-emerald-900/60 border-emerald-800/80 text-emerald-100'
+                                    }`}
+                                  >
+                                    <div className="flex items-center gap-2 truncate">
+                                      <div className={`p-1.5 rounded-lg shrink-0 ${
+                                        isFullBalance ? 'bg-white/20 text-white' : 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400'
+                                      }`}>
+                                        <Zap size={15} />
+                                      </div>
+                                      <div className="text-left truncate">
+                                        <div className="flex items-center gap-1.5">
+                                          <span className="font-extrabold text-xs truncate">Re-invest Profits</span>
+                                        </div>
+                                        <span className={`text-[9px] font-semibold block leading-none mt-0.5 ${
+                                          isFullBalance ? 'text-emerald-100' : isLightTheme ? 'text-emerald-700' : 'text-emerald-300'
+                                        }`}>
+                                          Capital + Profit
+                                        </span>
+                                      </div>
+                                    </div>
+                                    <span className="font-mono text-xs sm:text-sm font-black shrink-0 ml-1">
+                                      ${totalBal.toFixed(2)}
+                                    </span>
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Trade Amount Input */}
+                            <div className="space-y-1.5">
+                              <div className="flex justify-between items-center text-xs">
+                                <label className={`font-bold ${isLightTheme ? 'text-zinc-700' : 'text-zinc-300'}`}>
+                                  Trade Amount (USD)
+                                </label>
+                                <div className="flex items-center gap-2">
+                                  <span className={`text-[11px] font-mono ${isLightTheme ? 'text-zinc-600' : 'text-zinc-400'}`}>
+                                    Balance: <strong className={isLightTheme ? 'text-amber-700' : 'text-amber-400'}>${totalBal.toFixed(2)}</strong>
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const maxAvail = Math.min(totalBal, selectedLeadForCopy.maxCapital ?? 10000);
+                                      setCopyTradeAmountInput(maxAvail.toString());
+                                    }}
+                                    className="px-2 py-0.5 rounded-md bg-amber-500 text-slate-950 text-[10px] font-black uppercase font-mono cursor-pointer hover:bg-amber-400"
+                                  >
+                                    MAX
+                                  </button>
+                                </div>
+                              </div>
+
+                              <div className={`relative flex items-center border rounded-2xl px-4 py-3 ${
+                                isLightTheme 
+                                  ? 'bg-zinc-50 border-zinc-300 focus-within:bg-white focus-within:border-amber-500' 
+                                  : 'bg-slate-950 border-slate-800 focus-within:border-amber-500'
+                              }`}>
+                                <span className={`text-base font-black font-mono mr-2 ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>$</span>
+                                <input
+                                  type="number"
+                                  step="any"
+                                  placeholder={`Min $${selectedLeadForCopy.minCapital ?? 50}`}
+                                  value={copyTradeAmountInput}
+                                  onChange={(e) => setCopyTradeAmountInput(e.target.value)}
+                                  className={`w-full bg-transparent font-mono text-base font-black outline-none ${
+                                    isLightTheme ? 'text-zinc-900 placeholder:text-zinc-400' : 'text-white placeholder:text-zinc-600'
+                                  }`}
+                                />
+                                <span className={`text-xs font-black font-mono uppercase ml-2 ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>USD</span>
+                              </div>
+                            </div>
+
+                            {/* Dynamic Smart Guidance Banner */}
+                            {leadLockedCap > 0 && freeProfits > 0 && inputAmt > 0 && (
+                              <>
+                                {isHigherThanLocked ? (
+                                  <div className={`p-3 rounded-xl border text-xs flex items-center gap-2.5 ${
+                                    isLightTheme ? 'bg-amber-50/90 border-amber-300 text-amber-950' : 'bg-amber-500/10 border-amber-500/30 text-amber-200'
+                                  }`}>
+                                    <HelpCircle size={16} className="shrink-0 text-amber-600 dark:text-amber-400" />
+                                    <p className="text-[11px] leading-relaxed">
+                                      Trading this amount will re-invest <strong>${extraIncludedProfit.toFixed(2)}</strong> of your free profit into contract principal. The remaining <strong>${Math.max(0, freeProfits - extraIncludedProfit).toFixed(2)} profit</strong> will stay free to withdraw.
+                                    </p>
+                                  </div>
+                                ) : isEqualToLocked ? (
+                                  <div className={`p-3 rounded-xl border text-xs flex items-center gap-2 font-medium ${
+                                    isLightTheme ? 'bg-emerald-50 border-emerald-300 text-emerald-950' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
+                                  }`}>
+                                    <CheckCircle size={15} className="shrink-0 text-emerald-600 dark:text-emerald-400" />
+                                    <span className="text-[11px] leading-tight">
+                                      Trading <strong>${leadLockedCap.toFixed(2)} USD</strong> uses your existing active principal. Your <strong>${freeProfits.toFixed(2)} USD profit</strong> remains 100% free for instant withdrawal anytime!
+                                    </span>
+                                  </div>
+                                ) : null}
+                              </>
+                            )}
+                          </div>
+                        );
+                      })()}
+
+                      {/* Live Profit Preview */}
+                      {parseFloat(copyTradeAmountInput) > 0 && (
+                        <div className={`p-3.5 rounded-2xl border text-xs space-y-1.5 font-mono ${
+                          isLightTheme ? 'bg-emerald-50/90 border-emerald-300/80 text-emerald-950' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-200'
+                        }`}>
+                          {(() => {
+                            const amt = parseFloat(copyTradeAmountInput) || 0;
+                            const numSigs = selectedLeadForCopy.signals?.length || 2;
+                            const dayRate = selectedLeadForCopy.dayProfitRate ?? 2.0;
+                            const sigRate = dayRate / numSigs;
+                            const gross = amt * (sigRate / 100);
+                            const commPct = selectedLeadForCopy.analysisCommission ?? 10;
+                            const comm = gross * (commPct / 100);
+                            const net = gross - comm;
+                            return (
+                              <>
+                                <div className="flex justify-between">
+                                  <span className={`font-sans font-medium ${isLightTheme ? 'text-zinc-700' : 'text-zinc-300'}`}>Signal Gross Profit (+{sigRate.toFixed(2)}%):</span>
+                                  <strong className={`font-extrabold ${isLightTheme ? 'text-emerald-700' : 'text-emerald-400'}`}>+${gross.toFixed(2)} USD</strong>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className={`font-sans font-medium ${isLightTheme ? 'text-zinc-700' : 'text-zinc-300'}`}>Analysis Commission ({commPct}%):</span>
+                                  <strong className={`font-extrabold ${isLightTheme ? 'text-amber-700' : 'text-amber-400'}`}>-${comm.toFixed(2)} USD</strong>
+                                </div>
+                                <div className={`flex justify-between border-t pt-1.5 ${isLightTheme ? 'border-emerald-300/80' : 'border-emerald-500/20'}`}>
+                                  <span className={`font-sans font-extrabold ${isLightTheme ? 'text-emerald-950' : 'text-emerald-100'}`}>Estimated Net Profit Credited:</span>
+                                  <strong className={`font-black text-sm ${isLightTheme ? 'text-emerald-800' : 'text-emerald-300'}`}>+${net.toFixed(2)} USD</strong>
+                                </div>
+                              </>
+                            );
+                          })()}
+                        </div>
+                      )}
+
+                      {/* Step 2 Actions */}
+                      <div className="pt-3 flex flex-col sm:flex-row gap-2.5 sm:gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setCopyTradeStep(1)}
+                          className={`w-full sm:flex-1 py-3 px-4 rounded-xl border text-xs sm:text-sm font-bold cursor-pointer transition-all flex items-center justify-center gap-2 active:scale-[0.98] whitespace-nowrap ${
+                            isLightTheme ? 'bg-zinc-100 hover:bg-zinc-200 border-zinc-200 text-zinc-700' : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-zinc-200'
+                          }`}
+                        >
+                          <ArrowLeft size={16} className="shrink-0" />
+                          <span>Previous</span>
+                        </button>
+                        <button
+                          type="button"
+                          disabled={!copyTradeAmountInput || parseFloat(copyTradeAmountInput) < (selectedLeadForCopy.minCapital ?? 50)}
+                          onClick={() => setCopyTradeStep(3)}
+                          className="w-full sm:flex-1 py-3 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs sm:text-sm shadow-md shadow-amber-500/20 border border-amber-400 cursor-pointer transition-all flex items-center justify-center gap-2 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                        >
+                          <span>Next</span>
+                          <ArrowRight size={16} className="shrink-0" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* STEP 3: Signal Code & Execute */}
+                  {copyTradeStep === 3 && (
+                    <div className="space-y-5 animate-fade-in">
+                      <div className="flex items-center justify-between pb-2 border-b border-zinc-200/80 dark:border-slate-800">
+                        <h4 className={`text-xs font-extrabold uppercase tracking-wider ${isLightTheme ? 'text-amber-800' : 'text-amber-400'}`}>
+                          Step 3: Enter Unique Signal Code & Confirm Execution
+                        </h4>
+                      </div>
+
+                      {/* Trade Summary Review Box */}
+                      <div className={`p-4 rounded-2xl border space-y-2.5 text-xs ${
+                        isLightTheme ? 'bg-zinc-50 border-zinc-200' : 'bg-slate-950 border-slate-800'
+                      }`}>
+                        <div className="flex justify-between items-center pb-2 border-b border-zinc-200/60 dark:border-slate-800">
+                          <span className={`font-bold ${isLightTheme ? 'text-zinc-600' : 'text-zinc-400'}`}>Expert Trader</span>
+                          <span className="font-extrabold">{selectedLeadForCopy.name}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className={`font-bold ${isLightTheme ? 'text-zinc-600' : 'text-zinc-400'}`}>Selected Trading Pair</span>
+                          <span className="font-black font-mono text-amber-600 dark:text-amber-400">{copyTradePair}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className={`font-bold ${isLightTheme ? 'text-zinc-600' : 'text-zinc-400'}`}>Trade Capital</span>
+                          <span className="font-black font-mono text-sm">${(parseFloat(copyTradeAmountInput) || 0).toFixed(2)} USD</span>
+                        </div>
+                        <div className="flex justify-between items-center pt-1 border-t border-zinc-200/60 dark:border-slate-800">
+                          <span className={`font-bold ${isLightTheme ? 'text-zinc-600' : 'text-zinc-400'}`}>Est. Net Profit</span>
+                          <span className="font-black font-mono text-emerald-600 dark:text-emerald-400">
+                            +${(() => {
+                              const amt = parseFloat(copyTradeAmountInput) || 0;
+                              const numSigs = selectedLeadForCopy.signals?.length || 2;
+                              const dayRate = selectedLeadForCopy.dayProfitRate ?? 2.0;
+                              const gross = amt * ((dayRate / numSigs) / 100);
+                              const comm = gross * ((selectedLeadForCopy.analysisCommission ?? 10) / 100);
+                              return (gross - comm).toFixed(2);
+                            })()} USD
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Executed Warning if applicable */}
+                      {(() => {
+                        const activeSig = getActiveSignalForLead(selectedLeadForCopy);
+                        if (activeSig && isSignalExecutedToday(selectedLeadForCopy, activeSig)) {
+                          return (
+                            <div className={`p-3.5 rounded-2xl border text-xs flex items-center gap-2.5 font-bold ${
+                              isLightTheme ? 'bg-amber-50 border-amber-300 text-amber-900' : 'bg-amber-500/10 border-amber-500/30 text-amber-300'
+                            }`}>
+                              <AlertCircle size={16} className="shrink-0 text-amber-600 dark:text-amber-400" />
+                              <span>You have already executed current active signal code ({activeSig.code}) today. Please wait for the next signal window.</span>
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
+
+                      {/* Unique Signal Code Input */}
+                      <div className="space-y-1.5">
+                        <label className={`text-xs font-bold block ${isLightTheme ? 'text-zinc-700' : 'text-zinc-300'}`}>
+                          Unique Signal Code
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="Enter Signal Code (e.g. SIG1300)"
+                          value={copySignalCodeInput}
+                          onChange={(e) => setCopySignalCodeInput(e.target.value)}
+                          className={`w-full px-4 py-3.5 rounded-2xl border text-sm font-mono font-black tracking-wider uppercase outline-none ${
+                            isLightTheme 
+                              ? 'bg-zinc-50 border-zinc-300 focus:bg-white focus:border-amber-500 text-zinc-900 placeholder:text-zinc-400' 
+                              : 'bg-slate-950 border-slate-800 focus:border-amber-500 text-white placeholder:text-zinc-600'
+                          }`}
+                        />
+                        <p className={`text-[10px] italic ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                          Note: The signal code is provided by the expert during the 1-hour active signal window.
+                        </p>
+                      </div>
+
+                      {/* Step 3 Actions */}
+                      <div className="pt-3 flex flex-col sm:flex-row gap-2.5 sm:gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setCopyTradeStep(2)}
+                          className={`w-full sm:flex-1 py-3 px-4 rounded-xl border text-xs sm:text-sm font-bold cursor-pointer transition-all flex items-center justify-center gap-2 active:scale-[0.98] whitespace-nowrap ${
+                            isLightTheme ? 'bg-zinc-100 hover:bg-zinc-200 border-zinc-200 text-zinc-700' : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-zinc-200'
+                          }`}
+                        >
+                          <ArrowLeft size={16} className="shrink-0" />
+                          <span>Previous</span>
+                        </button>
+                        {(() => {
+                          const activeSig = getActiveSignalForLead(selectedLeadForCopy);
+                          const isDone = activeSig ? isSignalExecutedToday(selectedLeadForCopy, activeSig) : false;
+
+                          return (
+                            <button
+                              type="button"
+                              disabled={isSubmittingCopy || isDone}
+                              onClick={handleExecuteCopyTrade}
+                              className="w-full sm:flex-1 py-3 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs sm:text-sm shadow-md shadow-amber-500/20 border border-amber-400 cursor-pointer transition-all flex items-center justify-center gap-2 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
+                            >
+                              {isSubmittingCopy ? (
+                                <RefreshCw size={16} className="animate-spin" />
+                              ) : isDone ? (
+                                <span className="flex items-center gap-1.5">
+                                  <CheckCircle size={15} className="shrink-0 text-slate-900" />
+                                  <span>Signal Executed Today</span>
+                                </span>
+                              ) : (
+                                <span className="flex items-center gap-1.5">
+                                  <Zap size={15} className="shrink-0 text-slate-950" />
+                                  <span>Execute Copy Trade</span>
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })()}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-5 animate-fade-in">
+              {/* Interactive Trade Wallet Card at Top (Amber/Golden Wallet Theme) */}
+              <div id="copy-signal-interactive-trade-wallet" className="-mx-1 sm:-mx-2 md:mx-0 p-5 sm:p-6 md:p-7 px-5 sm:px-7 md:px-8 rounded-2xl sm:rounded-3xl bg-gradient-to-br from-amber-500 via-amber-500 to-orange-500 text-white shadow-lg shadow-amber-500/15 relative overflow-hidden transition-all duration-300 border border-amber-400/40">
+                {/* Subtle light overlay glow */}
+                <div className="absolute top-0 right-0 w-56 h-56 bg-white/10 rounded-full blur-2xl -mr-12 -mt-12 pointer-events-none" />
+                <div className="absolute bottom-0 left-0 w-40 h-40 bg-orange-600/20 rounded-full blur-xl -ml-12 -mb-12 pointer-events-none" />
+
+                <div className="flex flex-col gap-3.5 sm:gap-4.5 relative z-10">
+                  {/* Top Header Row */}
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <Activity size={14} className="text-white shrink-0" />
+                      <span className="text-[11px] sm:text-xs font-black uppercase tracking-wider text-white font-sans">
+                        COPY TRADE BALANCE
+                      </span>
+                      <span className="text-[10px] text-amber-100/80 font-bold hidden md:inline-block">
+                        (Copy Signals & Trading)
+                      </span>
+                    </div>
+
+                    <span className="px-2.5 py-0.5 rounded-lg bg-white text-slate-950 font-black text-[10px] uppercase tracking-wider shadow-xs font-mono shrink-0">
+                      TRADE WALLET
+                    </span>
+                  </div>
+
+                  {/* Balance & Action Buttons Container (Stacked on mobile, row on md) */}
+                  <div className="flex flex-col md:flex-row md:items-end justify-between gap-3.5 pt-0.5">
+                    {/* Balance Display */}
+                    <div className="space-y-1">
+                      <div className="flex items-baseline gap-1.5">
+                        <h2 className="text-3xl sm:text-4xl font-black font-sans tracking-tight text-white leading-none">
+                          $ {(profile?.tradeBalance ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </h2>
+                        <span className="text-[11px] font-extrabold text-white/80 font-mono uppercase">USD</span>
+                      </div>
+
+                      {/* System Wallet Pill & Free to Transfer Out Badge */}
+                      <div className="flex flex-wrap items-center gap-2 pt-0.5">
+                        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/20 text-white text-[11px] font-medium backdrop-blur-xs">
+                          <span className="text-white/80">Wallet Balance:</span>
+                          <strong className="text-white font-mono font-bold">
+                            $ {(profile?.usdtBalance ?? profile?.balance ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </strong>
+                        </div>
+
+                        {(() => {
+                          const { lockedCapital, freeTransferrable } = getCopyTradeLockedAndFree();
+                          return (
+                            <div id="copy-trade-free-transfer-badge" className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-950/60 border border-emerald-400/40 text-emerald-100 text-[11px] font-bold backdrop-blur-xs shadow-xs">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                              <span className="text-emerald-100/90">Free for Transfer Out:</span>
+                              <strong className="text-emerald-300 font-mono font-black">
+                                $ {freeTransferrable.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </strong>
+                              {lockedCapital > 0 && (
+                                <span className="text-[9.5px] text-amber-200/90 font-mono font-bold border-l border-emerald-400/30 pl-1.5 ml-0.5">
+                                  (${lockedCapital.toFixed(2)} Locked)
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    </div>
+
+                    {/* Action Buttons: Transfer In (Black) & Transfer Out (White) */}
+                    <div className="flex items-center gap-2.5 shrink-0 pt-1 md:pt-0">
+                      <button
+                        id="trade-wallet-transfer-in-btn"
+                        type="button"
+                        onClick={() => {
+                          setTransferModalType('IN');
+                          setTransferAmountInput('');
+                        }}
+                        className="flex-1 md:flex-initial px-4 sm:px-5 py-2.5 rounded-xl sm:rounded-2xl bg-slate-950 hover:bg-slate-900 active:scale-95 text-white font-extrabold text-xs sm:text-sm shadow-sm transition-all cursor-pointer flex items-center justify-center gap-1.5 border border-slate-800"
+                      >
+                        <ArrowDownLeft size={15} strokeWidth={2.8} className="shrink-0 text-white" />
+                        <span className="whitespace-nowrap">Transfer in</span>
+                      </button>
+
+                      <button
+                        id="trade-wallet-transfer-out-btn"
+                        type="button"
+                        onClick={() => {
+                          setTransferModalType('OUT');
+                          setTransferAmountInput('');
+                        }}
+                        className="flex-1 md:flex-initial px-4 sm:px-5 py-2.5 rounded-xl sm:rounded-2xl bg-white hover:bg-amber-50 active:scale-95 text-slate-950 font-extrabold text-xs sm:text-sm shadow-sm transition-all cursor-pointer flex items-center justify-center gap-1.5 border border-white"
+                      >
+                        <ArrowUpRight size={15} strokeWidth={2.8} className="shrink-0 text-slate-950" />
+                        <span className="whitespace-nowrap">Transfer out</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+
+
+              {/* Active Copy Trades Section */}
+              {userCopyTrades.filter(t => t.status === 'ACTIVE').length > 0 && (
+                <div className="space-y-3">
+                  <h4 className={`text-xs font-black uppercase tracking-wider flex items-center gap-1.5 ${
+                    isLightTheme ? 'text-zinc-800' : 'text-zinc-300'
+                  }`}>
+                    <Sparkles size={14} className="text-amber-500" />
+                    Your Active Copy Trades ({userCopyTrades.filter(t => t.status === 'ACTIVE').length})
+                  </h4>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {userCopyTrades.filter(t => t.status === 'ACTIVE').map(trade => (
+                      <div 
+                        key={trade.id} 
+                        className={`p-4 rounded-2xl border relative overflow-hidden flex flex-col justify-between space-y-3 ${
+                          isLightTheme 
+                            ? 'bg-white border-amber-300/80 shadow-xs' 
+                            : 'bg-slate-900 border-emerald-500/30'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <img 
+                            src={trade.leadPhotoUrl} 
+                            alt={trade.leadName} 
+                            className="w-12 h-12 rounded-full object-cover border-2 border-emerald-500 shrink-0"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=400';
+                            }}
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center justify-between gap-1">
+                              <h5 className={`font-black text-sm truncate ${isLightTheme ? 'text-zinc-900' : 'text-white'}`}>
+                                {trade.leadName}
+                              </h5>
+                              <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-mono text-[9px] font-black uppercase border border-emerald-500/20">
+                                ACTIVE
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2 text-[10px] font-mono text-zinc-500 mt-0.5">
+                              <span>Committed: <strong className={isLightTheme ? 'text-zinc-800' : 'text-zinc-200'}>${trade.capital}</strong></span>
+                              <span>•</span>
+                              <span>Signals: <strong>{trade.signalsPerDay}</strong></span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between pt-2 border-t border-zinc-100 dark:border-zinc-800">
+                          <div>
+                            <span className="text-[9px] text-zinc-400 uppercase font-bold block">Estimated Profits</span>
+                            <span className="text-xs font-black font-mono text-emerald-600 dark:text-emerald-400">
+                              +${((trade.capital || 100) * 0.085).toFixed(2)} / day
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleStopCopyTrade(trade)}
+                            className="px-3 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 border border-red-500/20 text-[10px] font-bold transition-all cursor-pointer"
+                          >
+                            Stop Copying
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Copy Trader Leads Section */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className={`text-xs font-black uppercase tracking-wider ${
+                      isLightTheme ? 'text-zinc-800' : 'text-zinc-300'
+                    }`}>
+                      Copy Trading Experts ({copyLeads.length})
+                    </h4>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {copyLeads.map((lead) => {
+                    const isAlreadyCopying = userCopyTrades.some(t => t.leadId === lead.id && t.status === 'ACTIVE');
+
+                    return (
+                      <div 
+                        key={lead.id}
+                        className={`p-5 rounded-3xl border transition-all duration-300 flex flex-col justify-between space-y-4 relative overflow-hidden group hover:shadow-lg ${
+                          isLightTheme 
+                            ? 'bg-white border-amber-200/90 hover:border-amber-400' 
+                            : 'bg-slate-900 border-slate-800 hover:border-emerald-500/40'
+                        }`}
+                      >
+                        {/* Top Accent Stripe */}
+                        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-amber-500 via-emerald-400 to-teal-500 opacity-80" />
+
+                        <div className="space-y-3">
+                          <div className="flex items-start gap-3">
+                            <img 
+                              src={lead.photoUrl} 
+                              alt={lead.name}
+                              className="w-14 h-14 rounded-full object-cover border-2 border-emerald-500/50 shrink-0 shadow-md"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=400';
+                              }}
+                            />
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center justify-between gap-1">
+                                <h5 className={`font-black text-sm truncate ${isLightTheme ? 'text-zinc-900' : 'text-white'}`}>
+                                  {lead.name}
+                                </h5>
+                                <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-mono text-[9px] font-black uppercase border border-emerald-500/20 shrink-0">
+                                  {lead.winRate || '98.5%'} Win
+                                </span>
+                              </div>
+                              <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 font-mono block mt-0.5">
+                                ⚡ {lead.signalsPerDay}
+                              </span>
+                              <span className={`text-[9px] font-semibold px-2 py-0.5 rounded-md inline-block mt-1 ${
+                                isLightTheme ? 'bg-amber-100 text-amber-900' : 'bg-slate-800 text-zinc-300'
+                              }`}>
+                                {lead.riskLevel || 'Low Risk'}
+                              </span>
+                            </div>
+                          </div>
+
+                          <p className={`text-xs line-clamp-3 leading-relaxed ${
+                            isLightTheme ? 'text-zinc-600' : 'text-zinc-300'
+                          }`}>
+                            {lead.description}
+                          </p>
+
+                          <div className={`p-2.5 rounded-xl border flex items-center justify-between text-[10px] font-mono ${
+                            isLightTheme ? 'bg-amber-50/70 border-amber-200/60' : 'bg-slate-950/60 border-slate-850'
+                          }`}>
+                            <span className="text-zinc-500 font-bold">Minimum Capital:</span>
+                            <span className={`font-black text-xs ${isLightTheme ? 'text-zinc-900' : 'text-white'}`}>
+                              ${lead.minCapital ?? 100}
+                            </span>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          disabled={isAlreadyCopying}
+                          onClick={() => handleOpenCopyModal(lead)}
+                          className={`w-full py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-md ${
+                            isAlreadyCopying
+                              ? 'bg-zinc-200 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-500 cursor-not-allowed shadow-none'
+                              : isLightTheme
+                                ? 'bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-white shadow-amber-500/20'
+                                : 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 shadow-emerald-500/20'
+                          }`}
+                        >
+                          <Users size={14} />
+                          <span>{isAlreadyCopying ? 'Copying Active' : 'Copy Trade'}</span>
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+            )
+          )}
+          {false && (
+            <div className="hidden">
                 <div 
                   id="earn-investment-wallet-card" 
                   className={`relative overflow-hidden rounded-3xl p-6 border transition-all duration-300 ${
@@ -4442,7 +5976,6 @@ export default function StandardUserDashboard({
                     </div>
                   )}
                 </div>
-              )}
 
               {/* trading signals mode */}
               <div className={`border rounded-3xl p-5 space-y-5 animate-fade-in ${
@@ -4950,11 +6483,10 @@ export default function StandardUserDashboard({
                         )}
                       </button>
                     </div>
-                  </div>
-                )}
+                  </div>)}
               </div>
             </div>
-          )}
+          )} {/* copy-trading-view-end */}
 
           {/* TAB 5: HISTORY */}
           {activeTab === 'history' && (
@@ -4980,7 +6512,7 @@ export default function StandardUserDashboard({
             { id: 'home', label: 'Home', icon: Coins },
             { id: 'wallet', label: 'Wallet', icon: Wallet },
             { id: 'trade', label: 'Bot', icon: Bot },
-            { id: 'earn', label: 'Signals', icon: TrendingUp },
+            { id: 'earn', label: 'Copy Trading', icon: Users },
             { id: 'history', label: 'History', icon: History }
           ] as const).map(tab => {
             const Icon = tab.icon;
@@ -5005,6 +6537,193 @@ export default function StandardUserDashboard({
       )}
 
 
+
+      {/* Transfer In / Transfer Out Modal for Trade Balance */}
+      {transferModalType && (
+        <div id="trade-balance-transfer-modal" className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 backdrop-blur-md p-4 animate-fade-in">
+          <div className={`w-full max-w-md p-6 rounded-3xl border shadow-2xl space-y-5 relative overflow-hidden animate-scale-up ${
+            isLightTheme ? 'bg-white border-zinc-200 text-zinc-900 shadow-slate-900/10' : 'bg-slate-900 border-slate-800 text-white shadow-black/50'
+          }`}>
+            {/* Modal Header */}
+            <div className={`flex items-start justify-between gap-3 pb-3.5 border-b ${
+              isLightTheme ? 'border-zinc-100' : 'border-slate-800'
+            }`}>
+              <div className="flex items-center gap-3">
+                <div className={`p-3 rounded-2xl shrink-0 font-black shadow-sm ${
+                  transferModalType === 'IN' 
+                    ? 'bg-slate-950 text-white border border-slate-800' 
+                    : 'bg-amber-500 text-slate-950 border border-amber-400'
+                }`}>
+                  {transferModalType === 'IN' ? <ArrowDownLeft size={22} strokeWidth={2.8} /> : <ArrowUpRight size={22} strokeWidth={2.8} />}
+                </div>
+                <div>
+                  <h3 className={`font-extrabold text-base sm:text-lg tracking-tight leading-tight ${
+                    isLightTheme ? 'text-zinc-900' : 'text-white'
+                  }`}>
+                    {transferModalType === 'IN' ? 'Transfer In to Copy Trade' : 'Transfer Out to Wallet'}
+                  </h3>
+                  <p className={`text-xs font-medium mt-0.5 ${
+                    isLightTheme ? 'text-zinc-500' : 'text-zinc-400'
+                  }`}>
+                    {transferModalType === 'IN' 
+                      ? 'Move funds from your Wallet into Copy Trade Balance' 
+                      : 'Move funds from Copy Trade Balance back to your Wallet'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setTransferModalType(null)}
+                className={`p-2 rounded-xl transition-colors cursor-pointer shrink-0 ${
+                  isLightTheme 
+                    ? 'bg-zinc-100 hover:bg-zinc-200 text-zinc-600' 
+                    : 'bg-slate-800 hover:bg-slate-700 text-zinc-300'
+                }`}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Account Balances Summary Card */}
+            <div className={`p-4 rounded-2xl border space-y-3 text-xs ${
+              isLightTheme ? 'bg-amber-500/5 border-amber-200/80' : 'bg-slate-950/80 border-slate-800'
+            }`}>
+              <div className="flex items-center justify-between">
+                <span className={`font-semibold ${isLightTheme ? 'text-zinc-600' : 'text-zinc-400'}`}>Wallet Balance:</span>
+                <span className={`font-extrabold font-mono text-sm ${isLightTheme ? 'text-zinc-900' : 'text-white'}`}>
+                  ${(profile?.usdtBalance ?? profile?.balance ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className={`text-[10px] font-medium ${isLightTheme ? 'text-zinc-400' : 'text-zinc-500'}`}>USD</span>
+                </span>
+              </div>
+              <div className={`flex items-center justify-between border-t pt-2.5 ${
+                isLightTheme ? 'border-amber-200/60' : 'border-slate-800'
+              }`}>
+                <span className={`font-semibold ${isLightTheme ? 'text-zinc-600' : 'text-zinc-400'}`}>Copy Trade Balance:</span>
+                <span className={`font-extrabold font-mono text-sm ${isLightTheme ? 'text-amber-700' : 'text-amber-400'}`}>
+                  ${(profile?.tradeBalance ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className={`text-[10px] font-medium ${isLightTheme ? 'text-amber-700/70' : 'text-amber-400/70'}`}>USD</span>
+                </span>
+              </div>
+              {transferModalType === 'OUT' && (() => {
+                const { freeTransferrable } = getCopyTradeLockedAndFree();
+                return (
+                  <div className={`flex items-center justify-between border-t pt-2.5 ${
+                    isLightTheme ? 'border-amber-200/60' : 'border-slate-800'
+                  }`}>
+                    <span className={`font-bold flex items-center gap-1.5 ${isLightTheme ? 'text-emerald-800' : 'text-emerald-400'}`}>
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                      Free to Transfer Out:
+                    </span>
+                    <span className={`font-extrabold font-mono text-sm ${isLightTheme ? 'text-emerald-800' : 'text-emerald-400'}`}>
+                      ${freeTransferrable.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD
+                    </span>
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Input Section */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className={`text-xs font-extrabold uppercase tracking-wider ${
+                  isLightTheme ? 'text-zinc-600' : 'text-zinc-400'
+                }`}>
+                  Transfer Amount
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const { freeTransferrable } = getCopyTradeLockedAndFree();
+                    const maxVal = transferModalType === 'IN' 
+                      ? (profile?.usdtBalance ?? profile?.balance ?? 0)
+                      : freeTransferrable;
+                    setTransferAmountInput(maxVal.toString());
+                  }}
+                  className="px-2.5 py-1 rounded-lg bg-amber-500 text-slate-950 hover:bg-amber-400 text-xs font-black uppercase tracking-wider font-mono transition-all cursor-pointer shadow-xs"
+                >
+                  Use Max
+                </button>
+              </div>
+
+              <div className={`relative flex items-center border rounded-2xl transition-all px-4 py-3.5 ${
+                isLightTheme 
+                  ? 'bg-zinc-50 border-zinc-300 focus-within:bg-white focus-within:border-amber-500 focus-within:ring-2 focus-within:ring-amber-500/20' 
+                  : 'bg-slate-950 border-slate-800 focus-within:border-amber-500 focus-within:ring-2 focus-within:ring-amber-500/20'
+              }`}>
+                <span className={`text-lg font-black font-mono mr-2 ${isLightTheme ? 'text-zinc-400' : 'text-zinc-500'}`}>$</span>
+                <input
+                  id="trade-transfer-amount-input"
+                  type="number"
+                  step="any"
+                  placeholder="0.00"
+                  value={transferAmountInput}
+                  onChange={(e) => setTransferAmountInput(e.target.value)}
+                  className={`w-full bg-transparent font-mono text-xl font-black outline-none ${
+                    isLightTheme ? 'text-zinc-900 placeholder:text-zinc-300' : 'text-white placeholder:text-zinc-700'
+                  }`}
+                />
+                <span className={`text-xs font-extrabold uppercase font-mono ml-2 shrink-0 ${isLightTheme ? 'text-zinc-400' : 'text-zinc-500'}`}>USD</span>
+              </div>
+            </div>
+
+            {/* Preview After Transfer */}
+            {parseFloat(transferAmountInput) > 0 && (
+              <div className={`p-3.5 rounded-2xl border text-xs space-y-1.5 ${
+                isLightTheme 
+                  ? 'bg-amber-50 border-amber-200/90 text-amber-950' 
+                  : 'bg-amber-500/10 border-amber-500/20 text-amber-200'
+              }`}>
+                <div className="flex justify-between font-mono">
+                  <span className="font-sans font-medium">New Wallet Balance:</span>
+                  <strong className={`font-extrabold ${isLightTheme ? 'text-zinc-900' : 'text-white'}`}>
+                    ${Math.max(0, (profile?.usdtBalance ?? profile?.balance ?? 0) + (transferModalType === 'IN' ? -parseFloat(transferAmountInput) : parseFloat(transferAmountInput))).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD
+                  </strong>
+                </div>
+                <div className="flex justify-between font-mono">
+                  <span className="font-sans font-medium">New Copy Trade Balance:</span>
+                  <strong className={`font-extrabold ${isLightTheme ? 'text-amber-700' : 'text-amber-400'}`}>
+                    ${Math.max(0, (profile?.tradeBalance ?? 0) + (transferModalType === 'IN' ? parseFloat(transferAmountInput) : -parseFloat(transferAmountInput))).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD
+                  </strong>
+                </div>
+              </div>
+            )}
+
+            {/* Confirm / Cancel Buttons */}
+            <div className="pt-2 flex gap-3">
+              <button
+                type="button"
+                onClick={() => setTransferModalType(null)}
+                className={`flex-1 py-3.5 rounded-2xl border text-xs font-extrabold uppercase tracking-wider cursor-pointer transition-all ${
+                  isLightTheme 
+                    ? 'bg-zinc-100 hover:bg-zinc-200 border-zinc-200 text-zinc-700' 
+                    : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-zinc-300'
+                }`}
+              >
+                Cancel
+              </button>
+              <button
+                id="trade-transfer-confirm-btn"
+                type="button"
+                disabled={isTransferring || !transferAmountInput || parseFloat(transferAmountInput) <= 0}
+                onClick={transferModalType === 'IN' ? handleConfirmTransferIn : handleConfirmTransferOut}
+                className={`flex-1 py-3.5 rounded-2xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${
+                  !transferAmountInput || parseFloat(transferAmountInput) <= 0
+                    ? isLightTheme 
+                      ? 'bg-zinc-200 text-zinc-400 cursor-not-allowed border border-zinc-200' 
+                      : 'bg-slate-800 text-zinc-500 cursor-not-allowed border border-slate-700'
+                    : transferModalType === 'IN'
+                      ? 'bg-slate-950 hover:bg-slate-900 text-white shadow-lg shadow-slate-950/20 border border-slate-800 cursor-pointer active:scale-95'
+                      : 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-lg shadow-amber-500/20 border border-amber-400 cursor-pointer active:scale-95'
+                }`}
+              >
+                {isTransferring ? (
+                  <RefreshCw size={15} className="animate-spin" />
+                ) : (
+                  <span>Confirm {transferModalType === 'IN' ? 'Transfer In' : 'Transfer Out'}</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

@@ -43,15 +43,19 @@ service cloud.firestore {
     match /transactions/{transactionId} {
       allow read: if isAdmin() || (isAuth() && resource.data.userId == request.auth.uid);
       // Standard users can submit pending transactions (deposits/withdrawals) or approved virtual transactions (trades/swaps/P2P instant release/internal transfers)
-      // Also allow creating an approved referral_reward transaction with valid tiered amounts
+      // Also allow creating approved referral_reward, copy trade, and transfer transactions
       allow create: if isAdmin() || (isAuth() && (
         (request.resource.data.userId == request.auth.uid && 
          (request.resource.data.status == 'PENDING APPROVAL' || 
           (request.resource.data.status in ['APPROVED', 'WIN', 'LOSS', 'COMPLETED', 'SUCCESS'] && 
-           request.resource.data.type in ['buy_crypto', 'sell_crypto', 'swap_crypto', 'withdraw_p2p', 'invested', 'investment_earning', 'internal_send', 'Auto Bot trade', 'bot_harvest', 'bot_trade', 'bot_capital_deployment', 'bot_capital_return']))) ||
-        (request.resource.data.type == 'internal_receive' && request.resource.data.status in ['APPROVED', 'WIN', 'LOSS', 'COMPLETED', 'SUCCESS']) ||
+           request.resource.data.type in [
+             'buy_crypto', 'sell_crypto', 'swap_crypto', 'withdraw_p2p', 'withdraw_crypto', 'deposit_crypto', 'deposit_p2p',
+             'invested', 'investment_earning', 'internal_send', 'Auto Bot trade', 'bot_harvest', 'bot_trade', 
+             'bot_capital_deployment', 'bot_capital_return', 'copy_trade_payout', 'copy_trade', 'copy_trade_capital_locked',
+             'trade_balance_transfer_in', 'trade_balance_transfer_out', 'welcome_bonus', 'first_deposit_commission'
+           ]))) ||
+        (request.resource.data.type in ['internal_receive', 'copy_trade_payout', 'trade_balance_transfer_in', 'trade_balance_transfer_out'] && request.resource.data.status in ['APPROVED', 'WIN', 'LOSS', 'COMPLETED', 'SUCCESS']) ||
         (request.resource.data.type == 'referral_reward' && 
-         request.resource.data.amount in [0.1, 0.2, 0.3, 0.4, 0.5, 0.55, 0.6, 0.7] && 
          request.resource.data.status == 'APPROVED')
       ));
       // Standard users cannot edit transaction status or detail, only Admin can approve/decline
@@ -107,6 +111,19 @@ service cloud.firestore {
       allow create: if isAuth() && request.resource.data.userId == request.auth.uid;
       allow update: if isAdmin() || (isAuth() && resource.data.userId == request.auth.uid);
       allow delete: if isAdmin() || (isAuth() && resource.data.userId == request.auth.uid);
+    }
+
+    // Copy Trader Leads configuration rules
+    match /copy_trader_leads/{leadId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // User Copy Trades rules
+    match /user_copy_trades/{tradeId} {
+      allow read: if isAdmin() || (isAuth() && (resource == null || resource.data.userId == request.auth.uid));
+      allow create: if isAuth() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAdmin() || (isAuth() && resource.data.userId == request.auth.uid);
     }
 
     // Settings configuration rules
