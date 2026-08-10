@@ -11,7 +11,7 @@ import {
   TrendingUp, TrendingDown, ArrowUpRight, ArrowDownLeft, Search, 
   User, LogOut, ArrowRightLeft, ShieldCheck, Activity, Wallet, 
   HelpCircle, RefreshCw, Coins, ArrowRight, MessageSquare, AlertCircle,
-  History, ArrowLeft, X, ChevronDown, Check, Lock, Unlock, Eye, EyeOff, Sparkles, BookOpen, Zap, Send,
+  History, ArrowLeft, X, ChevronDown, ChevronRight, Check, Lock, Unlock, Eye, EyeOff, Sparkles, BookOpen, Zap, Send,
   Cpu, Play, Pause, Bot, Crown, Gift, ListFilter, CheckCircle, CheckCircle2, Users, Globe, Clock
 } from 'lucide-react';
 import { RunningBotView } from './RunningBotView';
@@ -501,6 +501,7 @@ export default function StandardUserDashboard({
   const [copyLeads, setCopyLeads] = useState<CopyTraderLead[]>([]);
   const [userCopyTrades, setUserCopyTrades] = useState<UserCopyTrade[]>([]);
   const [selectedLeadForCopy, setSelectedLeadForCopy] = useState<CopyTraderLead | null>(null);
+  const [selectedContractForDetail, setSelectedContractForDetail] = useState<UserCopyTrade | null>(null);
   const [copyTradeStep, setCopyTradeStep] = useState<1 | 2 | 3>(1);
   const [copyTradePair, setCopyTradePair] = useState<string>('BTC/USDT');
   const [copyTradeAmountInput, setCopyTradeAmountInput] = useState<string>('50');
@@ -566,8 +567,25 @@ export default function StandardUserDashboard({
       const isSameLead = trade.leadId === lead.id || trade.leadName === lead.name;
       if (!isSameLead) return false;
 
-      const tradeCode = (trade.signalCode || '').toUpperCase();
       const targetCode = (signal.code || '').toUpperCase();
+
+      // Check executedSignals array if available
+      if (Array.isArray(trade.executedSignals) && trade.executedSignals.length > 0) {
+        const found = trade.executedSignals.some((sigLog: any) => {
+          const sigCode = (sigLog.code || '').toUpperCase();
+          const isSameCodeOrTime = (targetCode && sigCode === targetCode) || sigLog.time === signal.time;
+          if (!isSameCodeOrTime) return false;
+
+          const sigDate = sigLog.executedAt?.seconds
+            ? new Date(sigLog.executedAt.seconds * 1000)
+            : new Date(sigLog.executedAt || 0);
+          return sigDate >= todayStart;
+        });
+        if (found) return true;
+      }
+
+      // Check main trade fields (fallback)
+      const tradeCode = (trade.signalCode || '').toUpperCase();
       const isSameSignal = (targetCode && tradeCode === targetCode) || trade.signalTime === signal.time;
       if (!isSameSignal) return false;
 
@@ -575,7 +593,13 @@ export default function StandardUserDashboard({
         ? new Date(trade.createdAt.seconds * 1000) 
         : new Date(trade.createdAt || 0);
 
-      return tradeDate >= todayStart;
+      const updateDate = trade.updatedAt?.seconds
+        ? new Date(trade.updatedAt.seconds * 1000)
+        : trade.updatedAt
+        ? new Date(trade.updatedAt)
+        : tradeDate;
+
+      return (tradeDate >= todayStart || updateDate >= todayStart);
     });
   };
 
@@ -618,7 +642,62 @@ export default function StandardUserDashboard({
     const lockedCapital = Math.min(rawLockedCapital, tradeBal);
     const freeTransferrable = Math.max(0, tradeBal - lockedCapital);
 
-    return { lockedCapital, freeTransferrable };
+    return { lockedCapital, freeTransferrable, activeContractCapitalByLead, rawLockedCapital };
+  };
+
+  // Helper to calculate contract progress details for active copy trades
+  const getContractProgressDetails = (trade: UserCopyTrade) => {
+    const durationDays = trade.contractDurationDays || 30;
+    const startDate = trade.contractStartDate?.seconds 
+      ? new Date(trade.contractStartDate.seconds * 1000) 
+      : trade.createdAt?.seconds 
+      ? new Date(trade.createdAt.seconds * 1000) 
+      : new Date(trade.createdAt || Date.now());
+
+    const now = new Date();
+    
+    // Calculate workdays elapsed (excluding Sundays)
+    let workdaysElapsed = 0;
+    let curr = new Date(startDate);
+    while (curr < now) {
+      if (curr.getDay() !== 0) {
+        workdaysElapsed++;
+      }
+      curr.setDate(curr.getDate() + 1);
+    }
+
+    const clampedWorkdaysElapsed = Math.min(workdaysElapsed, durationDays);
+    const workdaysRemaining = Math.max(0, durationDays - clampedWorkdaysElapsed);
+    const progressPct = Math.min(100, Math.round((clampedWorkdaysElapsed / durationDays) * 100));
+    const isUnlocked = clampedWorkdaysElapsed >= durationDays;
+
+    // Calculate target completion date (adding durationDays workdays, skipping Sundays)
+    let targetEndDate = new Date(startDate);
+    let daysAdded = 0;
+    while (daysAdded < durationDays) {
+      targetEndDate.setDate(targetEndDate.getDate() + 1);
+      if (targetEndDate.getDay() !== 0) {
+        daysAdded++;
+      }
+    }
+
+    // Time remaining calculations
+    const diffMs = targetEndDate.getTime() - now.getTime();
+    const hoursRemainingTotal = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60)));
+    const daysRemainingCalendar = Math.floor(hoursRemainingTotal / 24);
+    const hoursRemainingModulo = hoursRemainingTotal % 24;
+
+    return {
+      durationDays,
+      startDate,
+      targetEndDate,
+      workdaysElapsed: clampedWorkdaysElapsed,
+      workdaysRemaining,
+      progressPct,
+      isUnlocked,
+      daysRemainingCalendar,
+      hoursRemainingModulo
+    };
   };
 
   const getWalletBalance = (prof?: UserAccount | null): number => {
@@ -1732,8 +1811,24 @@ export default function StandardUserDashboard({
     }
 
     const tradeBal = profile?.tradeBalance ?? 0;
-    if (amount > tradeBal) {
-      toast.error(`Insufficient Copy Trade Balance ($${tradeBal.toFixed(2)} USD available). Please transfer funds from your Wallet into your Copy Trade Balance.`, 'Insufficient Trade Balance');
+    const { rawLockedCapital, activeContractCapitalByLead } = getCopyTradeLockedAndFree();
+    const currentLeadKey = selectedLeadForCopy.id || selectedLeadForCopy.name;
+    const currentLeadLockedCap = activeContractCapitalByLead[currentLeadKey] || 0;
+    const lockedInOtherExperts = Math.max(0, rawLockedCapital - currentLeadLockedCap);
+    const availableForThisLead = Math.max(0, tradeBal - lockedInOtherExperts);
+
+    if (amount > availableForThisLead) {
+      if (lockedInOtherExperts > 0) {
+        toast.error(
+          `Insufficient available balance. You currently have $${lockedInOtherExperts.toFixed(2)} locked in active contracts with other experts. To trade with ${selectedLeadForCopy.name}, please transfer additional funds into your Copy Trade Balance.`,
+          'Capital Locked In Other Contract'
+        );
+      } else {
+        toast.error(
+          `Insufficient Copy Trade Balance ($${tradeBal.toFixed(2)} USD available). Please transfer funds from your Wallet into your Copy Trade Balance.`,
+          'Insufficient Trade Balance'
+        );
+      }
       return;
     }
 
@@ -1755,28 +1850,59 @@ export default function StandardUserDashboard({
         tradeBalance: parseFloat(newTradeBal.toFixed(2))
       });
 
-      // 6. Record Copy Trade Log
-      const newTradeId = `copy-${Date.now()}`;
-      await addDoc(collection(db, 'user_copy_trades'), {
-        id: newTradeId,
-        userId: user.uid,
-        userEmail: user.email || '',
-        leadId: selectedLeadForCopy.id,
-        leadName: selectedLeadForCopy.name,
-        leadPhotoUrl: selectedLeadForCopy.photoUrl,
-        tradingPair: copyTradePair,
-        amount: amount,
-        signalCode: copySignalCodeInput.trim().toUpperCase(),
-        signalTime: activeSignal.time,
-        grossProfit: parseFloat(grossProfit.toFixed(2)),
-        commissionDeducted: parseFloat(commissionDeducted.toFixed(2)),
+      // 6. Record or Update Copy Trade Contract
+      const existingActiveContract = userCopyTrades.find(
+        t => (t.leadId === selectedLeadForCopy.id || t.leadName === selectedLeadForCopy.name) && t.status === 'ACTIVE'
+      );
+
+      const executedSignalEntry = {
+        code: copySignalCodeInput.trim().toUpperCase(),
+        time: activeSignal.time,
         netProfit: parseFloat(netProfit.toFixed(2)),
-        status: 'COMPLETED',
-        contractCapital: amount,
-        contractStartDate: new Date(),
-        contractDurationDays: selectedLeadForCopy.contractDurationDays || 30,
-        createdAt: new Date().toISOString()
-      });
+        executedAt: new Date().toISOString()
+      };
+
+      if (existingActiveContract) {
+        // Continue existing active contract instead of creating a duplicate contract
+        const updatedNetProfit = (existingActiveContract.netProfit || 0) + netProfit;
+        const updatedGrossProfit = (existingActiveContract.grossProfit || 0) + grossProfit;
+        const updatedCommission = (existingActiveContract.commissionDeducted || 0) + commissionDeducted;
+        const prevSignals = Array.isArray(existingActiveContract.executedSignals) ? existingActiveContract.executedSignals : [];
+
+        await updateDoc(doc(db, 'user_copy_trades', existingActiveContract.id), {
+          netProfit: parseFloat(updatedNetProfit.toFixed(2)),
+          grossProfit: parseFloat(updatedGrossProfit.toFixed(2)),
+          commissionDeducted: parseFloat(updatedCommission.toFixed(2)),
+          signalCode: copySignalCodeInput.trim().toUpperCase(),
+          signalTime: activeSignal.time,
+          executedSignals: [...prevSignals, executedSignalEntry],
+          updatedAt: new Date().toISOString()
+        });
+      } else {
+        // Create initial copy trade contract
+        const newTradeId = `copy-${Date.now()}`;
+        await addDoc(collection(db, 'user_copy_trades'), {
+          id: newTradeId,
+          userId: user.uid,
+          userEmail: user.email || '',
+          leadId: selectedLeadForCopy.id,
+          leadName: selectedLeadForCopy.name,
+          leadPhotoUrl: selectedLeadForCopy.photoUrl,
+          tradingPair: copyTradePair,
+          amount: amount,
+          signalCode: copySignalCodeInput.trim().toUpperCase(),
+          signalTime: activeSignal.time,
+          executedSignals: [executedSignalEntry],
+          grossProfit: parseFloat(grossProfit.toFixed(2)),
+          commissionDeducted: parseFloat(commissionDeducted.toFixed(2)),
+          netProfit: parseFloat(netProfit.toFixed(2)),
+          status: 'ACTIVE',
+          contractCapital: amount,
+          contractStartDate: new Date(),
+          contractDurationDays: selectedLeadForCopy.contractDurationDays || 30,
+          createdAt: new Date().toISOString()
+        });
+      }
 
       // 7. Add Transaction record
       await addDoc(collection(db, 'transactions'), {
@@ -5076,38 +5202,24 @@ export default function StandardUserDashboard({
                         {(() => {
                           const userCountry = profile?.country || 'Kenya';
                           const userTzInfo = getUserTimezoneInfo(userCountry);
-                          const isNotKenya = userTzInfo.timeZone !== 'Africa/Nairobi' && userTzInfo.label.toLowerCase() !== 'kenya';
 
                           return (
-                            <>
-                              <div className="flex items-center justify-between flex-wrap gap-2">
-                                <span className={`text-xs font-extrabold uppercase tracking-wider ${isLightTheme ? 'text-zinc-700' : 'text-zinc-300'}`}>
-                                  Trading Times & Daily Signals
-                                </span>
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold font-mono flex items-center gap-1.5 ${
-                                    isLightTheme ? 'bg-amber-100 text-amber-900 border border-amber-200' : 'bg-amber-500/10 text-amber-300 border border-amber-500/20'
-                                  }`}>
-                                    <Globe size={11} className="shrink-0 text-amber-600 dark:text-amber-400" />
-                                    <span>{userTzInfo.flag} {userTzInfo.label} Time ({userTzInfo.code})</span>
-                                  </span>
-                                  <span className={`text-[10px] font-bold font-mono ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>
-                                    Contract: {selectedLeadForCopy.contractDurationDays ?? 30} Days (Excl. Sundays)
-                                  </span>
-                                </div>
-                              </div>
-
-                              {isNotKenya && (
-                                <div className={`p-3 rounded-xl text-xs font-medium flex items-start gap-2.5 ${
-                                  isLightTheme ? 'bg-amber-50/90 text-amber-900 border border-amber-200/80' : 'bg-amber-500/10 text-amber-300 border border-amber-500/20'
+                            <div className="flex items-center justify-between flex-wrap gap-2">
+                              <span className={`text-xs font-extrabold uppercase tracking-wider ${isLightTheme ? 'text-zinc-700' : 'text-zinc-300'}`}>
+                                Trading Times & Daily Signals
+                              </span>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold font-mono flex items-center gap-1.5 ${
+                                  isLightTheme ? 'bg-amber-100 text-amber-900 border border-amber-200' : 'bg-amber-500/10 text-amber-300 border border-amber-500/20'
                                 }`}>
-                                  <Clock size={15} className="shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" />
-                                  <div className="leading-snug">
-                                    <span className="font-extrabold">Automated Timezone Conversion:</span> Signals are published in <strong>Kenyan Time (EAT)</strong>. Below, we've converted each signal time to your local time in <strong>{userTzInfo.flag} {userTzInfo.label} ({userTzInfo.code})</strong> based on your registration country.
-                                  </div>
-                                </div>
-                              )}
-                            </>
+                                  <Globe size={11} className="shrink-0 text-amber-600 dark:text-amber-400" />
+                                  <span>{userTzInfo.flag} {userTzInfo.label} Time ({userTzInfo.code})</span>
+                                </span>
+                                <span className={`text-[10px] font-bold font-mono ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                                  Contract: {selectedLeadForCopy.contractDurationDays ?? 30} Days (Excl. Sundays)
+                                </span>
+                              </div>
+                            </div>
                           );
                         })()}
 
@@ -5168,11 +5280,6 @@ export default function StandardUserDashboard({
                                       <span className={`text-[10px] font-medium ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>
                                         Signal #{idx + 1}
                                       </span>
-                                      {fmtSig.isDifferentCountry && (
-                                        <span className={`text-[10px] font-bold font-mono ${isLightTheme ? 'text-zinc-600' : 'text-zinc-400'}`}>
-                                          (Kenya: <strong>{sig.time || '12:00'} EAT</strong>)
-                                        </span>
-                                      )}
                                     </div>
                                   </div>
 
@@ -5256,20 +5363,24 @@ export default function StandardUserDashboard({
 
                       {/* Capital Breakdown & Quick Amount Selection */}
                       {(() => {
-                        const { lockedCapital: leadLockedCap } = getCopyTradeLockedAndFree();
+                        const { rawLockedCapital, activeContractCapitalByLead } = getCopyTradeLockedAndFree();
                         const totalBal = profile?.tradeBalance ?? 0;
-                        const freeProfits = Math.max(0, totalBal - leadLockedCap);
+                        const currentLeadKey = selectedLeadForCopy.id || selectedLeadForCopy.name;
+                        const currentLeadLockedCap = activeContractCapitalByLead[currentLeadKey] || 0;
+                        const lockedInOtherExperts = Math.max(0, rawLockedCapital - currentLeadLockedCap);
+                        const availableForThisLead = Math.max(0, totalBal - lockedInOtherExperts);
+                        const freeProfits = Math.max(0, totalBal - rawLockedCapital);
                         const inputAmt = parseFloat(copyTradeAmountInput) || 0;
                         
-                        const isHigherThanLocked = leadLockedCap > 0 && inputAmt > (leadLockedCap + 0.001);
-                        const isEqualToLocked = leadLockedCap > 0 && Math.abs(inputAmt - leadLockedCap) < 0.01;
-                        const isFullBalance = totalBal > 0 && Math.abs(inputAmt - totalBal) < 0.01;
-                        const extraIncludedProfit = inputAmt > leadLockedCap ? Math.min(inputAmt - leadLockedCap, freeProfits) : 0;
+                        const isHigherThanLocked = currentLeadLockedCap > 0 && inputAmt > (currentLeadLockedCap + 0.001);
+                        const isEqualToLocked = currentLeadLockedCap > 0 && Math.abs(inputAmt - currentLeadLockedCap) < 0.01;
+                        const isFullBalance = availableForThisLead > 0 && Math.abs(inputAmt - availableForThisLead) < 0.01;
+                        const extraIncludedProfit = inputAmt > currentLeadLockedCap ? Math.min(inputAmt - currentLeadLockedCap, freeProfits) : 0;
 
                         return (
                           <div className="space-y-3">
                             {/* Quick Amount Selection Block */}
-                            {leadLockedCap > 0 && freeProfits > 0 && (
+                            {currentLeadLockedCap > 0 && freeProfits > 0 && (
                               <div className={`p-3.5 sm:p-4 rounded-2xl border space-y-2.5 ${
                                 isLightTheme ? 'bg-zinc-100/80 border-zinc-200/90' : 'bg-slate-950 border-slate-800'
                               }`}>
@@ -5285,7 +5396,7 @@ export default function StandardUserDashboard({
                                   {/* Principal Only Button (Blue / Protection Theme) */}
                                   <button
                                     type="button"
-                                    onClick={() => setCopyTradeAmountInput(leadLockedCap.toFixed(2))}
+                                    onClick={() => setCopyTradeAmountInput(currentLeadLockedCap.toFixed(2))}
                                     className={`py-3 px-3.5 rounded-xl text-xs font-extrabold transition-all border-2 cursor-pointer flex items-center justify-between gap-2 active:scale-[0.98] ${
                                       isEqualToLocked
                                         ? 'bg-blue-600 text-white border-blue-500 shadow-md ring-2 ring-blue-400/40'
@@ -5312,14 +5423,14 @@ export default function StandardUserDashboard({
                                       </div>
                                     </div>
                                     <span className="font-mono text-xs sm:text-sm font-black shrink-0 ml-1">
-                                      ${leadLockedCap.toFixed(2)}
+                                      ${currentLeadLockedCap.toFixed(2)}
                                     </span>
                                   </button>
 
                                   {/* Re-invest Profits Button (Emerald / Growth Theme) */}
                                   <button
                                     type="button"
-                                    onClick={() => setCopyTradeAmountInput(totalBal.toFixed(2))}
+                                    onClick={() => setCopyTradeAmountInput(availableForThisLead.toFixed(2))}
                                     className={`py-3 px-3.5 rounded-xl text-xs font-extrabold transition-all border-2 cursor-pointer flex items-center justify-between gap-2 active:scale-[0.98] ${
                                       isFullBalance
                                         ? 'bg-emerald-600 text-white border-emerald-500 shadow-md ring-2 ring-emerald-400/40'
@@ -5346,7 +5457,7 @@ export default function StandardUserDashboard({
                                       </div>
                                     </div>
                                     <span className="font-mono text-xs sm:text-sm font-black shrink-0 ml-1">
-                                      ${totalBal.toFixed(2)}
+                                      ${availableForThisLead.toFixed(2)}
                                     </span>
                                   </button>
                                 </div>
@@ -5361,12 +5472,15 @@ export default function StandardUserDashboard({
                                 </label>
                                 <div className="flex items-center gap-2">
                                   <span className={`text-[11px] font-mono ${isLightTheme ? 'text-zinc-600' : 'text-zinc-400'}`}>
-                                    Balance: <strong className={isLightTheme ? 'text-amber-700' : 'text-amber-400'}>${totalBal.toFixed(2)}</strong>
+                                    Available: <strong className={isLightTheme ? 'text-amber-700' : 'text-amber-400'}>${availableForThisLead.toFixed(2)}</strong>
+                                    {lockedInOtherExperts > 0 && (
+                                      <span className="text-[10px] opacity-75 ml-1">($${lockedInOtherExperts.toFixed(2)} locked elsewhere)</span>
+                                    )}
                                   </span>
                                   <button
                                     type="button"
                                     onClick={() => {
-                                      const maxAvail = Math.min(totalBal, selectedLeadForCopy.maxCapital ?? 10000);
+                                      const maxAvail = Math.min(availableForThisLead, selectedLeadForCopy.maxCapital ?? 10000);
                                       setCopyTradeAmountInput(maxAvail.toString());
                                     }}
                                     className="px-2 py-0.5 rounded-md bg-amber-500 text-slate-950 text-[10px] font-black uppercase font-mono cursor-pointer hover:bg-amber-400"
@@ -5397,7 +5511,7 @@ export default function StandardUserDashboard({
                             </div>
 
                             {/* Dynamic Smart Guidance Banner */}
-                            {leadLockedCap > 0 && freeProfits > 0 && inputAmt > 0 && (
+                            {currentLeadLockedCap > 0 && freeProfits > 0 && inputAmt > 0 && (
                               <>
                                 {isHigherThanLocked ? (
                                   <div className={`p-3 rounded-xl border text-xs flex items-center gap-2.5 ${
@@ -5414,7 +5528,7 @@ export default function StandardUserDashboard({
                                   }`}>
                                     <CheckCircle size={15} className="shrink-0 text-emerald-600 dark:text-emerald-400" />
                                     <span className="text-[11px] leading-tight">
-                                      Trading <strong>${leadLockedCap.toFixed(2)} USD</strong> uses your existing active principal. Your <strong>${freeProfits.toFixed(2)} USD profit</strong> remains 100% free for instant withdrawal anytime!
+                                      Trading <strong>${currentLeadLockedCap.toFixed(2)} USD</strong> uses your existing active principal. Your <strong>${freeProfits.toFixed(2)} USD profit</strong> remains 100% free for instant withdrawal anytime!
                                     </span>
                                   </div>
                                 ) : null}
@@ -5704,72 +5818,149 @@ export default function StandardUserDashboard({
 
 
 
-              {/* Active Copy Trades Section */}
-              {userCopyTrades.filter(t => t.status === 'ACTIVE').length > 0 && (
-                <div className="space-y-3">
-                  <h4 className={`text-xs font-black uppercase tracking-wider flex items-center gap-1.5 ${
-                    isLightTheme ? 'text-zinc-800' : 'text-zinc-300'
-                  }`}>
-                    <Sparkles size={14} className="text-amber-500" />
-                    Your Active Copy Trades ({userCopyTrades.filter(t => t.status === 'ACTIVE').length})
-                  </h4>
+              {/* Active Copy Trade Contracts Section */}
+              {(() => {
+                const activeList = userCopyTrades.filter(t => t.status === 'ACTIVE');
+                const groupedMap: Record<string, UserCopyTrade> = {};
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {userCopyTrades.filter(t => t.status === 'ACTIVE').map(trade => (
-                      <div 
-                        key={trade.id} 
-                        className={`p-4 rounded-2xl border relative overflow-hidden flex flex-col justify-between space-y-3 ${
-                          isLightTheme 
-                            ? 'bg-white border-amber-300/80 shadow-xs' 
-                            : 'bg-slate-900 border-emerald-500/30'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <img 
-                            src={trade.leadPhotoUrl} 
-                            alt={trade.leadName} 
-                            className="w-12 h-12 rounded-full object-cover border-2 border-emerald-500 shrink-0"
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=400';
-                            }}
-                          />
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center justify-between gap-1">
-                              <h5 className={`font-black text-sm truncate ${isLightTheme ? 'text-zinc-900' : 'text-white'}`}>
-                                {trade.leadName}
-                              </h5>
-                              <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-mono text-[9px] font-black uppercase border border-emerald-500/20">
-                                ACTIVE
+                activeList.forEach((trade) => {
+                  const key = trade.leadId || trade.leadName || trade.id;
+                  if (!groupedMap[key]) {
+                    groupedMap[key] = { ...trade };
+                  } else {
+                    const existing = groupedMap[key];
+                    existing.netProfit = parseFloat(((existing.netProfit || 0) + (trade.netProfit || 0)).toFixed(2));
+                    existing.grossProfit = parseFloat(((existing.grossProfit || 0) + (trade.grossProfit || 0)).toFixed(2));
+                    existing.commissionDeducted = parseFloat(((existing.commissionDeducted || 0) + (trade.commissionDeducted || 0)).toFixed(2));
+                    existing.contractCapital = Math.max(existing.contractCapital || 0, trade.contractCapital || trade.amount || 0);
+
+                    const ex1 = Array.isArray(existing.executedSignals) ? existing.executedSignals : [];
+                    const ex2 = Array.isArray(trade.executedSignals) ? trade.executedSignals : [];
+                    existing.executedSignals = [...ex1, ...ex2];
+                  }
+                });
+
+                const activeContracts = Object.values(groupedMap);
+                if (activeContracts.length === 0) return null;
+
+                return (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className={`text-xs font-black uppercase tracking-wider flex items-center gap-1.5 ${
+                        isLightTheme ? 'text-zinc-800' : 'text-zinc-300'
+                      }`}>
+                        <Sparkles size={14} className="text-amber-500" />
+                        Active Contracts ({activeContracts.length})
+                      </h4>
+                      <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 font-mono">
+                        Click any contract to view full progress & details
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {activeContracts.map(trade => {
+                        const contract = getContractProgressDetails(trade);
+                        const tradeCapital = trade.contractCapital || trade.amount || 0;
+                        const netProfit = trade.netProfit || 0;
+
+                        return (
+                          <div 
+                            key={trade.id} 
+                            onClick={() => setSelectedContractForDetail(trade)}
+                            className={`p-4 sm:p-5 rounded-2xl border relative overflow-hidden flex flex-col justify-between space-y-3.5 cursor-pointer transition-all hover:scale-[1.01] hover:shadow-md active:scale-[0.99] group ${
+                              isLightTheme 
+                                ? 'bg-white hover:bg-amber-50/30 border-amber-300/80 shadow-xs' 
+                                : 'bg-slate-900 hover:bg-slate-850 border-emerald-500/30'
+                            }`}
+                          >
+                            {/* Top Header: Lead Expert Profile & Lock Status Badge */}
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex items-center gap-3 min-w-0">
+                                <img 
+                                  src={trade.leadPhotoUrl} 
+                                  alt={trade.leadName} 
+                                  className="w-11 h-11 rounded-full object-cover border-2 border-emerald-500 shrink-0"
+                                  onError={(e) => {
+                                    (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=400';
+                                  }}
+                                />
+                                <div className="min-w-0 flex-1">
+                                  <h5 className={`font-black text-sm truncate flex items-center gap-1.5 ${isLightTheme ? 'text-zinc-900' : 'text-white'}`}>
+                                    <span>{trade.leadName}</span>
+                                    <ChevronRight size={14} className="text-amber-500 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
+                                  </h5>
+                                  <div className="flex items-center gap-2 text-[11px] font-mono text-zinc-500 mt-0.5">
+                                    <span>Pair: <strong className="text-amber-500 font-bold">{trade.tradingPair || 'BTC/USDT'}</strong></span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Lock Status Badge */}
+                              {contract.isUnlocked ? (
+                                <span className="px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-mono text-[9px] font-black uppercase border border-emerald-500/30 flex items-center gap-1 shrink-0">
+                                  <Unlock size={11} className="shrink-0" />
+                                  UNLOCKED (100%)
+                                </span>
+                              ) : (
+                                <span className="px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 font-mono text-[9px] font-black uppercase border border-amber-500/30 flex items-center gap-1 shrink-0">
+                                  <Lock size={11} className="shrink-0 text-amber-500" />
+                                  LOCKED ({contract.progressPct}%)
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Quick Stats Grid */}
+                            <div className="grid grid-cols-2 gap-2 text-[11px] font-mono">
+                              <div className={`p-2.5 rounded-xl border ${isLightTheme ? 'bg-zinc-50 border-zinc-200/80' : 'bg-slate-950/70 border-slate-800'}`}>
+                                <span className="text-[9px] text-zinc-400 uppercase font-bold block">Locked Principal</span>
+                                <span className={`font-extrabold text-xs sm:text-sm ${isLightTheme ? 'text-zinc-900' : 'text-white'}`}>
+                                  ${tradeCapital.toFixed(2)} USD
+                                </span>
+                              </div>
+                              <div className={`p-2.5 rounded-xl border ${isLightTheme ? 'bg-zinc-50 border-zinc-200/80' : 'bg-slate-950/70 border-slate-800'}`}>
+                                <span className="text-[9px] text-zinc-400 uppercase font-bold block">Accrued Profit</span>
+                                <span className="font-extrabold text-xs sm:text-sm text-emerald-600 dark:text-emerald-400">
+                                  +${netProfit.toFixed(2)} USD
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Contract Progress Bar Summary */}
+                            <div className="space-y-1.5 pt-0.5">
+                              <div className="flex justify-between items-center text-[10.5px] font-mono font-bold">
+                                <span className={`flex items-center gap-1 ${isLightTheme ? 'text-zinc-700' : 'text-zinc-300'}`}>
+                                  <Clock size={12} className="text-amber-500 shrink-0" />
+                                  Progress: {contract.workdaysElapsed}/{contract.durationDays} Workdays
+                                </span>
+                                <span className="text-amber-600 dark:text-amber-400 font-extrabold">
+                                  {contract.progressPct}%
+                                </span>
+                              </div>
+                              <div className="w-full h-2 rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden">
+                                <div 
+                                  className="h-full bg-gradient-to-r from-amber-500 to-emerald-500 rounded-full transition-all duration-500"
+                                  style={{ width: `${contract.progressPct}%` }}
+                                />
+                              </div>
+                            </div>
+
+                            {/* Action Footer: View Details CTA */}
+                            <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800 flex items-center justify-between text-xs font-extrabold text-amber-600 dark:text-amber-400">
+                              <span className="text-[11px] font-semibold text-zinc-400">
+                                {contract.isUnlocked ? 'Contract Complete' : `${contract.workdaysRemaining} workdays remaining`}
+                              </span>
+                              <span className="flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                                <span>View Contract Details</span>
+                                <ArrowRight size={13} className="shrink-0" />
                               </span>
                             </div>
-                            <div className="flex items-center gap-2 text-[10px] font-mono text-zinc-500 mt-0.5">
-                              <span>Committed: <strong className={isLightTheme ? 'text-zinc-800' : 'text-zinc-200'}>${trade.capital}</strong></span>
-                              <span>•</span>
-                              <span>Signals: <strong>{trade.signalsPerDay}</strong></span>
-                            </div>
                           </div>
-                        </div>
-
-                        <div className="flex items-center justify-between pt-2 border-t border-zinc-100 dark:border-zinc-800">
-                          <div>
-                            <span className="text-[9px] text-zinc-400 uppercase font-bold block">Estimated Profits</span>
-                            <span className="text-xs font-black font-mono text-emerald-600 dark:text-emerald-400">
-                              +${((trade.capital || 100) * 0.085).toFixed(2)} / day
-                            </span>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => handleStopCopyTrade(trade)}
-                            className="px-3 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 border border-red-500/20 text-[10px] font-bold transition-all cursor-pointer"
-                          >
-                            Stop Copying
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               {/* Copy Trader Leads Section */}
               <div className="space-y-3">
@@ -5847,18 +6038,28 @@ export default function StandardUserDashboard({
 
                         <button
                           type="button"
-                          disabled={isAlreadyCopying}
                           onClick={() => handleOpenCopyModal(lead)}
-                          className={`w-full py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-md ${
+                          className={`w-full py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-md active:scale-[0.98] ${
                             isAlreadyCopying
-                              ? 'bg-zinc-200 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-500 cursor-not-allowed shadow-none'
+                              ? isLightTheme
+                                ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20'
+                                : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-emerald-500/20'
                               : isLightTheme
                                 ? 'bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-white shadow-amber-500/20'
                                 : 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 shadow-emerald-500/20'
                           }`}
                         >
-                          <Users size={14} />
-                          <span>{isAlreadyCopying ? 'Copying Active' : 'Copy Trade'}</span>
+                          {isAlreadyCopying ? (
+                            <>
+                              <Zap size={14} className="animate-pulse text-amber-300 dark:text-slate-900" />
+                              <span>Execute Signal Code</span>
+                            </>
+                          ) : (
+                            <>
+                              <Users size={14} />
+                              <span>Copy Trade</span>
+                            </>
+                          )}
                         </button>
                       </div>
                     );
@@ -6743,6 +6944,184 @@ export default function StandardUserDashboard({
           </div>
         </div>
       )}
+
+      {/* Active Contract Detail Modal */}
+      {selectedContractForDetail && (() => {
+        const trade = selectedContractForDetail;
+        const contract = getContractProgressDetails(trade);
+        const tradeCapital = trade.contractCapital || trade.amount || 0;
+        const netProfit = trade.netProfit || 0;
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto animate-fade-in">
+            <div className={`w-full max-w-lg rounded-3xl border shadow-2xl overflow-hidden p-6 sm:p-7 space-y-6 relative my-8 ${
+              isLightTheme ? 'bg-white border-zinc-200' : 'bg-slate-900 border-slate-800 text-white'
+            }`}>
+              {/* Close Button */}
+              <button
+                type="button"
+                onClick={() => setSelectedContractForDetail(null)}
+                className={`absolute top-5 right-5 p-2 rounded-full border transition-all cursor-pointer ${
+                  isLightTheme 
+                    ? 'bg-zinc-100 hover:bg-zinc-200 text-zinc-600 border-zinc-200' 
+                    : 'bg-slate-800 hover:bg-slate-700 text-zinc-300 border-slate-700'
+                }`}
+              >
+                <X size={18} />
+              </button>
+
+              {/* Modal Header */}
+              <div className="flex items-center gap-4 pr-8">
+                <img 
+                  src={trade.leadPhotoUrl} 
+                  alt={trade.leadName} 
+                  className="w-14 h-14 rounded-full object-cover border-2 border-emerald-500 shrink-0 shadow-sm"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=400';
+                  }}
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                      Copy Contract
+                    </span>
+                    {contract.isUnlocked ? (
+                      <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
+                        <Unlock size={10} /> Unlocked
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 flex items-center gap-1">
+                        <Lock size={10} /> Locked
+                      </span>
+                    )}
+                  </div>
+                  <h3 className={`text-lg font-black mt-1 truncate ${isLightTheme ? 'text-zinc-900' : 'text-white'}`}>
+                    {trade.leadName}
+                  </h3>
+                  <div className="flex items-center gap-2 text-xs font-mono text-zinc-500 mt-0.5">
+                    <span>Pair: <strong className="text-amber-500 font-bold">{trade.tradingPair || 'BTC/USDT'}</strong></span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Timeline & Progress Breakdown Card */}
+              <div className={`p-4 sm:p-5 rounded-2xl border space-y-4 ${
+                isLightTheme ? 'bg-zinc-50 border-zinc-200' : 'bg-slate-950/80 border-slate-800'
+              }`}>
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-black uppercase tracking-wider flex items-center gap-1.5 text-amber-500">
+                    <Clock size={15} />
+                    Contract Progress Period
+                  </h4>
+                  <span className="text-xs font-black font-mono text-amber-600 dark:text-amber-400">
+                    {contract.isUnlocked ? '100% Completed' : `${contract.workdaysRemaining} Workdays Remaining`}
+                  </span>
+                </div>
+
+                {/* Main Progress Bar */}
+                <div className="space-y-2">
+                  <div className="w-full h-3 rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden p-0.5 relative">
+                    <div 
+                      className="h-full bg-gradient-to-r from-amber-500 via-emerald-500 to-emerald-400 rounded-full transition-all duration-700"
+                      style={{ width: `${contract.progressPct}%` }}
+                    />
+                  </div>
+                  <div className="flex justify-between items-center text-xs font-mono">
+                    <span className={isLightTheme ? 'text-zinc-700' : 'text-zinc-300'}>
+                      <strong>{contract.workdaysElapsed}</strong> of <strong>{contract.durationDays} Workdays</strong>
+                    </span>
+                    <span className="font-black text-emerald-600 dark:text-emerald-400">
+                      {contract.progressPct}%
+                    </span>
+                  </div>
+                </div>
+
+                {/* Countdown & Dates */}
+                <div className="grid grid-cols-2 gap-3 pt-3 border-t border-zinc-200 dark:border-zinc-800/80 text-xs font-mono">
+                  <div>
+                    <span className="text-zinc-400 block uppercase font-bold text-[9px] tracking-wider">Start Date</span>
+                    <span className={`font-black ${isLightTheme ? 'text-zinc-900' : 'text-zinc-100'}`}>
+                      {contract.startDate.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-zinc-400 block uppercase font-bold text-[9px] tracking-wider">Target Completion</span>
+                    <span className={`font-black ${isLightTheme ? 'text-zinc-900' : 'text-zinc-100'}`}>
+                      {contract.targetEndDate.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+                    </span>
+                  </div>
+                </div>
+
+                {!contract.isUnlocked && (
+                  <div className={`p-3 rounded-xl text-xs flex items-center justify-between border font-mono ${
+                    isLightTheme ? 'bg-amber-500/10 border-amber-200 text-amber-900' : 'bg-amber-500/10 border-amber-500/20 text-amber-200'
+                  }`}>
+                    <span className="font-semibold text-[11px]">Estimated Remaining Time:</span>
+                    <strong className="font-black text-amber-600 dark:text-amber-400">
+                      ~{contract.daysRemainingCalendar}d {contract.hoursRemainingModulo}h
+                    </strong>
+                  </div>
+                )}
+              </div>
+
+              {/* Capital & Yield Financial Overview */}
+              <div className="grid grid-cols-2 gap-3 text-xs font-mono">
+                <div className={`p-4 rounded-2xl border space-y-1 ${
+                  isLightTheme ? 'bg-zinc-50 border-zinc-200' : 'bg-slate-950/80 border-slate-800'
+                }`}>
+                  <span className="text-[10px] text-zinc-400 uppercase font-bold tracking-wider block">Locked Principal</span>
+                  <span className={`text-base font-black ${isLightTheme ? 'text-zinc-900' : 'text-white'}`}>
+                    ${tradeCapital.toFixed(2)} USD
+                  </span>
+                  <span className="text-[9.5px] text-amber-500 font-semibold block">
+                    Active in Expert Trades
+                  </span>
+                </div>
+
+                <div className={`p-4 rounded-2xl border space-y-1 ${
+                  isLightTheme ? 'bg-zinc-50 border-zinc-200' : 'bg-slate-950/80 border-slate-800'
+                }`}>
+                  <span className="text-[10px] text-zinc-400 uppercase font-bold tracking-wider block">Accrued Profit</span>
+                  <span className="text-base font-black text-emerald-600 dark:text-emerald-400">
+                    +${netProfit.toFixed(2)} USD
+                  </span>
+                  <span className="text-[9.5px] text-emerald-500 font-semibold block">
+                    100% Free for Transfer
+                  </span>
+                </div>
+              </div>
+
+              {/* Policy & Guidance Notice Box */}
+              <div className={`p-3.5 rounded-2xl border text-xs flex items-start gap-3 ${
+                isLightTheme ? 'bg-blue-50/80 border-blue-200/90 text-blue-950' : 'bg-blue-950/40 border-blue-800/60 text-blue-200'
+              }`}>
+                <ShieldCheck size={18} className="text-blue-500 shrink-0 mt-0.5" />
+                <div className="space-y-1 leading-relaxed text-[11px]">
+                  <p className="font-bold">Contract Security & Funds Allocation</p>
+                  <p className="opacity-90">
+                    Your principal of <strong>${tradeCapital.toFixed(2)} USD</strong> is tied to this contract for <strong>{contract.durationDays} workdays</strong>. All profits earned remain 100% free and liquid for withdrawal or transfer at any time. Principal automatically unlocks at contract completion.
+                  </p>
+                </div>
+              </div>
+
+              {/* Modal Footer Action */}
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedContractForDetail(null)}
+                  className={`w-full py-3.5 rounded-2xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer shadow-md ${
+                    isLightTheme 
+                      ? 'bg-zinc-900 hover:bg-zinc-800 text-white' 
+                      : 'bg-slate-800 hover:bg-slate-700 text-white'
+                  }`}
+                >
+                  Close Details
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
     </div>
   );
