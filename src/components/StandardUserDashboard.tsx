@@ -603,33 +603,47 @@ export default function StandardUserDashboard({
     });
   };
 
+  // Helper to merge active trades per lead expert so cards and modal show 100% identical stats
+  const getMergedActiveContracts = (trades: UserCopyTrade[]): UserCopyTrade[] => {
+    const activeList = (trades || []).filter(t => t.status === 'ACTIVE');
+    const groupedMap: Record<string, UserCopyTrade> = {};
+
+    activeList.forEach((trade) => {
+      const key = trade.leadId || trade.leadName || trade.id;
+      const sigs = Array.isArray(trade.executedSignals) && trade.executedSignals.length > 0
+        ? trade.executedSignals
+        : trade.signalCode ? [{ code: trade.signalCode, time: trade.signalTime, executedAt: trade.createdAt || new Date().toISOString() }] : [];
+
+      if (!groupedMap[key]) {
+        groupedMap[key] = { 
+          ...trade, 
+          executedSignals: [...sigs] 
+        };
+      } else {
+        const existing = groupedMap[key];
+        existing.netProfit = parseFloat(((existing.netProfit || 0) + (trade.netProfit || 0)).toFixed(2));
+        existing.grossProfit = parseFloat(((existing.grossProfit || 0) + (trade.grossProfit || 0)).toFixed(2));
+        existing.commissionDeducted = parseFloat(((existing.commissionDeducted || 0) + (trade.commissionDeducted || 0)).toFixed(2));
+        existing.contractCapital = Math.max(existing.contractCapital || 0, trade.contractCapital || trade.amount || 0);
+        existing.executedSignals = [...(existing.executedSignals || []), ...sigs];
+      }
+    });
+
+    return Object.values(groupedMap);
+  };
+
   // Helper to calculate locked contract capital and free transferrable amount on copy trading
   const getCopyTradeLockedAndFree = () => {
     const tradeBal = profile?.tradeBalance ?? 0;
-    const now = new Date();
     const activeContractCapitalByLead: Record<string, number> = {};
 
-    (userCopyTrades || []).forEach((trade) => {
+    const mergedTrades = getMergedActiveContracts(userCopyTrades);
+    mergedTrades.forEach((trade) => {
       const leadKey = trade.leadId || trade.leadName || 'default-lead';
       const capital = trade.contractCapital || trade.amount || 0;
       if (capital > 0) {
-        const durationDays = trade.contractDurationDays || 30;
-        const startDate = trade.contractStartDate?.seconds 
-          ? new Date(trade.contractStartDate.seconds * 1000) 
-          : trade.createdAt?.seconds 
-          ? new Date(trade.createdAt.seconds * 1000) 
-          : new Date(trade.createdAt || Date.now());
-        
-        let workdaysCount = 0;
-        let curr = new Date(startDate);
-        while (curr < now) {
-          if (curr.getDay() !== 0) { // Exclude Sundays
-            workdaysCount++;
-          }
-          curr.setDate(curr.getDate() + 1);
-        }
-
-        if (workdaysCount < durationDays) {
+        const contract = getContractProgressDetails(trade);
+        if (!contract.isUnlocked && trade.status === 'ACTIVE') {
           activeContractCapitalByLead[leadKey] = Math.max(
             activeContractCapitalByLead[leadKey] || 0,
             capital
@@ -655,28 +669,37 @@ export default function StandardUserDashboard({
       : new Date(trade.createdAt || Date.now());
 
     const now = new Date();
+
+    // Determine signals per day for this lead trader
+    const lead = copyLeads.find(l => l.id === trade.leadId || l.name === trade.leadName) 
+      || DEFAULT_COPY_LEADS.find(l => l.id === trade.leadId || l.name === trade.leadName);
+    const numSignalsPerDay = Math.max(1, lead?.signals?.length || 2);
+
+    // Get executed signals list
+    const executedSignalsList = Array.isArray(trade.executedSignals) && trade.executedSignals.length > 0
+      ? trade.executedSignals
+      : trade.signalCode
+      ? [{ code: trade.signalCode, time: trade.signalTime, executedAt: trade.createdAt || new Date().toISOString() }]
+      : [];
     
-    // Calculate workdays elapsed (excluding Sundays)
-    let workdaysElapsed = 0;
-    let curr = new Date(startDate);
-    while (curr < now) {
-      if (curr.getDay() !== 0) {
-        workdaysElapsed++;
-      }
-      curr.setDate(curr.getDate() + 1);
-    }
+    const executedCount = executedSignalsList.length;
 
-    const clampedWorkdaysElapsed = Math.min(workdaysElapsed, durationDays);
-    const workdaysRemaining = Math.max(0, durationDays - clampedWorkdaysElapsed);
-    const progressPct = Math.min(100, Math.round((clampedWorkdaysElapsed / durationDays) * 100));
-    const isUnlocked = clampedWorkdaysElapsed >= durationDays;
+    // 1 workday is complete when a user has executed the signal codes of that day (numSignalsPerDay signal codes)
+    const workdaysElapsed = Math.min(
+      durationDays,
+      Math.floor(executedCount / numSignalsPerDay)
+    );
 
-    // Calculate target completion date (adding durationDays workdays, skipping Sundays)
+    const workdaysRemaining = Math.max(0, durationDays - workdaysElapsed);
+    const progressPct = Math.min(100, Math.round((workdaysElapsed / durationDays) * 100));
+    const isUnlocked = workdaysElapsed >= durationDays;
+
+    // Calculate target completion date (adding durationDays workdays, Monday to Saturday, skipping Sundays)
     let targetEndDate = new Date(startDate);
     let daysAdded = 0;
     while (daysAdded < durationDays) {
       targetEndDate.setDate(targetEndDate.getDate() + 1);
-      if (targetEndDate.getDay() !== 0) {
+      if (targetEndDate.getDay() !== 0) { // Sunday is 0, Monday-Saturday are 1-6
         daysAdded++;
       }
     }
@@ -691,7 +714,7 @@ export default function StandardUserDashboard({
       durationDays,
       startDate,
       targetEndDate,
-      workdaysElapsed: clampedWorkdaysElapsed,
+      workdaysElapsed,
       workdaysRemaining,
       progressPct,
       isUnlocked,
@@ -5820,27 +5843,7 @@ export default function StandardUserDashboard({
 
               {/* Active Copy Trade Contracts Section */}
               {(() => {
-                const activeList = userCopyTrades.filter(t => t.status === 'ACTIVE');
-                const groupedMap: Record<string, UserCopyTrade> = {};
-
-                activeList.forEach((trade) => {
-                  const key = trade.leadId || trade.leadName || trade.id;
-                  if (!groupedMap[key]) {
-                    groupedMap[key] = { ...trade };
-                  } else {
-                    const existing = groupedMap[key];
-                    existing.netProfit = parseFloat(((existing.netProfit || 0) + (trade.netProfit || 0)).toFixed(2));
-                    existing.grossProfit = parseFloat(((existing.grossProfit || 0) + (trade.grossProfit || 0)).toFixed(2));
-                    existing.commissionDeducted = parseFloat(((existing.commissionDeducted || 0) + (trade.commissionDeducted || 0)).toFixed(2));
-                    existing.contractCapital = Math.max(existing.contractCapital || 0, trade.contractCapital || trade.amount || 0);
-
-                    const ex1 = Array.isArray(existing.executedSignals) ? existing.executedSignals : [];
-                    const ex2 = Array.isArray(trade.executedSignals) ? trade.executedSignals : [];
-                    existing.executedSignals = [...ex1, ...ex2];
-                  }
-                });
-
-                const activeContracts = Object.values(groupedMap);
+                const activeContracts = getMergedActiveContracts(userCopyTrades);
                 if (activeContracts.length === 0) return null;
 
                 return (
@@ -6947,21 +6950,26 @@ export default function StandardUserDashboard({
 
       {/* Active Contract Detail Modal */}
       {selectedContractForDetail && (() => {
-        const trade = selectedContractForDetail;
+        const activeContracts = getMergedActiveContracts(userCopyTrades);
+        const currentLeadKey = selectedContractForDetail.leadId || selectedContractForDetail.leadName || selectedContractForDetail.id;
+
+        const freshTrade = activeContracts.find(t => (t.leadId || t.leadName || t.id) === currentLeadKey);
+        const trade = freshTrade || selectedContractForDetail;
+
         const contract = getContractProgressDetails(trade);
         const tradeCapital = trade.contractCapital || trade.amount || 0;
         const netProfit = trade.netProfit || 0;
 
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto animate-fade-in">
-            <div className={`w-full max-w-lg rounded-3xl border shadow-2xl overflow-hidden p-6 sm:p-7 space-y-6 relative my-8 ${
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto animate-fade-in">
+            <div className={`w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl border shadow-2xl p-4 sm:p-6 space-y-4 sm:space-y-5 relative my-auto ${
               isLightTheme ? 'bg-white border-zinc-200' : 'bg-slate-900 border-slate-800 text-white'
             }`}>
               {/* Close Button */}
               <button
                 type="button"
                 onClick={() => setSelectedContractForDetail(null)}
-                className={`absolute top-5 right-5 p-2 rounded-full border transition-all cursor-pointer ${
+                className={`absolute top-4 right-4 p-2 rounded-full border transition-all cursor-pointer z-10 ${
                   isLightTheme 
                     ? 'bg-zinc-100 hover:bg-zinc-200 text-zinc-600 border-zinc-200' 
                     : 'bg-slate-800 hover:bg-slate-700 text-zinc-300 border-slate-700'
@@ -6971,62 +6979,62 @@ export default function StandardUserDashboard({
               </button>
 
               {/* Modal Header */}
-              <div className="flex items-center gap-4 pr-8">
+              <div className="flex items-center gap-3 sm:gap-4 pr-10">
                 <img 
                   src={trade.leadPhotoUrl} 
                   alt={trade.leadName} 
-                  className="w-14 h-14 rounded-full object-cover border-2 border-emerald-500 shrink-0 shadow-sm"
+                  className="w-12 h-12 sm:w-14 sm:h-14 rounded-full object-cover border-2 border-emerald-500 shrink-0 shadow-sm"
                   onError={(e) => {
                     (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=400';
                   }}
                 />
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 whitespace-nowrap">
                       Copy Contract
                     </span>
                     {contract.isUnlocked ? (
-                      <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
+                      <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 flex items-center gap-1 whitespace-nowrap">
                         <Unlock size={10} /> Unlocked
                       </span>
                     ) : (
-                      <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 flex items-center gap-1">
-                        <Lock size={10} /> Locked
+                      <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 flex items-center gap-1 whitespace-nowrap">
+                        <Lock size={10} /> Locked ({contract.progressPct}%)
                       </span>
                     )}
                   </div>
-                  <h3 className={`text-lg font-black mt-1 truncate ${isLightTheme ? 'text-zinc-900' : 'text-white'}`}>
+                  <h3 className={`text-base sm:text-lg font-black mt-1 truncate ${isLightTheme ? 'text-zinc-900' : 'text-white'}`}>
                     {trade.leadName}
                   </h3>
-                  <div className="flex items-center gap-2 text-xs font-mono text-zinc-500 mt-0.5">
+                  <div className="flex items-center gap-2 text-[11px] sm:text-xs font-mono text-zinc-500 mt-0.5">
                     <span>Pair: <strong className="text-amber-500 font-bold">{trade.tradingPair || 'BTC/USDT'}</strong></span>
                   </div>
                 </div>
               </div>
 
               {/* Timeline & Progress Breakdown Card */}
-              <div className={`p-4 sm:p-5 rounded-2xl border space-y-4 ${
+              <div className={`p-3.5 sm:p-5 rounded-2xl border space-y-3.5 ${
                 isLightTheme ? 'bg-zinc-50 border-zinc-200' : 'bg-slate-950/80 border-slate-800'
               }`}>
-                <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-black uppercase tracking-wider flex items-center gap-1.5 text-amber-500">
-                    <Clock size={15} />
-                    Contract Progress Period
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                  <h4 className="text-[11px] sm:text-xs font-black uppercase tracking-wider flex items-center gap-1.5 text-amber-500">
+                    <Clock size={14} className="shrink-0" />
+                    <span>Contract Progress Period</span>
                   </h4>
-                  <span className="text-xs font-black font-mono text-amber-600 dark:text-amber-400">
+                  <span className="text-[11px] sm:text-xs font-black font-mono text-amber-600 dark:text-amber-400">
                     {contract.isUnlocked ? '100% Completed' : `${contract.workdaysRemaining} Workdays Remaining`}
                   </span>
                 </div>
 
                 {/* Main Progress Bar */}
-                <div className="space-y-2">
-                  <div className="w-full h-3 rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden p-0.5 relative">
+                <div className="space-y-1.5">
+                  <div className="w-full h-2.5 sm:h-3 rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden p-0.5 relative">
                     <div 
                       className="h-full bg-gradient-to-r from-amber-500 via-emerald-500 to-emerald-400 rounded-full transition-all duration-700"
                       style={{ width: `${contract.progressPct}%` }}
                     />
                   </div>
-                  <div className="flex justify-between items-center text-xs font-mono">
+                  <div className="flex justify-between items-center text-[11px] sm:text-xs font-mono">
                     <span className={isLightTheme ? 'text-zinc-700' : 'text-zinc-300'}>
                       <strong>{contract.workdaysElapsed}</strong> of <strong>{contract.durationDays} Workdays</strong>
                     </span>
@@ -7037,27 +7045,27 @@ export default function StandardUserDashboard({
                 </div>
 
                 {/* Countdown & Dates */}
-                <div className="grid grid-cols-2 gap-3 pt-3 border-t border-zinc-200 dark:border-zinc-800/80 text-xs font-mono">
+                <div className="grid grid-cols-2 gap-2 sm:gap-3 pt-2.5 border-t border-zinc-200 dark:border-zinc-800/80 text-[11px] sm:text-xs font-mono">
                   <div>
-                    <span className="text-zinc-400 block uppercase font-bold text-[9px] tracking-wider">Start Date</span>
-                    <span className={`font-black ${isLightTheme ? 'text-zinc-900' : 'text-zinc-100'}`}>
+                    <span className="text-zinc-400 block uppercase font-bold text-[8.5px] sm:text-[9px] tracking-wider">Start Date</span>
+                    <span className={`font-black block truncate ${isLightTheme ? 'text-zinc-900' : 'text-zinc-100'}`}>
                       {contract.startDate.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
                     </span>
                   </div>
                   <div className="text-right">
-                    <span className="text-zinc-400 block uppercase font-bold text-[9px] tracking-wider">Target Completion</span>
-                    <span className={`font-black ${isLightTheme ? 'text-zinc-900' : 'text-zinc-100'}`}>
+                    <span className="text-zinc-400 block uppercase font-bold text-[8.5px] sm:text-[9px] tracking-wider">Target Completion</span>
+                    <span className={`font-black block truncate ${isLightTheme ? 'text-zinc-900' : 'text-zinc-100'}`}>
                       {contract.targetEndDate.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
                     </span>
                   </div>
                 </div>
 
                 {!contract.isUnlocked && (
-                  <div className={`p-3 rounded-xl text-xs flex items-center justify-between border font-mono ${
+                  <div className={`p-2.5 sm:p-3 rounded-xl text-[11px] sm:text-xs flex items-center justify-between gap-2 border font-mono ${
                     isLightTheme ? 'bg-amber-500/10 border-amber-200 text-amber-900' : 'bg-amber-500/10 border-amber-500/20 text-amber-200'
                   }`}>
-                    <span className="font-semibold text-[11px]">Estimated Remaining Time:</span>
-                    <strong className="font-black text-amber-600 dark:text-amber-400">
+                    <span className="font-semibold text-[10.5px] sm:text-[11px]">Estimated Remaining Time:</span>
+                    <strong className="font-black text-amber-600 dark:text-amber-400 whitespace-nowrap">
                       ~{contract.daysRemainingCalendar}d {contract.hoursRemainingModulo}h
                     </strong>
                   </div>
@@ -7065,38 +7073,38 @@ export default function StandardUserDashboard({
               </div>
 
               {/* Capital & Yield Financial Overview */}
-              <div className="grid grid-cols-2 gap-3 text-xs font-mono">
-                <div className={`p-4 rounded-2xl border space-y-1 ${
+              <div className="grid grid-cols-2 gap-2 sm:gap-3 text-xs font-mono">
+                <div className={`p-3 sm:p-4 rounded-2xl border space-y-0.5 sm:space-y-1 ${
                   isLightTheme ? 'bg-zinc-50 border-zinc-200' : 'bg-slate-950/80 border-slate-800'
                 }`}>
-                  <span className="text-[10px] text-zinc-400 uppercase font-bold tracking-wider block">Locked Principal</span>
-                  <span className={`text-base font-black ${isLightTheme ? 'text-zinc-900' : 'text-white'}`}>
+                  <span className="text-[9px] sm:text-[10px] text-zinc-400 uppercase font-bold tracking-wider block truncate">Locked Principal</span>
+                  <span className={`text-sm sm:text-base font-black block truncate ${isLightTheme ? 'text-zinc-900' : 'text-white'}`}>
                     ${tradeCapital.toFixed(2)} USD
                   </span>
-                  <span className="text-[9.5px] text-amber-500 font-semibold block">
+                  <span className="text-[9px] sm:text-[9.5px] text-amber-500 font-semibold block truncate">
                     Active in Expert Trades
                   </span>
                 </div>
 
-                <div className={`p-4 rounded-2xl border space-y-1 ${
+                <div className={`p-3 sm:p-4 rounded-2xl border space-y-0.5 sm:space-y-1 ${
                   isLightTheme ? 'bg-zinc-50 border-zinc-200' : 'bg-slate-950/80 border-slate-800'
                 }`}>
-                  <span className="text-[10px] text-zinc-400 uppercase font-bold tracking-wider block">Accrued Profit</span>
-                  <span className="text-base font-black text-emerald-600 dark:text-emerald-400">
+                  <span className="text-[9px] sm:text-[10px] text-zinc-400 uppercase font-bold tracking-wider block truncate">Accrued Profit</span>
+                  <span className="text-sm sm:text-base font-black text-emerald-600 dark:text-emerald-400 block truncate">
                     +${netProfit.toFixed(2)} USD
                   </span>
-                  <span className="text-[9.5px] text-emerald-500 font-semibold block">
+                  <span className="text-[9px] sm:text-[9.5px] text-emerald-500 font-semibold block truncate">
                     100% Free for Transfer
                   </span>
                 </div>
               </div>
 
               {/* Policy & Guidance Notice Box */}
-              <div className={`p-3.5 rounded-2xl border text-xs flex items-start gap-3 ${
+              <div className={`p-3 sm:p-3.5 rounded-2xl border text-xs flex items-start gap-2.5 ${
                 isLightTheme ? 'bg-blue-50/80 border-blue-200/90 text-blue-950' : 'bg-blue-950/40 border-blue-800/60 text-blue-200'
               }`}>
                 <ShieldCheck size={18} className="text-blue-500 shrink-0 mt-0.5" />
-                <div className="space-y-1 leading-relaxed text-[11px]">
+                <div className="space-y-1 leading-relaxed text-[10.5px] sm:text-[11px]">
                   <p className="font-bold">Contract Security & Funds Allocation</p>
                   <p className="opacity-90">
                     Your principal of <strong>${tradeCapital.toFixed(2)} USD</strong> is tied to this contract for <strong>{contract.durationDays} workdays</strong>. All profits earned remain 100% free and liquid for withdrawal or transfer at any time. Principal automatically unlocks at contract completion.
@@ -7105,11 +7113,11 @@ export default function StandardUserDashboard({
               </div>
 
               {/* Modal Footer Action */}
-              <div className="pt-2">
+              <div className="pt-1">
                 <button
                   type="button"
                   onClick={() => setSelectedContractForDetail(null)}
-                  className={`w-full py-3.5 rounded-2xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer shadow-md ${
+                  className={`w-full py-3 sm:py-3.5 rounded-2xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer shadow-md active:scale-[0.99] ${
                     isLightTheme 
                       ? 'bg-zinc-900 hover:bg-zinc-800 text-white' 
                       : 'bg-slate-800 hover:bg-slate-700 text-white'
