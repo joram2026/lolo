@@ -3,7 +3,7 @@ const config = {
   appName: 'ARBITRAGE',
   webDir: 'dist',
   server: {
-    url: 'https://lolo-navy.vercel.app/',
+    url: 'https://www.morex.site/',
     androidScheme: 'https',
     cleartext: true
   },
