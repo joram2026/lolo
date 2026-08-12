@@ -207,7 +207,18 @@ export interface UserCopyTrade {
   contractCapital?: number;
   contractStartDate?: any;
   contractDurationDays?: number;
-  executedSignals?: { code: string; time: string; netProfit?: number; executedAt: any }[];
+  executedSignals?: { 
+    code: string; 
+    time: string; 
+    netProfit?: number; 
+    grossProfit?: number;
+    commissionCut?: number;
+    amount?: number;
+    tradingPair?: string;
+    entryPrice?: string;
+    exitPrice?: string;
+    executedAt: any 
+  }[];
   createdAt: any;
   updatedAt?: any;
 }

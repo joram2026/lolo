@@ -984,7 +984,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                 </label>
                 <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center bg-white/80 border border-zinc-200 p-2 sm:p-2.5 rounded-xl font-mono text-xs">
                   <span className="text-zinc-700 font-medium select-all truncate flex-1 px-1 py-1 sm:py-0 text-[11px] sm:text-xs">
-                    https://lolo-navy.vercel.app/#/signup?ref={(profile as any)?.uniqueCode || ''}
+                    https://www.morex.site/#/signup?ref={(profile as any)?.uniqueCode || ''}
                   </span>
                   <button
                     type="button"

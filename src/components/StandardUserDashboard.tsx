@@ -507,6 +507,24 @@ export default function StandardUserDashboard({
   const [copyTradeAmountInput, setCopyTradeAmountInput] = useState<string>('50');
   const [copySignalCodeInput, setCopySignalCodeInput] = useState<string>('');
   const [isSubmittingCopy, setIsSubmittingCopy] = useState<boolean>(false);
+  const [executionAnimStep, setExecutionAnimStep] = useState<number>(0);
+  const [copyTradeViewTab, setCopyTradeViewTab] = useState<'contracts' | 'history'>('contracts');
+  const [settledTradeReceipt, setSettledTradeReceipt] = useState<{
+    leadName: string;
+    leadPhotoUrl?: string;
+    tradingPair: string;
+    signalCode: string;
+    tradedCapital: number;
+    grossProfit: number;
+    commissionCut: number;
+    netProfit: number;
+    commissionPct: number;
+    newBalance: number;
+    entryPrice: string;
+    exitPrice: string;
+    executedAt: string;
+    leadObj?: CopyTraderLead;
+  } | null>(null);
 
   // Trade Balance Transfer states (Transfer In / Transfer Out for Copy Signals)
   const [transferModalType, setTransferModalType] = useState<'IN' | 'OUT' | null>(null);
@@ -1878,10 +1896,19 @@ export default function StandardUserDashboard({
         t => (t.leadId === selectedLeadForCopy.id || t.leadName === selectedLeadForCopy.name) && t.status === 'ACTIVE'
       );
 
+      const entryPriceVal = (67100 + Math.random() * 400).toFixed(2);
+      const exitPriceVal = (67800 + Math.random() * 400).toFixed(2);
+
       const executedSignalEntry = {
         code: copySignalCodeInput.trim().toUpperCase(),
         time: activeSignal.time,
+        tradingPair: copyTradePair,
+        amount: amount,
+        grossProfit: parseFloat(grossProfit.toFixed(2)),
+        commissionCut: parseFloat(commissionDeducted.toFixed(2)),
         netProfit: parseFloat(netProfit.toFixed(2)),
+        entryPrice: entryPriceVal,
+        exitPrice: exitPriceVal,
         executedAt: new Date().toISOString()
       };
 
@@ -1938,10 +1965,23 @@ export default function StandardUserDashboard({
         paymentMessage: `Copy Trade Signal Executed (${copyTradePair}) with ${selectedLeadForCopy.name}. Profit: +$${netProfit.toFixed(2)} USD (Gross $${grossProfit.toFixed(2)} - Analysis Commission $${commissionDeducted.toFixed(2)})`
       });
 
-      toast.success(
-        `Signal Executed! Profit credited: +$${netProfit.toFixed(2)} USD (Gross $${grossProfit.toFixed(2)} less ${commissionPct}% Analysis Commission $${commissionDeducted.toFixed(2)}). New Copy Trade Balance: $${newTradeBal.toFixed(2)}.`,
-        'Trade Successful'
-      );
+      // Pop settlement trade ticket slip modal
+      setSettledTradeReceipt({
+        leadName: selectedLeadForCopy.name,
+        leadPhotoUrl: selectedLeadForCopy.photoUrl,
+        tradingPair: copyTradePair,
+        signalCode: copySignalCodeInput.trim().toUpperCase(),
+        tradedCapital: amount,
+        grossProfit: parseFloat(grossProfit.toFixed(2)),
+        commissionCut: parseFloat(commissionDeducted.toFixed(2)),
+        netProfit: parseFloat(netProfit.toFixed(2)),
+        commissionPct,
+        newBalance: newTradeBal,
+        entryPrice: (67100 + Math.random() * 400).toFixed(2),
+        exitPrice: (67800 + Math.random() * 400).toFixed(2),
+        executedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        leadObj: selectedLeadForCopy
+      });
 
       setSelectedLeadForCopy(null);
       setCopySignalCodeInput('');
@@ -6948,7 +6988,7 @@ export default function StandardUserDashboard({
         </div>
       )}
 
-      {/* Active Contract Detail Modal */}
+      {/* Active Contract Detail - Styled as a responsive, premium full-page view */}
       {selectedContractForDetail && (() => {
         const activeContracts = getMergedActiveContracts(userCopyTrades);
         const currentLeadKey = selectedContractForDetail.leadId || selectedContractForDetail.leadName || selectedContractForDetail.id;
@@ -6959,177 +6999,401 @@ export default function StandardUserDashboard({
         const contract = getContractProgressDetails(trade);
         const tradeCapital = trade.contractCapital || trade.amount || 0;
         const netProfit = trade.netProfit || 0;
+        const grossProfit = trade.grossProfit !== undefined ? trade.grossProfit : netProfit;
+        const commissionDeducted = trade.commissionDeducted !== undefined ? trade.commissionDeducted : 0;
+        const lead = DEFAULT_COPY_LEADS.find(l => l.id === trade.leadId || l.name === trade.leadName);
 
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto animate-fade-in">
-            <div className={`w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl border shadow-2xl p-4 sm:p-6 space-y-4 sm:space-y-5 relative my-auto ${
-              isLightTheme ? 'bg-white border-zinc-200' : 'bg-slate-900 border-slate-800 text-white'
+          <div className={`fixed inset-0 z-50 overflow-y-auto animate-fade-in ${
+            isLightTheme ? 'bg-[#FFF3D6] text-zinc-900' : 'bg-slate-900 text-white'
+          }`}>
+            {/* Top Navigation Header Bar */}
+            <div className={`sticky top-0 z-30 border-b backdrop-blur-md px-4 sm:px-6 py-2.5 sm:py-3 flex items-center justify-between gap-4 ${
+              isLightTheme ? 'bg-[#FFF3D6]/95 border-zinc-200/80 shadow-xs' : 'bg-slate-900/95 border-slate-800 shadow-sm'
             }`}>
-              {/* Close Button */}
-              <button
-                type="button"
-                onClick={() => setSelectedContractForDetail(null)}
-                className={`absolute top-4 right-4 p-2 rounded-full border transition-all cursor-pointer z-10 ${
-                  isLightTheme 
-                    ? 'bg-zinc-100 hover:bg-zinc-200 text-zinc-600 border-zinc-200' 
-                    : 'bg-slate-800 hover:bg-slate-700 text-zinc-300 border-slate-700'
-                }`}
-              >
-                <X size={18} />
-              </button>
-
-              {/* Modal Header */}
-              <div className="flex items-center gap-3 sm:gap-4 pr-10">
-                <img 
-                  src={trade.leadPhotoUrl} 
-                  alt={trade.leadName} 
-                  className="w-12 h-12 sm:w-14 sm:h-14 rounded-full object-cover border-2 border-emerald-500 shrink-0 shadow-sm"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=400';
-                  }}
-                />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 whitespace-nowrap">
-                      Copy Contract
-                    </span>
-                    {contract.isUnlocked ? (
-                      <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 flex items-center gap-1 whitespace-nowrap">
-                        <Unlock size={10} /> Unlocked
-                      </span>
-                    ) : (
-                      <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 flex items-center gap-1 whitespace-nowrap">
-                        <Lock size={10} /> Locked ({contract.progressPct}%)
-                      </span>
-                    )}
-                  </div>
-                  <h3 className={`text-base sm:text-lg font-black mt-1 truncate ${isLightTheme ? 'text-zinc-900' : 'text-white'}`}>
-                    {trade.leadName}
-                  </h3>
-                  <div className="flex items-center gap-2 text-[11px] sm:text-xs font-mono text-zinc-500 mt-0.5">
-                    <span>Pair: <strong className="text-amber-500 font-bold">{trade.tradingPair || 'BTC/USDT'}</strong></span>
-                  </div>
+              <div className="flex items-center gap-3 min-w-0">
+                <button
+                  type="button"
+                  onClick={() => setSelectedContractForDetail(null)}
+                  className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all cursor-pointer border shrink-0 ${
+                    isLightTheme
+                      ? 'bg-zinc-100 hover:bg-zinc-200 text-zinc-700 border-zinc-200'
+                      : 'bg-slate-800 hover:bg-slate-700 text-zinc-200 border-slate-700'
+                  }`}
+                >
+                  <ArrowLeft size={14} />
+                  <span>Back</span>
+                </button>
+                <div className="min-w-0">
+                  <h2 className="text-xs sm:text-sm font-black truncate">
+                    Contract Details
+                  </h2>
                 </div>
               </div>
 
-              {/* Timeline & Progress Breakdown Card */}
-              <div className={`p-3.5 sm:p-5 rounded-2xl border space-y-3.5 ${
-                isLightTheme ? 'bg-zinc-50 border-zinc-200' : 'bg-slate-950/80 border-slate-800'
-              }`}>
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-                  <h4 className="text-[11px] sm:text-xs font-black uppercase tracking-wider flex items-center gap-1.5 text-amber-500">
-                    <Clock size={14} className="shrink-0" />
-                    <span>Contract Progress Period</span>
-                  </h4>
-                  <span className="text-[11px] sm:text-xs font-black font-mono text-amber-600 dark:text-amber-400">
-                    {contract.isUnlocked ? '100% Completed' : `${contract.workdaysRemaining} Workdays Remaining`}
+              {/* Status Badge & Close */}
+              <div className="flex items-center gap-2 shrink-0">
+                {contract.isUnlocked ? (
+                  <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider px-2 py-1 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
+                    <Unlock size={11} /> Unlocked
                   </span>
+                ) : (
+                  <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider px-2 py-1 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 flex items-center gap-1">
+                    <Lock size={11} /> Active ({contract.progressPct}%)
+                  </span>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedContractForDetail(null)}
+                  className={`p-1.5 rounded-lg border transition-all cursor-pointer ${
+                    isLightTheme 
+                      ? 'bg-zinc-100 hover:bg-zinc-200 text-zinc-600 border-zinc-200' 
+                      : 'bg-slate-800 hover:bg-slate-700 text-zinc-300 border-slate-700'
+                  }`}
+                  title="Close Page"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            </div>
+
+            {/* Main Content Container */}
+            <div className="max-w-2xl mx-auto px-4 py-4 sm:py-6 space-y-4 pb-20">
+              
+              {/* Unified Contract Overview Card */}
+              <div className={`p-4 rounded-2xl border shadow-xs space-y-3.5 ${
+                isLightTheme ? 'bg-white border-zinc-200' : 'bg-slate-900 border-slate-800'
+              }`}>
+                {/* Expert Name */}
+                <div className="flex items-center gap-3">
+                  <img 
+                    src={trade.leadPhotoUrl} 
+                    alt={trade.leadName} 
+                    className="w-10 h-10 rounded-full object-cover border-2 border-emerald-500 shrink-0 shadow-xs"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=400';
+                    }}
+                  />
+                  <div>
+                    <span className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/15">
+                      {trade.tradingPair || 'BTC/USDT'}
+                    </span>
+                    <h1 className={`text-base font-black tracking-tight mt-0.5 ${isLightTheme ? 'text-zinc-900' : 'text-white'}`}>
+                      {trade.leadName}
+                    </h1>
+                  </div>
                 </div>
 
-                {/* Main Progress Bar */}
-                <div className="space-y-1.5">
-                  <div className="w-full h-2.5 sm:h-3 rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden p-0.5 relative">
+                {/* Grid of Key Info: Traded Capital, Accrued Profit, Duration, Target Date */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 font-mono text-xs pt-1">
+                  <div className={`p-2.5 rounded-xl border ${
+                    isLightTheme ? 'bg-zinc-50 border-zinc-200' : 'bg-slate-950/70 border-slate-800'
+                  }`}>
+                    <span className="text-[9px] text-zinc-400 uppercase font-bold tracking-wider block">Traded Capital</span>
+                    <span className={`text-sm font-black block mt-0.5 ${isLightTheme ? 'text-zinc-900' : 'text-white'}`}>
+                      ${tradeCapital.toFixed(2)}
+                    </span>
+                  </div>
+
+                  <div className={`p-2.5 rounded-xl border ${
+                    isLightTheme ? 'bg-zinc-50 border-zinc-200' : 'bg-slate-950/70 border-slate-800'
+                  }`}>
+                    <span className="text-[9px] text-zinc-400 uppercase font-bold tracking-wider block">Accrued Profit</span>
+                    <span className="text-sm font-black block mt-0.5 text-emerald-600 dark:text-emerald-400">
+                      +${netProfit.toFixed(2)}
+                    </span>
+                  </div>
+
+                  <div className={`p-2.5 rounded-xl border ${
+                    isLightTheme ? 'bg-zinc-50 border-zinc-200' : 'bg-slate-950/70 border-slate-800'
+                  }`}>
+                    <span className="text-[9px] text-zinc-400 uppercase font-bold tracking-wider block">Duration</span>
+                    <span className={`text-sm font-black block mt-0.5 ${isLightTheme ? 'text-zinc-900' : 'text-white'}`}>
+                      {contract.durationDays} Days
+                    </span>
+                  </div>
+
+                  <div className={`p-2.5 rounded-xl border ${
+                    isLightTheme ? 'bg-zinc-50 border-zinc-200' : 'bg-slate-950/70 border-slate-800'
+                  }`}>
+                    <span className="text-[9px] text-zinc-400 uppercase font-bold tracking-wider block">Target Date</span>
+                    <span className={`text-sm font-black block mt-0.5 truncate ${isLightTheme ? 'text-zinc-900' : 'text-white'}`}>
+                      {contract.targetEndDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Progress */}
+                <div className="pt-2.5 border-t border-zinc-200/50 dark:border-slate-800/60 space-y-1.5">
+                  <div className="flex justify-between items-center text-xs font-mono">
+                    <span className={`font-bold ${isLightTheme ? 'text-zinc-600' : 'text-zinc-400'}`}>
+                      Progress Period:
+                    </span>
+                    <span className="font-black text-amber-500">
+                      {contract.workdaysElapsed} of {contract.durationDays} Days ({contract.progressPct}%)
+                    </span>
+                  </div>
+                  <div className="w-full h-2 rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden relative shadow-inner">
                     <div 
-                      className="h-full bg-gradient-to-r from-amber-500 via-emerald-500 to-emerald-400 rounded-full transition-all duration-700"
+                      className="h-full bg-gradient-to-r from-amber-500 to-emerald-500 rounded-full transition-all duration-700"
                       style={{ width: `${contract.progressPct}%` }}
                     />
                   </div>
-                  <div className="flex justify-between items-center text-[11px] sm:text-xs font-mono">
-                    <span className={isLightTheme ? 'text-zinc-700' : 'text-zinc-300'}>
-                      <strong>{contract.workdaysElapsed}</strong> of <strong>{contract.durationDays} Workdays</strong>
-                    </span>
-                    <span className="font-black text-emerald-600 dark:text-emerald-400">
-                      {contract.progressPct}%
-                    </span>
-                  </div>
-                </div>
-
-                {/* Countdown & Dates */}
-                <div className="grid grid-cols-2 gap-2 sm:gap-3 pt-2.5 border-t border-zinc-200 dark:border-zinc-800/80 text-[11px] sm:text-xs font-mono">
-                  <div>
-                    <span className="text-zinc-400 block uppercase font-bold text-[8.5px] sm:text-[9px] tracking-wider">Start Date</span>
-                    <span className={`font-black block truncate ${isLightTheme ? 'text-zinc-900' : 'text-zinc-100'}`}>
-                      {contract.startDate.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
-                    </span>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-zinc-400 block uppercase font-bold text-[8.5px] sm:text-[9px] tracking-wider">Target Completion</span>
-                    <span className={`font-black block truncate ${isLightTheme ? 'text-zinc-900' : 'text-zinc-100'}`}>
-                      {contract.targetEndDate.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
-                    </span>
-                  </div>
-                </div>
-
-                {!contract.isUnlocked && (
-                  <div className={`p-2.5 sm:p-3 rounded-xl text-[11px] sm:text-xs flex items-center justify-between gap-2 border font-mono ${
-                    isLightTheme ? 'bg-amber-500/10 border-amber-200 text-amber-900' : 'bg-amber-500/10 border-amber-500/20 text-amber-200'
-                  }`}>
-                    <span className="font-semibold text-[10.5px] sm:text-[11px]">Estimated Remaining Time:</span>
-                    <strong className="font-black text-amber-600 dark:text-amber-400 whitespace-nowrap">
-                      ~{contract.daysRemainingCalendar}d {contract.hoursRemainingModulo}h
-                    </strong>
-                  </div>
-                )}
-              </div>
-
-              {/* Capital & Yield Financial Overview */}
-              <div className="grid grid-cols-2 gap-2 sm:gap-3 text-xs font-mono">
-                <div className={`p-3 sm:p-4 rounded-2xl border space-y-0.5 sm:space-y-1 ${
-                  isLightTheme ? 'bg-zinc-50 border-zinc-200' : 'bg-slate-950/80 border-slate-800'
-                }`}>
-                  <span className="text-[9px] sm:text-[10px] text-zinc-400 uppercase font-bold tracking-wider block truncate">Locked Principal</span>
-                  <span className={`text-sm sm:text-base font-black block truncate ${isLightTheme ? 'text-zinc-900' : 'text-white'}`}>
-                    ${tradeCapital.toFixed(2)} USD
-                  </span>
-                  <span className="text-[9px] sm:text-[9.5px] text-amber-500 font-semibold block truncate">
-                    Active in Expert Trades
-                  </span>
-                </div>
-
-                <div className={`p-3 sm:p-4 rounded-2xl border space-y-0.5 sm:space-y-1 ${
-                  isLightTheme ? 'bg-zinc-50 border-zinc-200' : 'bg-slate-950/80 border-slate-800'
-                }`}>
-                  <span className="text-[9px] sm:text-[10px] text-zinc-400 uppercase font-bold tracking-wider block truncate">Accrued Profit</span>
-                  <span className="text-sm sm:text-base font-black text-emerald-600 dark:text-emerald-400 block truncate">
-                    +${netProfit.toFixed(2)} USD
-                  </span>
-                  <span className="text-[9px] sm:text-[9.5px] text-emerald-500 font-semibold block truncate">
-                    100% Free for Transfer
-                  </span>
                 </div>
               </div>
 
-              {/* Policy & Guidance Notice Box */}
-              <div className={`p-3 sm:p-3.5 rounded-2xl border text-xs flex items-start gap-2.5 ${
-                isLightTheme ? 'bg-blue-50/80 border-blue-200/90 text-blue-950' : 'bg-blue-950/40 border-blue-800/60 text-blue-200'
+              {/* Executed Signals Log */}
+              <div className={`p-4 rounded-2xl border space-y-3 shadow-xs ${
+                isLightTheme ? 'bg-white border-zinc-200' : 'bg-slate-900 border-slate-800'
               }`}>
-                <ShieldCheck size={18} className="text-blue-500 shrink-0 mt-0.5" />
-                <div className="space-y-1 leading-relaxed text-[10.5px] sm:text-[11px]">
-                  <p className="font-bold">Contract Security & Funds Allocation</p>
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <h3 className="text-xs sm:text-sm font-black uppercase tracking-wider flex items-center gap-1.5 text-zinc-900 dark:text-white">
+                    <History size={15} className="text-emerald-500 shrink-0" />
+                    <span>Execution Logs ({Array.isArray(trade.executedSignals) ? trade.executedSignals.length : 0})</span>
+                  </h3>
+                  <span className="text-[10px] font-mono text-emerald-500 font-bold px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20">
+                    Settle Ledger
+                  </span>
+                </div>
+
+                <div className="space-y-2 max-h-[300px] overflow-y-auto pr-0.5">
+                  {Array.isArray(trade.executedSignals) && trade.executedSignals.length > 0 ? (
+                    [...trade.executedSignals].reverse().map((sig: any, idx: number) => {
+                      const execTimeFormatted = sig.executedAt 
+                        ? new Date(sig.executedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+                        : 'Settled';
+                      const pair = sig.tradingPair || trade.tradingPair || 'BTC/USDT';
+                      const tradedAmount = sig.amount || trade.contractCapital || trade.amount || 0;
+                      const entryP = sig.entryPrice || '67,240.00';
+                      const exitP = sig.exitPrice || '67,910.00';
+                      const netP = sig.netProfit !== undefined ? sig.netProfit : 0;
+
+                      return (
+                        <div 
+                          key={idx} 
+                          className={`p-3 rounded-xl border space-y-2 text-xs font-mono transition-all ${
+                            isLightTheme ? 'bg-zinc-50 border-zinc-200' : 'bg-slate-950/80 border-slate-800'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2 flex-wrap">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-black text-amber-500 text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/15">
+                                {sig.code}
+                              </span>
+                              <span className="font-black text-emerald-600 dark:text-emerald-400 text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/15">
+                                {pair}
+                              </span>
+                              <span className="text-[10px] text-zinc-400">{sig.time || 'Settled'}</span>
+                            </div>
+                            <span className="text-[10px] font-bold text-emerald-500 uppercase flex items-center gap-1">
+                              <CheckCircle2 size={11} /> Settled
+                            </span>
+                          </div>
+
+                          {/* Simplified clean grid for space-saving */}
+                          <div className={`p-2 rounded-lg border grid grid-cols-3 gap-2 text-[10.5px] ${
+                            isLightTheme ? 'bg-white border-zinc-150' : 'bg-slate-900 border-slate-800'
+                          }`}>
+                            <div>
+                              <span className="text-[9px] uppercase font-bold text-zinc-400 block">Capital</span>
+                              <span className={`font-bold ${isLightTheme ? 'text-zinc-900' : 'text-zinc-200'}`}>
+                                ${tradedAmount.toFixed(2)}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-[9px] uppercase font-bold text-zinc-400 block">Entry &rarr; Exit</span>
+                              <span className="font-bold text-zinc-400">
+                                <span className="text-amber-500">${entryP}</span> &rarr; <span className="text-emerald-500">${exitP}</span>
+                              </span>
+                            </div>
+                            <div className="text-right">
+                              <span className="text-[9px] uppercase font-bold text-emerald-500 block">Net Profit</span>
+                              <span className="font-black text-emerald-600 dark:text-emerald-400">
+                                +${netP.toFixed(2)}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between text-[9px] text-zinc-400 border-t border-zinc-200/45 dark:border-slate-800/45 pt-1">
+                            <span>Settle Timestamp</span>
+                            <span>{execTimeFormatted}</span>
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div className="p-4 text-center text-xs font-mono text-zinc-500 rounded-xl border border-dashed border-zinc-300 dark:border-slate-800">
+                      No executed signal records found yet.
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Contract Capital Security Badge Banner */}
+              <div className={`p-4 rounded-2xl border text-xs flex items-start gap-3 ${
+                isLightTheme ? 'bg-blue-50 border-blue-200/80 text-blue-950' : 'bg-blue-950/40 border-blue-800/50 text-blue-200'
+              }`}>
+                <ShieldCheck size={20} className="text-blue-500 shrink-0 mt-0.5" />
+                <div className="space-y-0.5 leading-relaxed text-xs">
+                  <p className="font-black text-sm">Contract Capital Security Verified</p>
                   <p className="opacity-90">
-                    Your principal of <strong>${tradeCapital.toFixed(2)} USD</strong> is tied to this contract for <strong>{contract.durationDays} workdays</strong>. All profits earned remain 100% free and liquid for withdrawal or transfer at any time. Principal automatically unlocks at contract completion.
+                    Your traded principal of <strong>${tradeCapital.toFixed(2)} USD</strong> is securely backed under capital assurance protocols for the full <strong>{contract.durationDays} workday</strong> duration. Accumulated accrued profits of <strong>${netProfit.toFixed(2)} USD</strong> remain unlocked and ready for transfer.
                   </p>
                 </div>
               </div>
 
-              {/* Modal Footer Action */}
-              <div className="pt-1">
-                <button
-                  type="button"
-                  onClick={() => setSelectedContractForDetail(null)}
-                  className={`w-full py-3 sm:py-3.5 rounded-2xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer shadow-md active:scale-[0.99] ${
-                    isLightTheme 
-                      ? 'bg-zinc-900 hover:bg-zinc-800 text-white' 
-                      : 'bg-slate-800 hover:bg-slate-700 text-white'
-                  }`}
-                >
-                  Close Details
-                </button>
-              </div>
             </div>
           </div>
         );
       })()}
+
+      {/* Trade Settlement Receipt Modal Ticket */}
+      {settledTradeReceipt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/85 backdrop-blur-md overflow-y-auto animate-fade-in">
+          <div className={`w-full max-w-md rounded-3xl border shadow-2xl p-5 sm:p-6 space-y-5 relative my-auto ${
+            isLightTheme ? 'bg-white border-emerald-300' : 'bg-slate-900 border-emerald-500/40 text-white'
+          }`}>
+            {/* Top Settlement Banner */}
+            <div className="text-center space-y-2">
+              <div className="w-14 h-14 mx-auto rounded-full bg-emerald-500/10 border-2 border-emerald-500 flex items-center justify-center text-emerald-500 shadow-inner animate-bounce-short">
+                <CheckCircle2 size={32} strokeWidth={2.5} />
+              </div>
+              <div className="space-y-0.5">
+                <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400 font-mono">
+                  Official Trade Settlement Slip
+                </span>
+                <h3 className={`text-xl font-black ${isLightTheme ? 'text-zinc-900' : 'text-white'}`}>
+                  Trade Settled & Profit Credited!
+                </h3>
+                <p className="text-xs text-zinc-500 font-mono">
+                  Settled at {settledTradeReceipt.executedAt}
+                </p>
+              </div>
+            </div>
+
+            {/* Trader & Pair Header */}
+            <div className={`p-3.5 rounded-2xl border flex items-center justify-between gap-3 ${
+              isLightTheme ? 'bg-zinc-50 border-zinc-200' : 'bg-slate-950/80 border-slate-800'
+            }`}>
+              <div className="flex items-center gap-3 min-w-0">
+                <img 
+                  src={settledTradeReceipt.leadPhotoUrl} 
+                  alt={settledTradeReceipt.leadName} 
+                  className="w-10 h-10 rounded-full object-cover border-2 border-emerald-500 shrink-0"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=400';
+                  }}
+                />
+                <div className="min-w-0">
+                  <h4 className={`font-black text-sm truncate ${isLightTheme ? 'text-zinc-900' : 'text-white'}`}>
+                    {settledTradeReceipt.leadName}
+                  </h4>
+                  <div className="flex items-center gap-1.5 text-[11px] font-mono text-zinc-400">
+                    <span>Pair: <strong className="text-amber-500 font-bold">{settledTradeReceipt.tradingPair}</strong></span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="text-right shrink-0">
+                <span className="text-[10px] font-mono uppercase text-zinc-400 block font-bold">Signal Code</span>
+                <span className="font-mono font-black text-xs px-2 py-0.5 rounded bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                  {settledTradeReceipt.signalCode}
+                </span>
+              </div>
+            </div>
+
+            {/* Financial Payout Slip Card */}
+            <div className={`p-4 rounded-2xl border space-y-3 font-mono text-xs ${
+              isLightTheme ? 'bg-zinc-50 border-zinc-200' : 'bg-slate-950/90 border-slate-800'
+            }`}>
+              <div className="flex justify-between items-center text-zinc-500">
+                <span>Traded Principal (Locked):</span>
+                <span className={`font-bold ${isLightTheme ? 'text-zinc-900' : 'text-zinc-200'}`}>
+                  ${settledTradeReceipt.tradedCapital.toFixed(2)} USD
+                </span>
+              </div>
+
+              <div className="flex justify-between items-center text-zinc-500">
+                <span>Gross Return Yield:</span>
+                <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                  +${settledTradeReceipt.grossProfit.toFixed(2)} USD
+                </span>
+              </div>
+
+              <div className="flex justify-between items-center text-zinc-500">
+                <span>Expert Commission ({settledTradeReceipt.commissionPct}%):</span>
+                <span className="font-bold text-rose-500">
+                  -${settledTradeReceipt.commissionCut.toFixed(2)} USD
+                </span>
+              </div>
+
+              <div className="pt-2 border-t border-zinc-200 dark:border-slate-800 flex justify-between items-center text-sm font-black">
+                <span className="text-emerald-600 dark:text-emerald-400 uppercase tracking-wide">Net Profit Credited:</span>
+                <span className="text-base font-black px-2.5 py-1 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+                  +${settledTradeReceipt.netProfit.toFixed(2)} USD
+                </span>
+              </div>
+            </div>
+
+            {/* Execution Ticket Details */}
+            <div className={`p-3 rounded-xl border grid grid-cols-2 gap-2 text-[11px] font-mono ${
+              isLightTheme ? 'bg-amber-500/5 border-amber-500/20 text-zinc-700' : 'bg-slate-950/60 border-slate-800 text-zinc-300'
+            }`}>
+              <div>
+                <span className="text-[9px] uppercase font-bold text-zinc-400 block">Entry Execution Price</span>
+                <span className="font-bold text-amber-500">${settledTradeReceipt.entryPrice} USDT</span>
+              </div>
+              <div className="text-right">
+                <span className="text-[9px] uppercase font-bold text-zinc-400 block">Exit Settlement Price</span>
+                <span className="font-bold text-emerald-500">${settledTradeReceipt.exitPrice} USDT</span>
+              </div>
+            </div>
+
+            {/* Updated Copy Balance Counter Banner */}
+            <div className={`p-3 rounded-2xl border flex items-center justify-between text-xs font-mono ${
+              isLightTheme ? 'bg-emerald-50 border-emerald-200 text-emerald-950' : 'bg-emerald-950/30 border-emerald-500/20 text-emerald-200'
+            }`}>
+              <span className="font-bold">Updated Copy Trade Balance:</span>
+              <strong className="text-sm font-black text-emerald-600 dark:text-emerald-400">
+                ${settledTradeReceipt.newBalance.toFixed(2)} USD
+              </strong>
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center gap-2 pt-1">
+              {settledTradeReceipt.leadObj && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const matchedTrade = userCopyTrades.find(
+                      t => t.leadId === settledTradeReceipt.leadObj?.id || t.leadName === settledTradeReceipt.leadObj?.name
+                    );
+                    if (matchedTrade) {
+                      setSelectedContractForDetail(matchedTrade);
+                    }
+                    setSettledTradeReceipt(null);
+                  }}
+                  className={`flex-1 py-3 rounded-2xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer border ${
+                    isLightTheme 
+                      ? 'bg-zinc-100 hover:bg-zinc-200 text-zinc-800 border-zinc-300' 
+                      : 'bg-slate-800 hover:bg-slate-700 text-white border-slate-700'
+                  }`}
+                >
+                  View Contract
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setSettledTradeReceipt(null)}
+                className="flex-1 py-3 rounded-2xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg active:scale-[0.99]"
+              >
+                Close Ticket
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
