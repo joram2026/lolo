@@ -69,6 +69,15 @@ export interface Transaction {
   feePercent?: number; // e.g. 10
   feeAmount?: number;  // 10% fee in USD
   netAmount?: number;  // amount user actually receives (90%)
+  aiAudit?: {
+    isValid: boolean;
+    confidence: number;
+    reasons: string;
+    extractedAmount: number | null;
+    extractedSymbol: string | null;
+    extractedTxHash: string | null;
+    extractedNetwork: string | null;
+  } | null;
 }
 
 export interface CryptoNetwork {

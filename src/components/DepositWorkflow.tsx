@@ -18,7 +18,8 @@ const FALLBACK_PRICES: Record<string, number> = {
 };
 import { 
   ArrowLeft, Coins, Users, CreditCard, ChevronRight, Copy, Check, 
-  Upload, Sparkles, MessageSquare, AlertCircle, RefreshCw, Star 
+  Upload, Sparkles, MessageSquare, AlertCircle, RefreshCw, Star,
+  Clock, AlertTriangle
 } from 'lucide-react';
 import { CoinIcon } from './StandardUserDashboard';
 import { useToast } from '../context/ToastContext';
@@ -54,8 +55,53 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
   const [amountCoin, setAmountCoin] = useState<string>('');
   const [evidence, setEvidence] = useState<string>('');
   const [compressing, setCompressing] = useState<boolean>(false);
+  const [auditing, setAuditing] = useState<boolean>(false);
+  const [auditResult, setAuditResult] = useState<{
+    isValid: boolean;
+    confidence: number;
+    extractedAmount: number | null;
+    extractedSymbol: string | null;
+    extractedTxHash: string | null;
+    extractedNetwork: string | null;
+    reasons: string;
+  } | null>(null);
   const [copied, setCopied] = useState<boolean>(false);
   const [cryptoPrices, setCryptoPrices] = useState<CryptoPrice[]>([]);
+
+  // Trigger Gemini AI image verification
+  const runImageAudit = async (base64Image: string) => {
+    setAuditing(true);
+    setAuditResult(null);
+    try {
+      const response = await fetch('/api/verify-receipt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          image: base64Image,
+          type: 'crypto',
+          expectedAmount: parseFloat(amountCoin) || null,
+          expectedSymbol: selectedCoin ? selectedCoin.id.toUpperCase() : 'USDT'
+        })
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setAuditResult(data);
+      } else {
+        console.warn('AI Receipt Verification API returned error status.');
+      }
+    } catch (err) {
+      console.error('Failed to verify receipt with AI:', err);
+    } finally {
+      setAuditing(false);
+    }
+  };
+
+  // Timer & Session Recovery states
+  const [expiresAt, setExpiresAt] = useState<number | null>(null);
+  const [timeLeft, setTimeLeft] = useState<string>('');
+  const [timerExpired, setTimerExpired] = useState<boolean>(false);
+  const [showCancelModal, setShowCancelModal] = useState<boolean>(false);
+  const [cancelModalCallback, setCancelModalCallback] = useState<(() => void) | null>(null);
 
   // Subscribe to crypto prices for live conversion
   useEffect(() => {
@@ -67,6 +113,63 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
     });
     return () => unsubscribe();
   }, []);
+
+  // Synchronized Countdown Timer Effect
+  useEffect(() => {
+    if (!expiresAt) {
+      setTimeLeft('');
+      setTimerExpired(false);
+      return;
+    }
+
+    const updateTimer = () => {
+      const now = Date.now();
+      const diff = expiresAt - now;
+      if (diff <= 0) {
+        setTimeLeft('00:00');
+        setTimerExpired(true);
+        localStorage.removeItem('morex_active_deposit_session');
+      } else {
+        const mins = Math.floor(diff / 60000);
+        const secs = Math.floor((diff % 60000) / 1000);
+        setTimeLeft(`${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`);
+        setTimerExpired(false);
+      }
+    };
+
+    updateTimer(); // Initial calculation
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [expiresAt]);
+
+  const saveSession = (newMethod: 'crypto_address' | 'crypto_confirm', customExpiresAt?: number) => {
+    if (!selectedCoin || !user?.uid) return;
+    const expiry = customExpiresAt || expiresAt || (Date.now() + 15 * 60 * 1000);
+    if (!expiresAt && !customExpiresAt) {
+      setExpiresAt(expiry);
+    }
+    const session = {
+      userId: user.uid,
+      coinId: selectedCoin.id,
+      network: selectedNetwork,
+      amount: amountCoin,
+      method: newMethod,
+      expiresAt: expiry
+    };
+    localStorage.setItem('morex_active_deposit_session', JSON.stringify(session));
+  };
+
+  const clearSession = () => {
+    localStorage.removeItem('morex_active_deposit_session');
+    setExpiresAt(null);
+    setTimeLeft('');
+    setTimerExpired(false);
+  };
+
+  const handleCancelClick = (callback: () => void) => {
+    setCancelModalCallback(() => callback);
+    setShowCancelModal(true);
+  };
 
   const currentSymbol = selectedCoin ? selectedCoin.id.toUpperCase() : 'USDT';
 
@@ -145,47 +248,73 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
         });
         setNetworks(netList);
 
-        const rawPreselected = (typeof initialCoinSymbol === 'string' ? initialCoinSymbol : '') || sessionStorage.getItem('preselected_deposit_coin') || localStorage.getItem('preselected_deposit_coin');
-        sessionStorage.removeItem('preselected_deposit_coin');
-        localStorage.removeItem('preselected_deposit_coin');
-
-        let rawString = '';
-        if (typeof rawPreselected === 'string') {
-          rawString = rawPreselected;
-        } else if (rawPreselected && typeof rawPreselected === 'object' && 'symbol' in rawPreselected) {
-          rawString = String((rawPreselected as any).symbol || '');
+        // Check for active saved session to rehydrate
+        const savedSessionStr = localStorage.getItem('morex_active_deposit_session');
+        let sessionLoaded = false;
+        if (savedSessionStr) {
+          try {
+            const savedSession = JSON.parse(savedSessionStr);
+            if (savedSession && savedSession.userId === user?.uid && savedSession.expiresAt > Date.now()) {
+              const targetCoin = netList.find(n => n.id.toLowerCase() === savedSession.coinId.toLowerCase());
+              if (targetCoin) {
+                setSelectedCoin(targetCoin);
+                setSelectedNetwork(savedSession.network);
+                setAmountCoin(savedSession.amount);
+                setMethod(savedSession.method || 'crypto_address');
+                setExpiresAt(savedSession.expiresAt);
+                sessionLoaded = true;
+              }
+            } else {
+              localStorage.removeItem('morex_active_deposit_session');
+            }
+          } catch (e) {
+            console.error('Error parsing saved session', e);
+          }
         }
 
-        const preselected = rawString.trim().toLowerCase();
+        if (!sessionLoaded) {
+          const rawPreselected = (typeof initialCoinSymbol === 'string' ? initialCoinSymbol : '') || sessionStorage.getItem('preselected_deposit_coin') || localStorage.getItem('preselected_deposit_coin');
+          sessionStorage.removeItem('preselected_deposit_coin');
+          localStorage.removeItem('preselected_deposit_coin');
 
-        if (preselected) {
-          const target = netList.find(n => 
-            n.id.toLowerCase() === preselected ||
-            n.id.toLowerCase() === preselected.replace(/[^a-z0-9]/g, '') ||
-            n.tokenName.toLowerCase() === preselected ||
-            n.tokenName.toLowerCase().includes(`(${preselected})`) ||
-            n.tokenName.toLowerCase().includes(preselected) ||
-            preselected.includes(n.id.toLowerCase())
-          );
+          let rawString = '';
+          if (typeof rawPreselected === 'string') {
+            rawString = rawPreselected;
+          } else if (rawPreselected && typeof rawPreselected === 'object' && 'symbol' in rawPreselected) {
+            rawString = String((rawPreselected as any).symbol || '');
+          }
 
-          if (target) {
-            setSelectedCoin(target);
-            if (target.networks && target.networks.length > 0) {
-              setSelectedNetwork(target.networks[0]);
-            } else {
-              setSelectedNetwork('');
+          const preselected = rawString.trim().toLowerCase();
+
+          if (preselected) {
+            const target = netList.find(n => 
+              n.id.toLowerCase() === preselected ||
+              n.id.toLowerCase() === preselected.replace(/[^a-z0-9]/g, '') ||
+              n.tokenName.toLowerCase() === preselected ||
+              n.tokenName.toLowerCase().includes(`(${preselected})`) ||
+              n.tokenName.toLowerCase().includes(preselected) ||
+              preselected.includes(n.id.toLowerCase())
+            );
+
+            if (target) {
+              setSelectedCoin(target);
+              if (target.networks && target.networks.length > 0) {
+                setSelectedNetwork(target.networks[0]);
+              } else {
+                setSelectedNetwork('');
+              }
+              setMethod('crypto');
+            } else if (netList.length > 0) {
+              setSelectedCoin(netList[0]);
+              if (netList[0].networks && netList[0].networks.length > 0) {
+                setSelectedNetwork(netList[0].networks[0]);
+              }
             }
-            setMethod('crypto');
           } else if (netList.length > 0) {
             setSelectedCoin(netList[0]);
             if (netList[0].networks && netList[0].networks.length > 0) {
               setSelectedNetwork(netList[0].networks[0]);
             }
-          }
-        } else if (netList.length > 0) {
-          setSelectedCoin(netList[0]);
-          if (netList[0].networks && netList[0].networks.length > 0) {
-            setSelectedNetwork(netList[0].networks[0]);
           }
         }
 
@@ -349,15 +478,19 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
     if (file) {
       setCompressing(true);
       setError(null);
+      setAuditResult(null);
       try {
         const compressedBase64 = await compressImageFile(file, 1000, 1000, 0.75);
         setEvidence(compressedBase64);
+        await runImageAudit(compressedBase64);
       } catch (err) {
         console.error('Failed to compress image:', err);
         // Fallback: read directly
         const reader = new FileReader();
-        reader.onloadend = () => {
-          setEvidence(reader.result as string);
+        reader.onloadend = async () => {
+          const res = reader.result as string;
+          setEvidence(res);
+          await runImageAudit(res);
         };
         reader.readAsDataURL(file);
       } finally {
@@ -403,10 +536,20 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
         evidence: finalEvidence,
         network: selectedNetwork,
         address: selectedCoin?.addresses[selectedNetwork] || '',
-        merchantName: selectedCoin ? formatCoinName(selectedCoin.tokenName) : ''
+        merchantName: selectedCoin ? formatCoinName(selectedCoin.tokenName) : '',
+        aiAudit: auditResult ? {
+          isValid: auditResult.isValid,
+          confidence: auditResult.confidence,
+          reasons: auditResult.reasons,
+          extractedAmount: auditResult.extractedAmount,
+          extractedSymbol: auditResult.extractedSymbol,
+          extractedTxHash: auditResult.extractedTxHash,
+          extractedNetwork: auditResult.extractedNetwork
+        } : null
       };
 
       await addDoc(collection(db, 'transactions'), newTx);
+      clearSession();
       onSuccess();
     } catch (err: any) {
       console.error('Crypto deposit error:', err);
@@ -459,8 +602,16 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
           onClick={() => {
             if (method === 'selection' || method === 'crypto_coin_select') onBack();
             else if (method === 'crypto') setMethod('crypto_coin_select');
-            else if (method === 'crypto_address') setMethod('crypto');
-            else if (method === 'crypto_confirm') setMethod('crypto_address');
+            else if (method === 'crypto_address') {
+              handleCancelClick(() => {
+                clearSession();
+                setMethod('crypto');
+              });
+            }
+            else if (method === 'crypto_confirm') {
+              setMethod('crypto_address');
+              saveSession('crypto_address');
+            }
             else onBack();
           }}
           className="p-2 rounded-full bg-white border border-zinc-200 text-zinc-600 hover:text-zinc-900 hover:bg-zinc-50 transition-colors"
@@ -655,7 +806,21 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
                     setError('Please select a network.');
                     return;
                   }
+                  const expiry = Date.now() + 15 * 60 * 1000;
+                  setExpiresAt(expiry);
                   setMethod('crypto_address');
+                  
+                  if (selectedCoin && user?.uid) {
+                    const session = {
+                      userId: user.uid,
+                      coinId: selectedCoin.id,
+                      network: selectedNetwork,
+                      amount: amountCoin,
+                      method: 'crypto_address',
+                      expiresAt: expiry
+                    };
+                    localStorage.setItem('morex_active_deposit_session', JSON.stringify(session));
+                  }
                 }}
                 className="w-full flex items-center justify-center gap-2 py-3.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600 disabled:bg-zinc-200 disabled:text-zinc-400 rounded-xl text-sm font-black transition-all shadow-md mt-6 cursor-pointer uppercase tracking-wider"
               >
@@ -668,167 +833,345 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
           {/* Crypto Step 2: Receiver Address & Instructions */}
           {method === 'crypto_address' && selectedCoin && (
             <div className="space-y-5">
-              {/* Transfer Summary Card */}
-              <div className="bg-white border border-zinc-200 rounded-2xl p-4 space-y-3 shadow-xs">
-                <div className="flex justify-between items-center pb-2 border-b border-zinc-100">
-                  <span className="text-xs text-zinc-500 font-medium">Selected Asset</span>
-                  <div className="flex items-center gap-1.5">
-                    <CoinIcon symbol={selectedCoin.id.toUpperCase()} className="w-5 h-5 rounded" />
-                    <span className="font-bold text-xs text-zinc-800">{formatCoinName(selectedCoin.tokenName)}</span>
+              {/* Expired state lock safeguard */}
+              {timerExpired ? (
+                <div className="bg-white border border-zinc-200 rounded-2xl p-6 text-center space-y-4 shadow-sm animate-fadeIn">
+                  <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto">
+                    <AlertTriangle size={32} />
                   </div>
-                </div>
-                <div className="flex justify-between items-center pb-2 border-b border-zinc-100">
-                  <span className="text-xs text-zinc-500 font-medium">Network</span>
-                  <span className="font-mono font-bold text-xs text-amber-600 px-2 py-0.5 bg-amber-50 rounded-md border border-amber-200">{selectedNetwork}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-xs text-zinc-500 font-medium">Exact Deposit Amount</span>
-                  <span className="font-mono font-extrabold text-sm text-amber-700">{amountCoin} {currentSymbol}</span>
-                </div>
-              </div>
-
-              {/* Wallet Address Card */}
-              <div className="bg-white border border-zinc-200 rounded-2xl p-4 space-y-3 shadow-sm">
-                <div className="flex justify-between items-center">
-                  <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Receiver Address ({selectedNetwork})</span>
+                  <div className="space-y-1.5">
+                    <h3 className="text-base font-black text-zinc-800">Deposit Window Expired</h3>
+                    <p className="text-xs text-zinc-500 leading-relaxed max-w-xs mx-auto">
+                      To protect against cryptocurrency exchange rate volatility, your deposit session rate-lock has expired.
+                    </p>
+                  </div>
                   <button
-                    id="crypto-copy-address"
-                    type="button"
-                    onClick={() => handleCopy(selectedCoin.addresses[selectedNetwork] || '')}
-                    className="p-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-700 transition-colors flex items-center gap-1 text-[11px] font-bold cursor-pointer"
+                    onClick={() => {
+                      clearSession();
+                      setMethod('crypto_coin_select');
+                    }}
+                    className="w-full py-3.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-black rounded-xl text-sm transition-all cursor-pointer uppercase tracking-wider shadow-md"
                   >
-                    {copied ? <Check size={12} className="text-amber-600" /> : <Copy size={12} />}
-                    <span>{copied ? 'Copied' : 'Copy Address'}</span>
+                    Start New Deposit
                   </button>
                 </div>
-                <div className="bg-zinc-50 border border-zinc-200 p-3 rounded-xl font-mono text-xs text-amber-800 break-all select-all font-bold leading-relaxed tracking-wide">
-                  {selectedCoin.addresses[selectedNetwork] || 'No Address configured'}
-                </div>
-              </div>
+              ) : (
+                <>
+                  {/* Countdown Timer HUD */}
+                  {expiresAt && (
+                    <div className="bg-zinc-900 text-white rounded-2xl p-3 border border-zinc-800 shadow-sm flex items-center justify-between gap-3 animate-fadeIn">
+                      <div className="flex items-center gap-2">
+                        <Clock size={16} className={`shrink-0 ${parseInt(timeLeft.split(':')[0] || '0') < 5 ? 'text-red-500 animate-pulse' : 'text-emerald-400'}`} />
+                        <div className="text-left">
+                          <p className="text-[9px] uppercase font-bold text-zinc-400 tracking-wider">Session Expires In</p>
+                          <p className="text-xs font-mono font-black">
+                            Expires in <span className={parseInt(timeLeft.split(':')[0] || '0') < 5 ? 'text-red-500 font-bold' : 'text-emerald-400'}>{timeLeft}</span>
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => {
+                          handleCancelClick(() => {
+                            clearSession();
+                            setMethod('crypto_coin_select');
+                          });
+                        }}
+                        className="text-[9px] font-bold text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 px-2 py-1 rounded-lg border border-red-500/20 transition-all cursor-pointer"
+                      >
+                        Cancel Invoice
+                      </button>
+                    </div>
+                  )}
 
-              {/* Instruction Banner */}
-              <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 text-xs space-y-1.5 text-zinc-800">
-                <div className="flex items-center gap-1.5 font-black text-amber-800 text-xs">
-                  <AlertCircle size={15} className="text-amber-600 shrink-0" />
-                  <span>Deposit Instructions</span>
-                </div>
-                <p className="text-[11px] leading-relaxed text-zinc-700">
-                  Please transfer exactly <strong className="font-mono text-amber-900">{amountCoin} {currentSymbol}</strong> to the address above.
-                </p>
-                <p className="text-[10px] text-amber-800 font-semibold">
-                  ⚠️ Transfer strictly using the <strong className="underline">{selectedNetwork}</strong> network. Sending via any other network will result in permanent loss of funds.
-                </p>
-              </div>
+                  {/* Transfer Summary Card */}
+                  <div className="bg-white border border-zinc-200 rounded-2xl p-4 space-y-3 shadow-xs">
+                    <div className="flex justify-between items-center pb-2 border-b border-zinc-100">
+                      <span className="text-xs text-zinc-500 font-medium">Selected Asset</span>
+                      <div className="flex items-center gap-1.5">
+                        <CoinIcon symbol={selectedCoin.id.toUpperCase()} className="w-5 h-5 rounded" />
+                        <span className="font-bold text-xs text-zinc-800">{formatCoinName(selectedCoin.tokenName)}</span>
+                      </div>
+                    </div>
+                    <div className="flex justify-between items-center pb-2 border-b border-zinc-100">
+                      <span className="text-xs text-zinc-500 font-medium">Network</span>
+                      <span className="font-mono font-bold text-xs text-amber-600 px-2 py-0.5 bg-amber-50 rounded-md border border-amber-200">{selectedNetwork}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-zinc-500 font-medium">Exact Deposit Amount</span>
+                      <span className="font-mono font-extrabold text-sm text-amber-700">{amountCoin} {currentSymbol}</span>
+                    </div>
+                  </div>
 
-              {/* I Have Made Payment Action */}
-              <button
-                id="crypto-payment-made-btn"
-                onClick={() => setMethod('crypto_confirm')}
-                className="w-full flex items-center justify-center gap-2 py-3.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600 rounded-xl text-sm font-black transition-all shadow-md cursor-pointer uppercase tracking-wider"
-              >
-                <span>I HAVE MADE PAYMENT</span>
-                <ChevronRight size={16} />
-              </button>
+                  {/* Wallet Address Card */}
+                  <div className="bg-white border border-zinc-200 rounded-2xl p-4 space-y-3 shadow-sm">
+                    <div className="flex justify-between items-center">
+                      <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Receiver Address ({selectedNetwork})</span>
+                      <button
+                        id="crypto-copy-address"
+                        type="button"
+                        onClick={() => handleCopy(selectedCoin.addresses[selectedNetwork] || '')}
+                        className="p-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-700 transition-colors flex items-center gap-1 text-[11px] font-bold cursor-pointer"
+                      >
+                        {copied ? <Check size={12} className="text-amber-600" /> : <Copy size={12} />}
+                        <span>{copied ? 'Copied' : 'Copy Address'}</span>
+                      </button>
+                    </div>
+                    <div className="bg-zinc-50 border border-zinc-200 p-3 rounded-xl font-mono text-xs text-amber-800 break-all select-all font-bold leading-relaxed tracking-wide">
+                      {selectedCoin.addresses[selectedNetwork] || 'No Address configured'}
+                    </div>
+                  </div>
+
+                  {/* QR Code Card */}
+                  <div className="bg-white border border-zinc-200 rounded-2xl p-4 flex flex-col items-center justify-center text-center shadow-xs animate-fadeIn">
+                    <div className="bg-zinc-50 border border-zinc-100 p-2.5 rounded-xl mb-2">
+                      <img 
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&color=27272a&data=${encodeURIComponent(selectedCoin.addresses[selectedNetwork] || '')}`}
+                        alt="Deposit QR Code"
+                        className="w-32 h-32 object-contain"
+                        referrerPolicy="no-referrer"
+                      />
+                    </div>
+                    <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">Scan QR Code to pay</p>
+                  </div>
+
+                  {/* Instruction Banner */}
+                  <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 text-xs space-y-1.5 text-zinc-800">
+                    <div className="flex items-center gap-1.5 font-black text-amber-800 text-xs">
+                      <AlertCircle size={15} className="text-amber-600 shrink-0" />
+                      <span>Deposit Instructions</span>
+                    </div>
+                    <p className="text-[11px] leading-relaxed text-zinc-700">
+                      Please transfer exactly <strong className="font-mono text-amber-900">{amountCoin} {currentSymbol}</strong> to the address above.
+                    </p>
+                    <p className="text-[10px] text-amber-800 font-semibold">
+                      ⚠️ Transfer strictly using the <strong className="underline">{selectedNetwork}</strong> network. Sending via any other network will result in permanent loss of funds.
+                    </p>
+                  </div>
+
+                  {/* I Have Made Payment Action */}
+                  <button
+                    id="crypto-payment-made-btn"
+                    onClick={() => {
+                      setMethod('crypto_confirm');
+                      saveSession('crypto_confirm');
+                    }}
+                    className="w-full flex items-center justify-center gap-2 py-3.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600 rounded-xl text-sm font-black transition-all shadow-md cursor-pointer uppercase tracking-wider"
+                  >
+                    <span>I HAVE MADE PAYMENT</span>
+                    <ChevronRight size={16} />
+                  </button>
+                </>
+              )}
             </div>
           )}
 
           {/* Crypto Confirm & Upload Proof Page */}
           {method === 'crypto_confirm' && selectedCoin && (
             <div className="space-y-5">
-              <div className="bg-white border border-zinc-200 rounded-2xl p-4 space-y-4">
-                <div className="flex flex-col items-center justify-center text-center gap-2 pb-2 border-b border-zinc-200/60">
-                  <div className="w-12 h-12 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-500">
-                    <Coins size={22} />
+              {timerExpired ? (
+                <div className="bg-white border border-zinc-200 rounded-2xl p-6 text-center space-y-4 shadow-sm animate-fadeIn">
+                  <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto">
+                    <AlertTriangle size={32} />
                   </div>
-                  <div>
-                    <h3 className="text-sm font-black text-zinc-800">Upload Deposit Proof</h3>
-                    <p className="text-[11px] text-zinc-500">Provide evidence of transfer</p>
+                  <div className="space-y-1.5">
+                    <h3 className="text-base font-black text-zinc-800">Deposit Window Expired</h3>
+                    <p className="text-xs text-zinc-500 leading-relaxed max-w-xs mx-auto">
+                      To protect against cryptocurrency exchange rate volatility, your deposit session rate-lock has expired.
+                    </p>
                   </div>
+                  <button
+                    onClick={() => {
+                      clearSession();
+                      setMethod('crypto_coin_select');
+                    }}
+                    className="w-full py-3.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-black rounded-xl text-sm transition-all cursor-pointer uppercase tracking-wider shadow-md"
+                  >
+                    Start New Deposit
+                  </button>
                 </div>
-
-                <div className="space-y-3 text-xs">
-                  <div className="flex justify-between items-center pb-1.5 border-b border-zinc-100">
-                    <span className="text-zinc-500">Selected Asset</span>
-                    <span className="font-bold text-zinc-800">{formatCoinName(selectedCoin.tokenName)}</span>
-                  </div>
-                  <div className="flex justify-between items-center pb-1.5 border-b border-zinc-100">
-                    <span className="text-zinc-500">Selected Network</span>
-                    <span className="font-mono font-bold text-amber-600">{selectedNetwork}</span>
-                  </div>
-                  <div className="flex justify-between items-center pb-1.5 border-b border-zinc-100">
-                    <span className="text-zinc-500">Recipient Address</span>
-                    <span className="font-mono font-bold text-zinc-600 break-all max-w-[200px] text-right">{selectedCoin.addresses[selectedNetwork]}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-zinc-500">Amount Sent</span>
-                    <span className="font-mono font-bold text-amber-600">{amountCoin} {currentSymbol}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Evidence Upload */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-zinc-500 block">
-                  Evidence of Payment (Upload Screenshot)
-                </label>
-                <div className="relative border border-dashed border-zinc-300 bg-white rounded-2xl p-5 hover:bg-zinc-50 transition-all text-center flex flex-col items-center justify-center cursor-pointer">
-                  <input
-                    id="crypto-evidence-upload-final"
-                    type="file"
-                    accept="image/*"
-                    onChange={handleFileChange}
-                    className="absolute inset-0 opacity-0 cursor-pointer"
-                  />
-                  {compressing ? (
-                    <div className="space-y-2 py-2">
-                      <RefreshCw size={24} className="animate-spin text-amber-500 mx-auto" />
-                      <p className="text-xs font-bold text-amber-600">Compressing & optimizing proof image...</p>
+              ) : (
+                <>
+                  {/* Countdown Timer HUD */}
+                  {expiresAt && (
+                    <div className="bg-zinc-900 text-white rounded-2xl p-3 border border-zinc-800 shadow-sm flex items-center justify-between gap-3 animate-fadeIn">
+                      <div className="flex items-center gap-2">
+                        <Clock size={16} className={`shrink-0 ${parseInt(timeLeft.split(':')[0] || '0') < 5 ? 'text-red-500 animate-pulse' : 'text-emerald-400'}`} />
+                        <div className="text-left">
+                          <p className="text-[9px] uppercase font-bold text-zinc-400 tracking-wider">Session Expires In</p>
+                          <p className="text-xs font-mono font-black">
+                            Expires in <span className={parseInt(timeLeft.split(':')[0] || '0') < 5 ? 'text-red-500 font-bold' : 'text-emerald-400'}>{timeLeft}</span>
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => {
+                          handleCancelClick(() => {
+                            clearSession();
+                            setMethod('crypto_coin_select');
+                          });
+                        }}
+                        className="text-[9px] font-bold text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 px-2 py-1 rounded-lg border border-red-500/20 transition-all cursor-pointer"
+                      >
+                        Cancel Invoice
+                      </button>
                     </div>
-                  ) : evidence ? (
-                    <div className="space-y-2">
-                      <img src={evidence} alt="Proof of payment" className="max-h-24 mx-auto rounded-lg border border-zinc-200" />
-                      <p className="text-[11px] text-amber-600 font-semibold">Image loaded successfully! Tap to change.</p>
-                    </div>
-                  ) : (
-                    <>
-                      <Upload size={24} className="text-zinc-400 mb-2" />
-                      <p className="text-xs font-bold text-zinc-600">Drag & Drop or Click to Upload</p>
-                      <p className="text-[10px] text-zinc-400 mt-1">Accepts PNG, JPG, JPEG (auto-optimized proof)</p>
-                    </>
                   )}
-                </div>
-              </div>
 
-              {/* Submit Action */}
-              <button
-                id="crypto-deposit-submit-final"
-                onClick={handleCryptoSubmit}
-                disabled={submitting || !evidence}
-                className="w-full flex items-center justify-center gap-2 py-3.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600 disabled:bg-zinc-200 disabled:text-zinc-400 rounded-xl text-sm font-black transition-all shadow-md cursor-pointer uppercase tracking-wider"
-              >
-                {submitting ? (
-                  <>
-                    <RefreshCw size={15} className="animate-spin text-white" />
-                    <span>Submitting...</span>
-                  </>
-                ) : (
-                  <>
-                    <Sparkles size={15} />
-                    <span>DONE</span>
-                  </>
-                )}
-              </button>
+                  <div className="bg-white border border-zinc-200 rounded-2xl p-4 space-y-4 animate-fadeIn">
+                    <div className="flex flex-col items-center justify-center text-center gap-2 pb-2 border-b border-zinc-200/60">
+                      <div className="w-12 h-12 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-500">
+                        <Coins size={22} />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-black text-zinc-800">Upload Deposit Proof</h3>
+                        <p className="text-[11px] text-zinc-500">Provide evidence of transfer</p>
+                      </div>
+                    </div>
 
-              <button
-                id="cancel-crypto-confirm-btn"
-                onClick={() => {
-                  setError(null);
-                  setMethod('crypto');
-                }}
-                className="w-full py-2.5 bg-white hover:bg-zinc-50 border border-zinc-200 text-zinc-500 hover:text-zinc-700 rounded-xl text-xs font-bold transition-all cursor-pointer text-center"
-              >
-                Cancel & Go Back
-              </button>
+                    <div className="space-y-3 text-xs">
+                      <div className="flex justify-between items-center pb-1.5 border-b border-zinc-100">
+                        <span className="text-zinc-500">Selected Asset</span>
+                        <span className="font-bold text-zinc-800">{formatCoinName(selectedCoin.tokenName)}</span>
+                      </div>
+                      <div className="flex justify-between items-center pb-1.5 border-b border-zinc-100">
+                        <span className="text-zinc-500">Selected Network</span>
+                        <span className="font-mono font-bold text-amber-600">{selectedNetwork}</span>
+                      </div>
+                      <div className="flex justify-between items-center pb-1.5 border-b border-zinc-100">
+                        <span className="text-zinc-500">Recipient Address</span>
+                        <span className="font-mono font-bold text-zinc-600 break-all max-w-[200px] text-right">{selectedCoin.addresses[selectedNetwork]}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-zinc-500">Amount Sent</span>
+                        <span className="font-mono font-bold text-amber-600">{amountCoin} {currentSymbol}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Evidence Upload */}
+                  <div className="space-y-1.5 animate-fadeIn">
+                    <label className="text-xs font-semibold text-zinc-500 block">
+                      Evidence of Payment (Upload Screenshot)
+                    </label>
+                    <div className="relative border border-dashed border-zinc-300 bg-white rounded-2xl p-5 hover:bg-zinc-50 transition-all text-center flex flex-col items-center justify-center cursor-pointer">
+                      <input
+                        id="crypto-evidence-upload-final"
+                        type="file"
+                        accept="image/*"
+                        onChange={handleFileChange}
+                        className="absolute inset-0 opacity-0 cursor-pointer"
+                        disabled={auditing}
+                      />
+                      {compressing ? (
+                        <div className="space-y-2 py-2">
+                          <RefreshCw size={24} className="animate-spin text-amber-500 mx-auto" />
+                          <p className="text-xs font-bold text-amber-600">Compressing & optimizing proof image...</p>
+                        </div>
+                      ) : evidence ? (
+                        <div className="space-y-2">
+                          <img src={evidence} alt="Proof of payment" className="max-h-24 mx-auto rounded-lg border border-zinc-200" />
+                          <p className="text-[11px] text-amber-600 font-semibold">Image loaded successfully! Tap to change.</p>
+                        </div>
+                      ) : (
+                        <>
+                          <Upload size={24} className="text-zinc-400 mb-2" />
+                          <p className="text-xs font-bold text-zinc-600">Drag & Drop or Click to Upload</p>
+                          <p className="text-[10px] text-zinc-400 mt-1">Accepts PNG, JPG, JPEG (auto-optimized proof)</p>
+                        </>
+                      )}
+                    </div>
+
+                    {/* Smart Receipt Analysis Scan Feedback */}
+                    {auditing && (
+                      <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 flex flex-col gap-2.5 animate-fadeIn">
+                        <div className="flex items-center gap-2 text-xs font-bold text-amber-800">
+                          <RefreshCw size={14} className="animate-spin text-amber-600 shrink-0" />
+                          <span>Receipt analysis in progress...</span>
+                        </div>
+                        <div className="w-full bg-zinc-200/80 h-1.5 rounded-full overflow-hidden relative">
+                          <div className="bg-amber-500 h-full w-1/2 rounded-full animate-pulse"></div>
+                        </div>
+                        <p className="text-[10px] text-zinc-500 leading-normal">
+                          Analyzing transaction details, payment markers, and confirmation records...
+                        </p>
+                      </div>
+                    )}
+
+                    {!auditing && auditResult && (
+                      <div className={`border rounded-2xl p-4 space-y-2.5 animate-fadeIn ${
+                        auditResult.isValid ? 'bg-emerald-500/10 border-emerald-500/25' : 'bg-rose-500/10 border-rose-500/25'
+                      }`}>
+                        <div className="flex items-center gap-1.5 font-extrabold text-xs">
+                          {auditResult.isValid ? (
+                            <>
+                              <Sparkles size={14} className="text-emerald-600 shrink-0" />
+                              <span className="text-emerald-800">Receipt Verification: Complete</span>
+                            </>
+                          ) : (
+                            <>
+                              <AlertTriangle size={14} className="text-rose-600 shrink-0 animate-bounce" />
+                              <span className="text-rose-800">Receipt Verification: Needs Review</span>
+                            </>
+                          )}
+                        </div>
+                        <p className={`text-[11px] leading-relaxed font-semibold ${
+                          auditResult.isValid ? 'text-emerald-700' : 'text-rose-700'
+                        }`}>
+                          {auditResult.reasons}
+                        </p>
+                        {auditResult.isValid ? (
+                          <div className="grid grid-cols-2 gap-3 pt-2.5 border-t border-emerald-500/10 text-[10px] font-mono text-emerald-800/80">
+                            <div>
+                              <span className="block font-bold uppercase text-[8px] text-emerald-600/70">Detected Amount</span>
+                              <span className="font-bold text-xs">{auditResult.extractedAmount ? `${auditResult.extractedAmount} ${auditResult.extractedSymbol || ''}` : 'N/A'}</span>
+                            </div>
+                            <div>
+                              <span className="block font-bold uppercase text-[8px] text-emerald-600/70">Tx Reference Hash</span>
+                              <span className="truncate block font-bold text-xs">{auditResult.extractedTxHash || 'N/A'}</span>
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-[9px] text-rose-700 leading-relaxed font-semibold pt-2 border-t border-rose-500/10">
+                            ⚠️ Note: Please upload a valid payment proof screenshot. Unrelated or empty images will be auto-flagged and manually declined.
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Submit Action */}
+                  <button
+                    id="crypto-deposit-submit-final"
+                    onClick={handleCryptoSubmit}
+                    disabled={submitting || !evidence}
+                    className="w-full flex items-center justify-center gap-2 py-3.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600 disabled:bg-zinc-200 disabled:text-zinc-400 rounded-xl text-sm font-black transition-all shadow-md cursor-pointer uppercase tracking-wider"
+                  >
+                    {submitting ? (
+                      <>
+                        <RefreshCw size={15} className="animate-spin text-white" />
+                        <span>Submitting...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles size={15} />
+                        <span>DONE</span>
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    id="cancel-crypto-confirm-btn"
+                    onClick={() => {
+                      setError(null);
+                      setMethod('crypto_address');
+                      saveSession('crypto_address');
+                    }}
+                    className="w-full py-2.5 bg-white hover:bg-zinc-50 border border-zinc-200 text-zinc-500 hover:text-zinc-700 rounded-xl text-xs font-bold transition-all cursor-pointer text-center"
+                  >
+                    Cancel & Go Back
+                  </button>
+                </>
+              )}
             </div>
           )}
 
@@ -1104,6 +1447,40 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
             </div>
           )}
         </>
+      )}
+
+      {/* Custom Confirmation Modal (Iframe-Safe & Native Styled) */}
+      {showCancelModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn">
+          <div className="bg-white rounded-2xl p-5 max-w-xs w-full text-center space-y-4 shadow-xl border border-zinc-100">
+            <div className="w-12 h-12 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto">
+              <AlertTriangle size={24} />
+            </div>
+            <div className="space-y-1">
+              <h4 className="text-sm font-black text-zinc-800">Cancel Deposit?</h4>
+              <p className="text-xs text-zinc-500 leading-relaxed">
+                This will release your active rate-locked invoice and clear your session progress.
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <button
+                onClick={() => setShowCancelModal(false)}
+                className="py-2.5 px-3 border border-zinc-200 hover:bg-zinc-50 rounded-xl text-xs font-bold text-zinc-500 transition-colors cursor-pointer"
+              >
+                No, Keep It
+              </button>
+              <button
+                onClick={() => {
+                  setShowCancelModal(false);
+                  if (cancelModalCallback) cancelModalCallback();
+                }}
+                className="py-2.5 px-3 bg-red-500 hover:bg-red-600 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
+              >
+                Yes, Cancel
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

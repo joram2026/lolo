@@ -7,7 +7,7 @@ import { useToast } from '../context/ToastContext';
 import { 
   Shield, Key, Sparkles, User, Gift, Check, ArrowLeft, AlertCircle, 
   Smartphone, Copy, CheckCircle2, QrCode, Power, Lock, ShieldAlert,
-  ChevronRight, HelpCircle, MessageSquare, Send, Download, Laptop,
+  ChevronRight, ChevronDown, ChevronUp, HelpCircle, MessageSquare, Send, Download, Laptop,
   Gamepad2, LayoutGrid, Clapperboard, BookOpen, Star, Share2, Plus, 
   Search, MoreVertical, Info, ShieldCheck, X
 } from 'lucide-react';
@@ -118,6 +118,43 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
   const [referredUsers, setReferredUsers] = useState<any[]>([]);
   const [loadingReferred, setLoadingReferred] = useState(false);
   const [refConfig, setRefConfig] = useState<ReferralDepositConfig | null>(null);
+  const [firstDepositCommissions, setFirstDepositCommissions] = useState<any[]>([]);
+  const [loadingCommissions, setLoadingCommissions] = useState(false);
+  const [showEarningsBreakdown, setShowEarningsBreakdown] = useState(false);
+
+  useEffect(() => {
+    if (!user?.uid) return;
+
+    async function fetchCommissions() {
+      setLoadingCommissions(true);
+      try {
+        const q = query(
+          collection(db, 'transactions'),
+          where('userId', '==', user.uid),
+          where('type', '==', 'first_deposit_commission')
+        );
+        const querySnapshot = await getDocs(q);
+        const list: any[] = [];
+        querySnapshot.forEach((docSnap) => {
+          const tData = docSnap.data();
+          if (tData.status === 'APPROVED') {
+            list.push({
+              id: docSnap.id,
+              ...tData,
+              createdAt: tData.createdAt ? tData.createdAt.toDate() : new Date(),
+            });
+          }
+        });
+        setFirstDepositCommissions(list);
+      } catch (err) {
+        console.error('Error fetching deposit commissions:', err);
+      } finally {
+        setLoadingCommissions(false);
+      }
+    }
+
+    fetchCommissions();
+  }, [user]);
 
   useEffect(() => {
     async function fetchReferralConfig() {
@@ -874,40 +911,93 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
             })()}
 
             {/* 2. REFERRAL EARNINGS & STATS CARD */}
-            <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
-              <div className="bg-[#FFF8E1] border border-zinc-200/80 shadow-sm rounded-2xl p-3.5 sm:p-4 flex flex-col justify-between">
-                <div>
-                  <span className="text-[9px] sm:text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Total Earned</span>
-                  <div className="mt-1 flex items-baseline gap-1">
-                    <span className="text-xl sm:text-2xl font-bold text-amber-600 font-mono">
-                      {(() => {
-                        let total = 0;
-                        for (let i = 1; i <= referredUsers.length; i++) {
-                          if (i >= 40) total += 0.40;
-                          else if (i >= 20) total += 0.30;
-                          else if (i >= 7) total += 0.20;
-                          else total += 0.10;
-                        }
-                        return total.toFixed(2);
-                      })()}
-                    </span>
-                    <span className="text-[10px] sm:text-xs text-zinc-500 font-bold">USDT</span>
-                  </div>
-                </div>
-                <p className="text-[9px] sm:text-[10px] text-zinc-500 mt-2">Paid directly to your balance</p>
-              </div>
+            {(() => {
+              const milestoneEarnings = (() => {
+                let total = 0;
+                for (let i = 1; i <= referredUsers.length; i++) {
+                  if (i >= 40) total += 0.40;
+                  else if (i >= 20) total += 0.30;
+                  else if (i >= 7) total += 0.20;
+                  else total += 0.10;
+                }
+                return total;
+              })();
 
-              <div className="bg-[#FFF8E1] border border-zinc-200/80 shadow-sm rounded-2xl p-3.5 sm:p-4 flex flex-col justify-between">
-                <div>
-                  <span className="text-[9px] sm:text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Successful Invites</span>
-                  <div className="mt-1 flex items-baseline gap-1">
-                    <span className="text-xl sm:text-2xl font-bold text-zinc-800 font-mono">{referredUsers.length}</span>
-                    <span className="text-[10px] sm:text-xs text-zinc-500 font-bold ml-1">friends</span>
+              const depositCommissionEarnings = firstDepositCommissions.reduce((sum, tx) => sum + (tx.amount || 0), 0);
+              const grandTotal = milestoneEarnings + depositCommissionEarnings;
+
+              return (
+                <div className="grid grid-cols-2 gap-2.5 sm:gap-3 items-start">
+                  <div 
+                    className="bg-[#FFF8E1] border border-zinc-200/80 shadow-sm rounded-2xl p-3.5 sm:p-4 flex flex-col justify-between transition-all duration-300 relative select-none cursor-pointer hover:bg-[#FFF5D1]"
+                    onClick={() => setShowEarningsBreakdown(!showEarningsBreakdown)}
+                  >
+                    <div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-[9px] sm:text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Total Earned</span>
+                        <div className="text-amber-600">
+                          {showEarningsBreakdown ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                        </div>
+                      </div>
+                      <div className="mt-1 flex items-baseline gap-1">
+                        <span className="text-xl sm:text-2xl font-bold text-amber-600 font-mono">
+                          {grandTotal.toFixed(2)}
+                        </span>
+                        <span className="text-[10px] sm:text-xs text-zinc-500 font-bold">USDT</span>
+                      </div>
+                    </div>
+
+                    {!showEarningsBreakdown && (
+                      <p className="text-[8px] sm:text-[9px] text-zinc-500 font-bold mt-2 flex items-center gap-0.5 animate-fadeIn">
+                        <span>Tap to view breakdown</span>
+                      </p>
+                    )}
+
+                    {showEarningsBreakdown && (
+                      <div className="mt-2.5 pt-2.5 border-t border-zinc-200/50 space-y-1.5 text-left text-[9px] sm:text-[10px] text-zinc-600 animate-fadeIn" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex justify-between items-center">
+                          <span className="flex items-center gap-1 font-medium">
+                            <span className="text-amber-500">👥</span> Sign-ups:
+                          </span>
+                          <span className="font-bold font-mono text-zinc-800">${milestoneEarnings.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="flex items-center gap-1 font-medium">
+                            <span className="text-amber-500">💳</span> Deposits:
+                          </span>
+                          <span className="font-bold font-mono text-zinc-800">${depositCommissionEarnings.toFixed(2)}</span>
+                        </div>
+
+                        {firstDepositCommissions.length > 0 && (
+                          <div className="mt-2 pt-2 border-t border-zinc-200/30 max-h-24 overflow-y-auto pr-1 space-y-1 text-[8px] sm:text-[9px]">
+                            <div className="text-[8px] font-bold text-zinc-400 uppercase tracking-wider mb-1">Commission Logs</div>
+                            {firstDepositCommissions.map((tx) => (
+                              <div key={tx.id} className="flex justify-between items-center bg-amber-500/5 px-1.5 py-1 rounded border border-amber-500/10 text-zinc-700">
+                                <span className="truncate max-w-[95px] sm:max-w-[120px]" title={tx.paymentMessage}>
+                                  {tx.paymentMessage?.replace("Referral First Deposit Bonus", "Bonus") || "Deposit Bonus"}
+                                </span>
+                                <span className="font-bold font-mono text-amber-700 flex-shrink-0 font-mono">+${tx.amount?.toFixed(2)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="bg-[#FFF8E1] border border-zinc-200/80 shadow-sm rounded-2xl p-3.5 sm:p-4 flex flex-col justify-between min-h-[92px]">
+                    <div>
+                      <span className="text-[9px] sm:text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Successful Invites</span>
+                      <div className="mt-1 flex items-baseline gap-1">
+                        <span className="text-xl sm:text-2xl font-bold text-zinc-800 font-mono">{referredUsers.length}</span>
+                        <span className="text-[10px] sm:text-xs text-zinc-500 font-bold ml-1">friends</span>
+                      </div>
+                    </div>
+                    <p className="text-[9px] sm:text-[10px] text-zinc-500 mt-2">Keep growing your circle!</p>
                   </div>
                 </div>
-                <p className="text-[9px] sm:text-[10px] text-zinc-500 mt-2">Keep growing your circle!</p>
-              </div>
-            </div>
+              );
+            })()}
 
             {/* 3. TIER MILESTONE PROGRESS TRACK */}
             {(() => {

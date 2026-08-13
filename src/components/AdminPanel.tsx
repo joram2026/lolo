@@ -2170,6 +2170,34 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                           )}
                         </div>
 
+                        {/* AI Audit HUD */}
+                        {tx.aiAudit && (
+                          <div className={`p-3 rounded-xl border text-[11px] leading-relaxed space-y-1 ${
+                            tx.aiAudit.isValid 
+                              ? 'bg-emerald-950/20 border-emerald-500/20 text-emerald-300' 
+                              : 'bg-red-950/20 border-red-500/20 text-red-300'
+                          }`}>
+                            <div className="flex items-center justify-between font-bold">
+                              <span className="flex items-center gap-1">
+                                <Sparkles size={12} className={tx.aiAudit.isValid ? 'text-emerald-400 animate-pulse' : 'text-red-400'} />
+                                <span className={tx.aiAudit.isValid ? 'text-emerald-300' : 'text-red-300'}>Gemini AI Audit Assessment:</span>
+                              </span>
+                              <span className={`px-1.5 py-0.25 rounded font-mono text-[9px] ${
+                                tx.aiAudit.isValid ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'
+                              }`}>
+                                {tx.aiAudit.isValid ? 'VALID' : 'INVALID / SUSPICIOUS'} ({tx.aiAudit.confidence}% Confidence)
+                              </span>
+                            </div>
+                            <p className="font-semibold text-[10px] text-zinc-300">{tx.aiAudit.reasons}</p>
+                            {tx.aiAudit.isValid && (
+                              <div className="grid grid-cols-2 gap-2 pt-1 border-t border-zinc-800/60 font-mono text-[9px] text-zinc-400">
+                                <div><span className="text-zinc-500">Detected Amount:</span> {tx.aiAudit.extractedAmount ? `${tx.aiAudit.extractedAmount} ${tx.aiAudit.extractedSymbol || ''}` : 'N/A'}</div>
+                                <div><span className="text-zinc-500">Tx Hash / Ref:</span> <span className="truncate block max-w-[150px]">{tx.aiAudit.extractedTxHash || 'N/A'}</span></div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
                         {/* Confirmation and Action Block */}
                         <div className="flex justify-end gap-2 pt-2">
                           <button
@@ -3980,7 +4008,12 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                       <div className="text-[10px] text-zinc-500 font-mono">
                         <span>ID: {t.id} | Date: {formatDate(t.createdAt)}</span>
                         {t.network && <span className="block text-[9px] text-zinc-400">Network: {t.network} | Address: {t.address}</span>}
-                        {t.merchantName && <span className="block text-[9px] text-zinc-400">Merchant: {t.merchantName} {t.localAmount && `(${t.localAmount.toLocaleString()} Shs)`}</span>}
+                        {t.merchantName && (
+                          <span className="block text-[9px] text-zinc-400">
+                            {t.type === 'deposit_p2p' || t.type === 'withdraw_p2p' ? 'Merchant: ' : 'Asset: '}
+                            {t.merchantName} {t.localAmount && `(${t.localAmount.toLocaleString()} Shs)`}
+                          </span>
+                        )}
                       </div>
                     </div>
                     <div className="text-right shrink-0">

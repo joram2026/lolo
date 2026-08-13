@@ -35,7 +35,7 @@ service cloud.firestore {
       allow update: if isAdmin() || 
                     (isAuth() && isOwner(userId) && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['withdrawalEnabled', 'email'])) ||
                     (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['accountPassword', 'authEmail', 'authEmailVersion', 'uid'])) ||
-                    (isAuth() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['balance']));
+                    (isAuth() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['balance', 'usdtBalance']));
       allow delete: if isAdmin();
     }
 

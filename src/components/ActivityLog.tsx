@@ -565,7 +565,9 @@ export default function ActivityLog({ userId, isLightTheme = false }: ActivityLo
                       )}
                       {tx.merchantName && (
                         <div>
-                          <span className={`${isLightTheme ? 'text-zinc-400' : 'text-zinc-600'} font-bold block uppercase tracking-wider text-[8px]`}>P2P Merchant</span>
+                          <span className={`${isLightTheme ? 'text-zinc-400' : 'text-zinc-600'} font-bold block uppercase tracking-wider text-[8px]`}>
+                            {tx.type === 'deposit_p2p' || tx.type === 'withdraw_p2p' ? 'P2P Merchant' : 'Crypto Asset'}
+                          </span>
                           <span className={`font-bold ${isLightTheme ? 'text-zinc-700' : 'text-zinc-300'}`}>{tx.merchantName}</span>
                         </div>
                       )}
