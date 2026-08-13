@@ -9,7 +9,7 @@ import {
   updatePassword
 } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp, getDoc, collection, query, where, getDocs, updateDoc, increment, addDoc, deleteDoc } from 'firebase/firestore';
-import { Shield, Mail, Lock, User, Phone, Sparkles, AlertCircle, RefreshCw, Eye, EyeOff, Globe, ChevronDown, Check } from 'lucide-react';
+import { Shield, Mail, Lock, User, Phone, Sparkles, AlertCircle, RefreshCw, Eye, EyeOff, Globe, ChevronDown, Check, TrendingUp, Zap, Award, ArrowUpRight, Activity, DollarSign, Users, Percent, CheckCircle } from 'lucide-react';
 
 interface AuthPageProps {
   onSuccess: () => void;
@@ -491,446 +491,473 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
   };
 
   return (
-    <div id="auth-page-container" className="min-h-screen flex items-center justify-center p-4 sm:p-6 bg-[#FFF3D6] text-zinc-800 font-sans">
-      <div className="w-full max-w-sm">
-        
-        {/* Brand Banner */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center mb-4 relative group">
-            {/* Pulsing ambient glow behind icon */}
-            <div className="absolute inset-0 bg-amber-500/10 rounded-full blur-xl group-hover:bg-amber-500/20 transition-all duration-700 animate-pulse"></div>
-            {/* Premium Icon Ring */}
-            <div className="relative w-20 h-20 rounded-3xl bg-white border border-zinc-200/80 p-2 shadow-xl flex items-center justify-center overflow-hidden">
-              <img 
-                src="/icon.svg" 
-                alt="Morex" 
-                className="w-full h-full object-contain transform group-hover:scale-105 transition-transform duration-500"
-                referrerPolicy="no-referrer"
-              />
-              {/* Overlay sheen */}
-              <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-zinc-950/5 to-transparent pointer-events-none"></div>
-            </div>
-          </div>
-          <h1 className="text-2xl font-black text-zinc-800 tracking-tight">Morex Holdings</h1>
-          <p className="text-xs text-zinc-500 mt-1 max-w-[260px] mx-auto">
-            Start earning from crypto with the most favourable rates.
-          </p>
+    <div id="auth-page-container" className="min-h-screen bg-gradient-to-br from-[#FFFBF0] via-[#FFF3D6] to-[#FFEBB5] text-zinc-800 font-sans relative overflow-hidden flex flex-col justify-center items-center py-12">
+      <style>{`
+        @keyframes float-slow {
+          0%, 100% { transform: translateY(0px) rotate(0deg); }
+          50% { transform: translateY(-15px) rotate(5deg); }
+        }
+        .animate-float-slow {
+          animation: float-slow 8s ease-in-out infinite;
+        }
+        @keyframes float-fast {
+          0%, 100% { transform: translateY(0px) rotate(0deg); }
+          50% { transform: translateY(-8px) rotate(-3deg); }
+        }
+        .animate-float-fast {
+          animation: float-fast 5s ease-in-out infinite;
+        }
+      `}</style>
+
+      {/* 1. Floating Forex Background Icons */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden select-none z-0">
+        <div className="absolute top-[18%] left-[4%] opacity-[0.08] animate-float-slow text-amber-600">
+          <div className="text-6xl sm:text-9xl font-black font-serif">₿</div>
         </div>
+        <div className="absolute bottom-[20%] left-[6%] opacity-[0.06] animate-float-fast text-emerald-600">
+          <div className="text-7xl sm:text-[10rem] font-black font-sans">$</div>
+        </div>
+        <div className="absolute top-[25%] right-[6%] opacity-[0.05] animate-float-slow text-blue-600">
+          <div className="text-6xl sm:text-9xl font-bold font-sans">€</div>
+        </div>
+        <div className="absolute bottom-[15%] right-[4%] opacity-[0.07] animate-float-fast text-indigo-600">
+          <div className="text-6xl sm:text-9xl font-bold font-sans">£</div>
+        </div>
+        <div className="absolute inset-0 bg-[radial-gradient(#d97706_0.5px,transparent_0.5px)] [background-size:20px_20px] opacity-[0.04]" />
+      </div>
 
-        {/* Auth Box Card */}
-        <div className="bg-white border border-zinc-200/60 rounded-3xl p-6 shadow-xl space-y-6">
-          {show2faPrompt ? (
-            <div className="space-y-6">
-              <div className="space-y-1">
-                <h2 className="text-lg font-bold text-zinc-800 flex items-center gap-2">
-                  <Shield size={18} className="text-amber-500" />
-                  Two-Factor Verification
-                </h2>
-                <p className="text-xs text-zinc-500 leading-relaxed">
-                  This wallet is secured with Two-Factor Authentication. Please enter the 6-digit passcode from your Google Authenticator app.
-                </p>
-              </div>
-
-
-
-              <form onSubmit={handleVerify2faLogin} className="space-y-4">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-zinc-400 uppercase tracking-wider block text-center">Google Authenticator Code</label>
-                  <input
-                    id="auth-2fa-input"
-                    type="text"
-                    maxLength={6}
-                    required
-                    autoFocus
-                    placeholder="000000"
-                    value={twoFactorCode}
-                    onChange={(e) => setTwoFactorCode(e.target.value.replace(/\D/g, ''))}
-                    className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-xl text-center font-mono text-lg tracking-widest text-amber-600 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
+      {/* 2. Centered Auth Container */}
+      <div className="w-full max-w-sm px-4 relative z-10 flex flex-col justify-center">
+            
+            {/* Logo/Banner section */}
+            <div className="text-center mb-6">
+              <div className="inline-flex items-center justify-center mb-3 relative group">
+                <div className="absolute inset-0 bg-amber-500/10 rounded-full blur-xl group-hover:bg-amber-500/20 transition-all duration-700 animate-pulse"></div>
+                <div className="relative w-16 h-16 rounded-2xl bg-white border border-zinc-200/80 p-1.5 shadow-lg flex items-center justify-center overflow-hidden">
+                  <img 
+                    src="/icon.svg" 
+                    alt="Morex" 
+                    className="w-full h-full object-contain transform group-hover:scale-105 transition-transform duration-500"
+                    referrerPolicy="no-referrer"
                   />
+                  <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-zinc-950/5 to-transparent pointer-events-none"></div>
                 </div>
-
-                <button
-                  id="auth-2fa-verify-btn"
-                  type="submit"
-                  className="w-full py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-bold rounded-xl text-xs tracking-wider uppercase shadow-md transition-all cursor-pointer"
-                >
-                  Verify & Log In
-                </button>
-
-                <button
-                  id="auth-2fa-cancel-btn"
-                  type="button"
-                  onClick={() => { setShow2faPrompt(false); setTwoFactorCode(''); setTwoFactorError(null); }}
-                  className="w-full py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-600 rounded-xl text-[10px] uppercase font-bold tracking-wider transition-all cursor-pointer text-center"
-                >
-                  Back to Sign In
-                </button>
-              </form>
-            </div>
-          ) : (
-            <>
-              <div className="space-y-1">
-                <h2 className="text-lg font-bold text-zinc-800">
-                  {isReset ? 'Reset Wallet Password' : isSignUp ? 'Create your Wallet' : 'Sign in to Wallet'}
-                </h2>
-                <p className="text-xs text-zinc-400">
-                  {isReset 
-                    ? 'Enter your email and a new password to reset your account password.' 
-                    : isSignUp 
-                      ? 'Sign and start making profits.' 
-                      : 'Enter your credentials to make profits.'
-                  }
-                </p>
               </div>
+              <h1 className="text-xl font-black text-zinc-900 tracking-tight">Morex Holdings</h1>
+              <p className="text-[11px] text-zinc-500 mt-0.5 max-w-[260px] mx-auto leading-normal">
+                Start earning from high-yield crypto & forex arbitrage copy trading.
+              </p>
+            </div>
 
-
-
-              <form onSubmit={handleSubmit} className="space-y-4">
-                
-                {/* Display Name - Sign Up Only */}
-                {isSignUp && !isReset && (
+            {/* Main Auth Form Container Card */}
+            <div className="bg-white border border-zinc-200/60 rounded-3xl p-5 sm:p-6 shadow-xl space-y-5">
+              {show2faPrompt ? (
+                <div className="space-y-6">
                   <div className="space-y-1">
-                    <label htmlFor="auth-display-name" className="text-xs font-semibold text-zinc-600 cursor-pointer">Display Name</label>
-                    <div className="relative">
-                      <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-zinc-400 pointer-events-none z-10">
-                        <User size={15} />
-                      </span>
+                    <h2 className="text-lg font-bold text-zinc-800 flex items-center gap-2">
+                      <Shield size={18} className="text-amber-500" />
+                      Two-Factor Verification
+                    </h2>
+                    <p className="text-xs text-zinc-500 leading-relaxed">
+                      This wallet is secured with Two-Factor Authentication. Please enter the 6-digit passcode from your Google Authenticator app.
+                    </p>
+                  </div>
+
+                  <form onSubmit={handleVerify2faLogin} className="space-y-4">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-zinc-400 uppercase tracking-wider block text-center">Google Authenticator Code</label>
                       <input
-                        id="auth-display-name"
-                        name="displayName"
+                        id="auth-2fa-input"
                         type="text"
+                        maxLength={6}
                         required
-                        autoComplete="name"
-                        autoCapitalize="words"
-                        autoCorrect="off"
-                        placeholder="John Doe"
-                        value={displayName}
-                        onChange={(e) => setDisplayName(e.target.value)}
-                        className="w-full pl-9 pr-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 placeholder-zinc-400 text-zinc-800"
+                        autoFocus
+                        placeholder="000000"
+                        value={twoFactorCode}
+                        onChange={(e) => setTwoFactorCode(e.target.value.replace(/\D/g, ''))}
+                        className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-xl text-center font-mono text-lg tracking-widest text-amber-600 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
                       />
                     </div>
-                  </div>
-                )}
 
-                {/* Country Dropdown - Sign Up Only */}
-                {isSignUp && !isReset && (
-                  <div className="space-y-1 relative">
-                    <label htmlFor="auth-country-trigger" className="text-xs font-semibold text-zinc-600 cursor-pointer">Country of Residence</label>
-                    
                     <button
-                      id="auth-country-trigger"
-                      type="button"
-                      onClick={() => setIsCountryOpen(!isCountryOpen)}
-                      className="w-full px-3 py-2.5 bg-zinc-50 hover:bg-zinc-100/90 border border-zinc-200 rounded-xl text-xs flex items-center justify-between transition-all focus:outline-none focus:ring-1 focus:ring-amber-500 text-zinc-800 font-medium cursor-pointer shadow-sm active:scale-[0.99]"
+                      id="auth-2fa-verify-btn"
+                      type="submit"
+                      className="w-full py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-bold rounded-xl text-xs tracking-wider uppercase shadow-md transition-all cursor-pointer"
                     >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <span className="text-base leading-none shrink-0">{COUNTRIES.find(c => c.code === country)?.flag || '🇰🇪'}</span>
-                        <span className="font-semibold text-zinc-800 truncate">{COUNTRIES.find(c => c.code === country)?.name || country}</span>
-                        <span className="text-[10px] bg-zinc-200/80 text-zinc-700 font-bold font-mono px-1.5 py-0.5 rounded shrink-0">
-                          {COUNTRIES.find(c => c.code === country)?.dialCode || '+254'}
-                        </span>
-                      </div>
-                      <ChevronDown size={15} className={`text-zinc-400 shrink-0 transition-transform duration-200 ${isCountryOpen ? 'rotate-180 text-amber-500' : ''}`} />
+                      Verify & Log In
                     </button>
 
-                    {/* Custom Modern Dropdown Menu */}
-                    {isCountryOpen && (
-                      <>
-                        <div 
-                          className="fixed inset-0 z-40" 
-                          onClick={() => setIsCountryOpen(false)} 
-                        />
+                    <button
+                      id="auth-2fa-cancel-btn"
+                      type="button"
+                      onClick={() => { setShow2faPrompt(false); setTwoFactorCode(''); setTwoFactorError(null); }}
+                      className="w-full py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-600 rounded-xl text-[10px] uppercase font-bold tracking-wider transition-all cursor-pointer text-center"
+                    >
+                      Back to Sign In
+                    </button>
+                  </form>
+                </div>
+              ) : (
+                <>
+                  <div className="space-y-1">
+                    <h2 className="text-lg font-bold text-zinc-800">
+                      {isReset ? 'Reset Wallet Password' : isSignUp ? 'Create your Wallet' : 'Sign in to Wallet'}
+                    </h2>
+                    <p className="text-xs text-zinc-400">
+                      {isReset 
+                        ? 'Enter your email and a new password to reset your account password.' 
+                        : isSignUp 
+                          ? 'Sign up and start making profits.' 
+                          : 'Enter your credentials to make profits.'
+                      }
+                    </p>
+                  </div>
+
+                  <form onSubmit={handleSubmit} className="space-y-4">
+                    
+                    {/* Display Name - Sign Up Only */}
+                    {isSignUp && !isReset && (
+                      <div className="space-y-1">
+                        <label htmlFor="auth-display-name" className="text-xs font-semibold text-zinc-600 cursor-pointer">Display Name</label>
+                        <div className="relative">
+                          <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-zinc-400 pointer-events-none z-10">
+                            <User size={15} />
+                          </span>
+                          <input
+                            id="auth-display-name"
+                            name="displayName"
+                            type="text"
+                            required
+                            autoComplete="name"
+                            autoCapitalize="words"
+                            autoCorrect="off"
+                            placeholder="John Doe"
+                            value={displayName}
+                            onChange={(e) => setDisplayName(e.target.value)}
+                            className="w-full pl-9 pr-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 placeholder-zinc-400 text-zinc-800"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Country Dropdown - Sign Up Only */}
+                    {isSignUp && !isReset && (
+                      <div className="space-y-1 relative">
+                        <label htmlFor="auth-country-trigger" className="text-xs font-semibold text-zinc-600 cursor-pointer">Country of Residence</label>
                         
-                        <div className="absolute left-0 right-0 top-full mt-1.5 z-50 bg-white border border-amber-200/80 rounded-2xl shadow-xl p-1.5 space-y-1 animate-in fade-in zoom-in-95 duration-150">
-                          {COUNTRIES.map((c) => {
-                            const isSelected = country === c.code;
-                            return (
-                              <button
-                                key={c.code}
-                                id={`auth-country-opt-${c.code.toLowerCase().replace(/\s+/g, '-')}`}
-                                type="button"
-                                onClick={() => {
-                                  setCountry(c.code);
-                                  setIsCountryOpen(false);
-                                }}
-                                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs transition-all cursor-pointer ${
-                                  isSelected 
-                                    ? 'bg-amber-500/10 border border-amber-500/30 text-amber-950 font-bold shadow-xs' 
-                                    : 'hover:bg-amber-50/60 text-zinc-700 font-medium border border-transparent'
-                                }`}
-                              >
-                                <div className="flex items-center gap-2.5">
-                                  <span className="text-base leading-none">{c.flag}</span>
-                                  <span>{c.name}</span>
-                                  <span className="text-[10px] font-mono text-zinc-500 font-semibold">
-                                    ({c.dialCode})
-                                  </span>
-                                </div>
-                                {isSelected && <Check size={14} className="text-amber-600 shrink-0 stroke-[3]" />}
-                              </button>
-                            );
-                          })}
+                        <button
+                          id="auth-country-trigger"
+                          type="button"
+                          onClick={() => setIsCountryOpen(!isCountryOpen)}
+                          className="w-full px-3 py-2.5 bg-zinc-50 hover:bg-zinc-100/90 border border-zinc-200 rounded-xl text-xs flex items-center justify-between transition-all focus:outline-none focus:ring-1 focus:ring-amber-500 text-zinc-800 font-medium cursor-pointer shadow-sm active:scale-[0.99]"
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <span className="text-base leading-none shrink-0">{COUNTRIES.find(c => c.code === country)?.flag || '🇰🇪'}</span>
+                            <span className="font-semibold text-zinc-800 truncate">{COUNTRIES.find(c => c.code === country)?.name || country}</span>
+                            <span className="text-[10px] bg-zinc-200/80 text-zinc-700 font-bold font-mono px-1.5 py-0.5 rounded shrink-0">
+                              {COUNTRIES.find(c => c.code === country)?.dialCode || '+254'}
+                            </span>
+                          </div>
+                          <ChevronDown size={15} className={`text-zinc-400 shrink-0 transition-transform duration-200 ${isCountryOpen ? 'rotate-180 text-amber-500' : ''}`} />
+                        </button>
+
+                        {/* Custom Modern Dropdown Menu */}
+                        {isCountryOpen && (
+                          <>
+                            <div 
+                              className="fixed inset-0 z-40" 
+                              onClick={() => setIsCountryOpen(false)} 
+                            />
+                            
+                            <div className="absolute left-0 right-0 top-full mt-1.5 z-50 bg-white border border-amber-200/80 rounded-2xl shadow-xl p-1.5 space-y-1 animate-in fade-in zoom-in-95 duration-150">
+                              {COUNTRIES.map((c) => {
+                                const isSelected = country === c.code;
+                                return (
+                                  <button
+                                    key={c.code}
+                                    id={`auth-country-opt-${c.code.toLowerCase().replace(/\s+/g, '-')}`}
+                                    type="button"
+                                    onClick={() => {
+                                      setCountry(c.code);
+                                      setIsCountryOpen(false);
+                                    }}
+                                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs transition-all cursor-pointer ${
+                                      isSelected 
+                                        ? 'bg-amber-500/10 border border-amber-500/30 text-amber-950 font-bold shadow-xs' 
+                                        : 'hover:bg-amber-50/60 text-zinc-700 font-medium border border-transparent'
+                                    }`}
+                                  >
+                                    <div className="flex items-center gap-2.5">
+                                      <span className="text-base leading-none">{c.flag}</span>
+                                      <span>{c.name}</span>
+                                      <span className="text-[10px] font-mono text-zinc-500 font-semibold">
+                                        ({c.dialCode})
+                                      </span>
+                                    </div>
+                                    {isSelected && <Check size={14} className="text-amber-600 shrink-0 stroke-[3]" />}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Email Field */}
+                    <div className="space-y-1">
+                      <label htmlFor="auth-email" className="text-xs font-semibold text-zinc-600 cursor-pointer">Email Address</label>
+                      <div className="relative">
+                        <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-zinc-400 pointer-events-none z-10">
+                          <Mail size={15} />
+                        </span>
+                        <input
+                          id="auth-email"
+                          name="email"
+                          type="email"
+                          required
+                          autoComplete="email"
+                          autoCapitalize="none"
+                          autoCorrect="off"
+                          spellCheck={false}
+                          placeholder="alex@gmail.com or personal"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          className="w-full pl-9 pr-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 placeholder-zinc-400 text-zinc-800"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Phone Number - Sign Up Only */}
+                    {isSignUp && !isReset && (
+                      <div className="space-y-1">
+                        <label htmlFor="auth-phone" className="text-xs font-semibold text-zinc-600 cursor-pointer">Phone Number</label>
+                        <div className="relative flex items-center">
+                          <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none z-10 gap-1.5">
+                            <span className="text-sm leading-none">{COUNTRIES.find(c => c.code === country)?.flag || '🇰🇪'}</span>
+                            <span className="text-xs font-bold text-zinc-600 font-mono">{COUNTRIES.find(c => c.code === country)?.dialCode || '+254'}</span>
+                            <span className="h-4 w-[1px] bg-zinc-200 ml-0.5" />
+                          </div>
+                          <input
+                            id="auth-phone"
+                            name="phone"
+                            type="tel"
+                            required
+                            autoComplete="tel"
+                            placeholder="700 000 000"
+                            value={phone}
+                            onChange={(e) => setPhone(e.target.value)}
+                            className="w-full pl-24 pr-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 placeholder-zinc-400 text-zinc-800 font-medium"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Custom Reset Fields (New Password, Confirm Password) - Reset Only */}
+                    {isReset && (
+                      <>
+                        {/* New Password */}
+                        <div className="space-y-1">
+                          <label htmlFor="auth-reset-new-password" className="text-xs font-semibold text-zinc-600 cursor-pointer">New Password</label>
+                          <div className="relative">
+                            <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-zinc-400 pointer-events-none z-10">
+                              <Lock size={15} />
+                            </span>
+                            <input
+                              id="auth-reset-new-password"
+                              name="newPassword"
+                              type={showResetPassword ? 'text' : 'password'}
+                              required
+                              minLength={6}
+                              autoComplete="new-password"
+                              placeholder="••••••••"
+                              value={resetNewPassword}
+                              onChange={(e) => setResetNewPassword(e.target.value)}
+                              className="w-full pl-9 pr-10 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 placeholder-zinc-400 text-zinc-800"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowResetPassword(!showResetPassword)}
+                              className="absolute inset-y-0 right-0 flex items-center pr-3 text-zinc-400 hover:text-zinc-600 focus:outline-none cursor-pointer z-10"
+                              title={showResetPassword ? "Hide password" : "Show password"}
+                            >
+                              {showResetPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Confirm New Password */}
+                        <div className="space-y-1">
+                          <label htmlFor="auth-reset-confirm-password" className="text-xs font-semibold text-zinc-600 cursor-pointer">Confirm New Password</label>
+                          <div className="relative">
+                            <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-zinc-400 pointer-events-none z-10">
+                              <Lock size={15} />
+                            </span>
+                            <input
+                              id="auth-reset-confirm-password"
+                              name="confirmPassword"
+                              type={showResetPassword ? 'text' : 'password'}
+                              required
+                              minLength={6}
+                              autoComplete="new-password"
+                              placeholder="••••••••"
+                              value={resetConfirmPassword}
+                              onChange={(e) => setResetConfirmPassword(e.target.value)}
+                              className="w-full pl-9 pr-10 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 placeholder-zinc-400 text-zinc-800"
+                            />
+                          </div>
                         </div>
                       </>
                     )}
-                  </div>
-                )}
 
-                {/* Email Field */}
-                <div className="space-y-1">
-                  <label htmlFor="auth-email" className="text-xs font-semibold text-zinc-600 cursor-pointer">Email Address</label>
-                  <div className="relative">
-                    <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-zinc-400 pointer-events-none z-10">
-                      <Mail size={15} />
-                    </span>
-                    <input
-                      id="auth-email"
-                      name="email"
-                      type="email"
-                      required
-                      autoComplete="email"
-                      autoCapitalize="none"
-                      autoCorrect="off"
-                      spellCheck={false}
-                      placeholder="alex@gmail.com or personal"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="w-full pl-9 pr-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 placeholder-zinc-400 text-zinc-800"
-                    />
-                  </div>
-                </div>
-
-                {/* Phone Number - Sign Up Only */}
-                {isSignUp && !isReset && (
-                  <div className="space-y-1">
-                    <label htmlFor="auth-phone" className="text-xs font-semibold text-zinc-600 cursor-pointer">Phone Number</label>
-                    <div className="relative flex items-center">
-                      <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none z-10 gap-1.5">
-                        <span className="text-sm leading-none">{COUNTRIES.find(c => c.code === country)?.flag || '🇰🇪'}</span>
-                        <span className="text-xs font-bold text-zinc-600 font-mono">{COUNTRIES.find(c => c.code === country)?.dialCode || '+254'}</span>
-                        <span className="h-4 w-[1px] bg-zinc-200 ml-0.5" />
+                    {/* Password Field - Login / Sign Up Only */}
+                    {!isReset && (
+                      <div className="space-y-1">
+                        <div className="flex justify-between items-center">
+                          <label htmlFor="auth-password" className="text-xs font-semibold text-zinc-600 cursor-pointer">Password</label>
+                          {!isSignUp && (
+                            <button
+                              id="auth-forgot-password"
+                              type="button"
+                              onClick={() => { navigate('/reset'); setError(null); }}
+                              className="text-[11px] font-medium text-amber-600 hover:text-amber-700 hover:underline cursor-pointer"
+                            >
+                              Forgot?
+                            </button>
+                          )}
+                        </div>
+                        <div className="relative">
+                          <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-zinc-400 pointer-events-none z-10">
+                            <Lock size={15} />
+                          </span>
+                          <input
+                            id="auth-password"
+                            name="password"
+                            type={showPassword ? 'text' : 'password'}
+                            required
+                            minLength={6}
+                            autoComplete={isSignUp ? "new-password" : "current-password"}
+                            placeholder="••••••••"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            className="w-full pl-9 pr-10 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 placeholder-zinc-400 text-zinc-800"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowPassword(!showPassword)}
+                            className="absolute inset-y-0 right-0 flex items-center pr-3 text-zinc-400 hover:text-zinc-600 focus:outline-none cursor-pointer z-10"
+                            title={showPassword ? "Hide password" : "Show password"}
+                          >
+                            {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                          </button>
+                        </div>
                       </div>
-                      <input
-                        id="auth-phone"
-                        name="phone"
-                        type="tel"
-                        required
-                        autoComplete="tel"
-                        placeholder="700 000 000"
-                        value={phone}
-                        onChange={(e) => setPhone(e.target.value)}
-                        className="w-full pl-24 pr-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 placeholder-zinc-400 text-zinc-800 font-medium"
-                      />
-                    </div>
-                  </div>
-                )}
+                    )}
 
-                {/* Custom Reset Fields (New Password, Confirm Password) - Reset Only */}
-                {isReset && (
-                  <>
-                    {/* New Password */}
-                    <div className="space-y-1">
-                      <label htmlFor="auth-reset-new-password" className="text-xs font-semibold text-zinc-600 cursor-pointer">New Password</label>
-                      <div className="relative">
-                        <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-zinc-400 pointer-events-none z-10">
-                          <Lock size={15} />
-                        </span>
-                        <input
-                          id="auth-reset-new-password"
-                          name="newPassword"
-                          type={showResetPassword ? 'text' : 'password'}
-                          required
-                          minLength={6}
-                          autoComplete="new-password"
-                          placeholder="••••••••"
-                          value={resetNewPassword}
-                          onChange={(e) => setResetNewPassword(e.target.value)}
-                          className="w-full pl-9 pr-10 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 placeholder-zinc-400 text-zinc-800"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowResetPassword(!showResetPassword)}
-                          className="absolute inset-y-0 right-0 flex items-center pr-3 text-zinc-400 hover:text-zinc-600 focus:outline-none cursor-pointer z-10"
-                          title={showResetPassword ? "Hide password" : "Show password"}
-                        >
-                          {showResetPassword ? <EyeOff size={15} /> : <Eye size={15} />}
-                        </button>
+                    {/* Confirm Password Field - Sign Up Only */}
+                    {isSignUp && !isReset && (
+                      <div className="space-y-1">
+                        <label htmlFor="auth-confirm-password" className="text-xs font-semibold text-zinc-600 cursor-pointer">Confirm Password</label>
+                        <div className="relative">
+                          <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-zinc-400 pointer-events-none z-10">
+                            <Lock size={15} />
+                          </span>
+                          <input
+                            id="auth-confirm-password"
+                            name="confirmPassword"
+                            type={showConfirmPassword ? 'text' : 'password'}
+                            required
+                            minLength={6}
+                            autoComplete="new-password"
+                            placeholder="••••••••"
+                            value={confirmPassword}
+                            onChange={(e) => setConfirmPassword(e.target.value)}
+                            className="w-full pl-9 pr-10 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 placeholder-zinc-400 text-zinc-800"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                            className="absolute inset-y-0 right-0 flex items-center pr-3 text-zinc-400 hover:text-zinc-600 focus:outline-none cursor-pointer z-10"
+                            title={showConfirmPassword ? "Hide password" : "Show password"}
+                          >
+                            {showConfirmPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                          </button>
+                        </div>
                       </div>
-                    </div>
+                    )}
 
-                    {/* Confirm New Password */}
-                    <div className="space-y-1">
-                      <label htmlFor="auth-reset-confirm-password" className="text-xs font-semibold text-zinc-600 cursor-pointer">Confirm New Password</label>
-                      <div className="relative">
-                        <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-zinc-400 pointer-events-none z-10">
-                          <Lock size={15} />
-                        </span>
+                    {/* Referral Code - Sign Up Only */}
+                    {isSignUp && !isReset && (
+                      <div className="space-y-1">
+                        <label htmlFor="auth-referral" className="text-xs font-semibold text-zinc-600 cursor-pointer">Referral Code (Optional)</label>
                         <input
-                          id="auth-reset-confirm-password"
-                          name="confirmPassword"
-                          type={showResetPassword ? 'text' : 'password'}
-                          required
-                          minLength={6}
-                          autoComplete="new-password"
-                          placeholder="••••••••"
-                          value={resetConfirmPassword}
-                          onChange={(e) => setResetConfirmPassword(e.target.value)}
-                          className="w-full pl-9 pr-10 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 placeholder-zinc-400 text-zinc-800"
+                          id="auth-referral"
+                          name="referral"
+                          type="text"
+                          autoComplete="off"
+                          autoCapitalize="characters"
+                          autoCorrect="off"
+                          spellCheck={false}
+                          placeholder="e.g. FRIEND50"
+                          value={referral}
+                          onChange={(e) => setReferral(e.target.value)}
+                          className="w-full px-3 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 placeholder-zinc-400 text-zinc-800"
                         />
                       </div>
-                    </div>
-                  </>
-                )}
+                    )}
 
-                {/* Password Field - Login / Sign Up Only */}
-                {!isReset && (
-                  <div className="space-y-1">
-                    <div className="flex justify-between items-center">
-                      <label htmlFor="auth-password" className="text-xs font-semibold text-zinc-600 cursor-pointer">Password</label>
-                      {!isSignUp && (
-                        <button
-                          id="auth-forgot-password"
-                          type="button"
-                          onClick={() => { navigate('/reset'); setError(null); }}
-                          className="text-[11px] font-medium text-amber-600 hover:text-amber-700 hover:underline cursor-pointer"
-                        >
-                          Forgot?
-                        </button>
-                      )}
-                    </div>
-                    <div className="relative">
-                      <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-zinc-400 pointer-events-none z-10">
-                        <Lock size={15} />
-                      </span>
-                      <input
-                        id="auth-password"
-                        name="password"
-                        type={showPassword ? 'text' : 'password'}
-                        required
-                        minLength={6}
-                        autoComplete={isSignUp ? "new-password" : "current-password"}
-                        placeholder="••••••••"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        className="w-full pl-9 pr-10 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 placeholder-zinc-400 text-zinc-800"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute inset-y-0 right-0 flex items-center pr-3 text-zinc-400 hover:text-zinc-600 focus:outline-none cursor-pointer z-10"
-                        title={showPassword ? "Hide password" : "Show password"}
-                      >
-                        {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Confirm Password Field - Sign Up Only */}
-                {isSignUp && !isReset && (
-                  <div className="space-y-1">
-                    <label htmlFor="auth-confirm-password" className="text-xs font-semibold text-zinc-600 cursor-pointer">Confirm Password</label>
-                    <div className="relative">
-                      <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-zinc-400 pointer-events-none z-10">
-                        <Lock size={15} />
-                      </span>
-                      <input
-                        id="auth-confirm-password"
-                        name="confirmPassword"
-                        type={showConfirmPassword ? 'text' : 'password'}
-                        required
-                        minLength={6}
-                        autoComplete="new-password"
-                        placeholder="••••••••"
-                        value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
-                        className="w-full pl-9 pr-10 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 placeholder-zinc-400 text-zinc-800"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                        className="absolute inset-y-0 right-0 flex items-center pr-3 text-zinc-400 hover:text-zinc-600 focus:outline-none cursor-pointer z-10"
-                        title={showConfirmPassword ? "Hide password" : "Show password"}
-                      >
-                        {showConfirmPassword ? <EyeOff size={15} /> : <Eye size={15} />}
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Referral Code - Sign Up Only */}
-                {isSignUp && !isReset && (
-                  <div className="space-y-1">
-                    <label htmlFor="auth-referral" className="text-xs font-semibold text-zinc-600 cursor-pointer">Referral Code (Optional)</label>
-                    <input
-                      id="auth-referral"
-                      name="referral"
-                      type="text"
-                      autoComplete="off"
-                      autoCapitalize="characters"
-                      autoCorrect="off"
-                      spellCheck={false}
-                      placeholder="e.g. FRIEND50"
-                      value={referral}
-                      onChange={(e) => setReferral(e.target.value)}
-                      className="w-full px-3 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 placeholder-zinc-400 text-zinc-800"
-                    />
-                  </div>
-                )}
-
-                {/* Submit Button */}
-                <button
-                  id="auth-submit-btn"
-                  type="submit"
-                  disabled={loading}
-                  className="w-full flex items-center justify-center gap-2 py-3 bg-gradient-to-r from-amber-500 to-amber-600 text-white hover:from-amber-600 hover:to-amber-700 rounded-xl text-xs font-bold transition-all mt-4 disabled:bg-zinc-100 disabled:text-zinc-400 shadow-md shadow-amber-500/10 cursor-pointer"
-                >
-                  {loading ? (
-                    <>
-                      <RefreshCw size={14} className="animate-spin" />
-                      <span>Please wait...</span>
-                    </>
-                  ) : (
-                    <span>
-                      {isReset 
-                        ? 'Update Password' 
-                        : isSignUp 
-                          ? 'Create Account' 
-                          : 'Log In'
-                      }
-                    </span>
-                  )}
-                </button>
-
-              </form>
-
-              {/* Toggle Button */}
-              <div className="text-center">
-                {isReset ? (
-                  <button
-                    id="auth-back-to-login"
-                    onClick={() => { navigate('/login'); setError(null); }}
-                    className="text-xs font-semibold text-zinc-500 hover:text-zinc-800 hover:underline"
-                  >
-                    Back to Sign In
-                  </button>
-                ) : (
-                  <p className="text-xs text-zinc-550">
-                    {isSignUp ? 'Already have an account?' : "Don't have an account?"}{' '}
+                    {/* Submit Button */}
                     <button
-                      id="auth-toggle-btn"
-                      onClick={() => { navigate(isSignUp ? '/login' : '/signup'); setError(null); }}
-                      className="text-xs font-bold text-amber-600 hover:text-amber-700 hover:underline"
+                      id="auth-submit-btn"
+                      type="submit"
+                      disabled={loading}
+                      className="w-full flex items-center justify-center gap-2 py-3 bg-gradient-to-r from-amber-500 to-amber-600 text-white hover:from-amber-600 hover:to-amber-700 rounded-xl text-xs font-bold transition-all mt-4 disabled:bg-zinc-100 disabled:text-zinc-400 shadow-md shadow-amber-500/10 cursor-pointer"
                     >
-                      {isSignUp ? 'Sign In' : 'Sign Up'}
+                      {loading ? (
+                        <>
+                          <RefreshCw size={14} className="animate-spin" />
+                          <span>Please wait...</span>
+                        </>
+                      ) : (
+                        <span>
+                          {isReset 
+                            ? 'Update Password' 
+                            : isSignUp 
+                              ? 'Create Account' 
+                              : 'Log In'
+                          }
+                        </span>
+                      )}
                     </button>
-                  </p>
-                )}
-              </div>
 
-            </>
-          )}
-        </div>
+                  </form>
+
+                  {/* Toggle Button */}
+                  <div className="text-center">
+                    {isReset ? (
+                      <button
+                        id="auth-back-to-login"
+                        onClick={() => { navigate('/login'); setError(null); }}
+                        className="text-xs font-semibold text-zinc-500 hover:text-zinc-800 hover:underline"
+                      >
+                        Back to Sign In
+                      </button>
+                    ) : (
+                      <p className="text-xs text-zinc-550">
+                        {isSignUp ? 'Already have an account?' : "Don't have an account?"}{' '}
+                        <button
+                          id="auth-toggle-btn"
+                          onClick={() => { navigate(isSignUp ? '/login' : '/signup'); setError(null); }}
+                          className="text-xs font-bold text-amber-600 hover:text-amber-700 hover:underline"
+                        >
+                          {isSignUp ? 'Sign In' : 'Sign Up'}
+                        </button>
+                      </p>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
 
       </div>
     </div>

@@ -157,10 +157,43 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
 
   const handleCopyReferral = () => {
     const code = (profile as any)?.uniqueCode || '';
-    const referralLink = `${window.location.origin}/#/signup?ref=${code}`;
-    navigator.clipboard.writeText(referralLink);
-    setCopiedReferral(true);
-    setTimeout(() => setCopiedReferral(false), 2500);
+    const referralLink = `https://www.morex.site/#/signup?ref=${code}`;
+    
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(referralLink)
+        .then(() => {
+          setCopiedReferral(true);
+          setTimeout(() => setCopiedReferral(false), 2500);
+        })
+        .catch((err) => {
+          console.error('Failed to copy using navigator.clipboard:', err);
+          fallbackCopyText(referralLink);
+        });
+    } else {
+      fallbackCopyText(referralLink);
+    }
+  };
+
+  const fallbackCopyText = (text: string) => {
+    try {
+      const textArea = document.createElement('textarea');
+      textArea.value = text;
+      textArea.style.top = '0';
+      textArea.style.left = '0';
+      textArea.style.position = 'fixed';
+      textArea.style.opacity = '0';
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      const successful = document.execCommand('copy');
+      document.body.removeChild(textArea);
+      if (successful) {
+        setCopiedReferral(true);
+        setTimeout(() => setCopiedReferral(false), 2500);
+      }
+    } catch (err) {
+      console.error('Fallback copy failed:', err);
+    }
   };
 
   const handleVerifyAndEnable2fa = async () => {
