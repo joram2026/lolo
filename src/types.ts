@@ -9,6 +9,7 @@ export interface UserAccount {
   tradeBalance?: number;
   lockedCopyTradeCapital?: number; // Capital locked in copy trade contracts
   referralSource?: string;
+  uniqueCode?: string;
   hasMadeFirstDeposit?: boolean;
   createdAt: any; // Firestore Timestamp
   withdrawalEnabled: boolean;

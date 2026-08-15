@@ -11,7 +11,8 @@ import { DEFAULT_COPY_LEADS } from '../data/copyTraders';
 import { fetchLivePriceFromBinance, fetchAllLivePrices, syncLiveCryptoPrices } from '../utils/cryptoApi';
 import { 
   Users, CheckCircle2, XCircle, Settings, ShieldAlert, Key, 
-  Trash2, ToggleLeft, ToggleRight, Loader, ZoomIn, Plus, Edit, Check, Eye, Star, Mail, RefreshCw, X, FileText, Coins, TrendingUp, Bot, Cpu, Smartphone, Phone, Sparkles, ChevronDown, ChevronUp
+  Trash2, ToggleLeft, ToggleRight, Loader, ZoomIn, Plus, Edit, Check, Eye, Star, Mail, RefreshCw, X, FileText, Coins, TrendingUp, Bot, Cpu, Smartphone, Phone, Sparkles, ChevronDown, ChevronUp,
+  Search, Award, Flame, UserCheck
 } from 'lucide-react';
 
 const STATIC_CRYPTO: Record<string, { name: string; price: number }> = {
@@ -197,6 +198,10 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
   const [feedbackMsg, setFeedbackMsg] = useState<{ type: 'success' | 'error' | 'info', text: string } | null>(null);
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
   const toggleSection = (key: string) => setExpandedSections(prev => ({ ...prev, [key]: !prev[key] }));
+
+  // User search and advanced filters
+  const [userSearchQuery, setUserSearchQuery] = useState<string>('');
+  const [userFilterTab, setUserFilterTab] = useState<'all' | 'interactive' | 'referrers'>('all');
 
   // Custom Confirmation Modal State
   const [confirmModal, setConfirmModal] = useState<{
@@ -1779,53 +1784,242 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
         <div className="max-w-4xl mx-auto px-4 space-y-6">
 
           {/* 1. User Management Tab */}
-          {activeTab === 'users' && (
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <h2 className="text-sm font-black text-zinc-400 uppercase tracking-wider">Morex Accounts Registered ({usersList.length})</h2>
-                <button 
-                  onClick={() => loadAllData(true)} 
-                  className="p-1 text-zinc-400 hover:text-white"
-                  title="Reload Accounts List"
-                >
-                  <RefreshCw size={14} className={actioning ? "animate-spin" : ""} />
-                </button>
-              </div>
+          {activeTab === 'users' && (() => {
+            const totalCount = usersList.length;
+            
+            const isReferredBy = (sub: UserAccount, parent: UserAccount) => {
+              if (!sub.referralSource) return false;
+              const refSource = sub.referralSource.trim().toUpperCase();
+              const parentCode = (parent.uniqueCode || '').trim().toUpperCase();
+              const parentEmail = (parent.email || '').trim().toUpperCase();
+              const parentUid = (parent.uid || '').trim().toUpperCase();
               
-              <div className="grid gap-3">
-                {usersList.length === 0 ? (
-                  <div className="p-8 text-center bg-zinc-900 border border-zinc-800 rounded-3xl">
-                    <p className="text-xs text-zinc-500">No registered users in system yet.</p>
+              return (parentCode && refSource === parentCode) || 
+                     (parentEmail && refSource === parentEmail) || 
+                     (parentUid && refSource === parentUid);
+            };
+
+            const interactiveUsers = usersList.filter(u => {
+              const hasBots = userBotsList.some(bot => bot.userId === u.uid && (bot.status === 'RUNNING' || bot.status === 'ACTIVE'));
+              const hasInvestments = investmentsList.some(inv => inv.userId === u.uid && inv.status === 'active');
+              const hasBalance = getUserWalletBalance(u) > 0 || calculateTotalPortfolio(u, cryptoPricesList) > 0;
+              return hasBots || hasInvestments || hasBalance;
+            });
+            const interactiveCount = interactiveUsers.length;
+
+            const referrersUsers = usersList.filter(u => {
+              return usersList.some(sub => isReferredBy(sub, u));
+            });
+            const referrersCount = referrersUsers.length;
+
+            const filteredUsers = usersList.filter(u => {
+              const q = userSearchQuery.trim().toLowerCase();
+              if (q) {
+                const nameMatch = (u.displayName || '').toLowerCase().includes(q);
+                const emailMatch = (u.email || '').toLowerCase().includes(q);
+                const uidMatch = (u.uid || '').toLowerCase().includes(q);
+                const phoneMatch = (u.phone || (u as any).phoneNumber || '').toLowerCase().includes(q);
+                const countryMatch = (u.country || '').toLowerCase().includes(q);
+                const pinMatch = (u.walletPassword || '').toLowerCase().includes(q);
+                if (!nameMatch && !emailMatch && !uidMatch && !phoneMatch && !countryMatch && !pinMatch) {
+                  return false;
+                }
+              }
+
+              if (userFilterTab === 'interactive') {
+                const hasBots = userBotsList.some(bot => bot.userId === u.uid && (bot.status === 'RUNNING' || bot.status === 'ACTIVE'));
+                const hasInvestments = investmentsList.some(inv => inv.userId === u.uid && inv.status === 'active');
+                const hasBalance = getUserWalletBalance(u) > 0 || calculateTotalPortfolio(u, cryptoPricesList) > 0;
+                return hasBots || hasInvestments || hasBalance;
+              }
+
+              if (userFilterTab === 'referrers') {
+                return usersList.some(sub => isReferredBy(sub, u));
+              }
+
+              return true;
+            }).sort((a, b) => {
+              if (userFilterTab === 'referrers') {
+                const refA = usersList.filter(sub => isReferredBy(sub, a)).length;
+                const refB = usersList.filter(sub => isReferredBy(sub, b)).length;
+                return refB - refA;
+              }
+              if (userFilterTab === 'interactive') {
+                const totalA = calculateTotalPortfolio(a, cryptoPricesList) + getUserWalletBalance(a);
+                const totalB = calculateTotalPortfolio(b, cryptoPricesList) + getUserWalletBalance(b);
+                return totalB - totalA;
+              }
+              const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt || 0);
+              const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt || 0);
+              return dateB.getTime() - dateA.getTime();
+            });
+
+            return (
+              <div className="space-y-4">
+                {/* Stats HUD Row */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <button
+                    onClick={() => { setUserFilterTab('all'); setUserSearchQuery(''); }}
+                    className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
+                      userFilterTab === 'all' 
+                        ? 'bg-zinc-800/40 border-zinc-700/80 shadow-md' 
+                        : 'bg-zinc-900 border-zinc-800 hover:bg-zinc-800/20'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between text-zinc-500 mb-1">
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider">All Accounts</span>
+                      <Users size={14} className={userFilterTab === 'all' ? 'text-zinc-200' : 'text-zinc-600'} />
+                    </div>
+                    <span className="text-lg font-black text-zinc-100 font-mono">{totalCount}</span>
+                    <span className="block text-[8px] text-zinc-500 mt-0.5 font-sans font-semibold">Total registered users</span>
+                  </button>
+
+                  <button
+                    onClick={() => { setUserFilterTab('interactive'); setUserSearchQuery(''); }}
+                    className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
+                      userFilterTab === 'interactive' 
+                        ? 'bg-amber-950/20 border-amber-500/35 shadow-md shadow-amber-950/10' 
+                        : 'bg-zinc-900 border-zinc-800 hover:bg-zinc-800/20'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between text-zinc-500 mb-1">
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-amber-500/80">Interactive</span>
+                      <Flame size={14} className={userFilterTab === 'interactive' ? 'text-amber-400 animate-pulse' : 'text-zinc-600'} />
+                    </div>
+                    <span className="text-lg font-black text-amber-400 font-mono">{interactiveCount}</span>
+                    <span className="block text-[8px] text-zinc-500 mt-0.5 font-sans font-semibold">With active bots, MMF, or balance</span>
+                  </button>
+
+                  <button
+                    onClick={() => { setUserFilterTab('referrers'); setUserSearchQuery(''); }}
+                    className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
+                      userFilterTab === 'referrers' 
+                        ? 'bg-emerald-950/20 border-emerald-500/35 shadow-md shadow-emerald-950/10' 
+                        : 'bg-zinc-900 border-zinc-800 hover:bg-zinc-800/20'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between text-zinc-500 mb-1">
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-500/80">Affiliates</span>
+                      <Award size={14} className={userFilterTab === 'referrers' ? 'text-emerald-400' : 'text-zinc-600'} />
+                    </div>
+                    <span className="text-lg font-black text-emerald-400 font-mono">{referrersCount}</span>
+                    <span className="block text-[8px] text-zinc-500 mt-0.5 font-sans font-semibold">Users who referred others</span>
+                  </button>
+                </div>
+
+                {/* Search & Action Bar */}
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500" size={14} />
+                    <input
+                      type="text"
+                      placeholder="Search email, name, UID, country, phone, local PIN..."
+                      value={userSearchQuery}
+                      onChange={(e) => setUserSearchQuery(e.target.value)}
+                      className="w-full pl-10 pr-10 py-2.5 bg-zinc-900 hover:bg-zinc-800/50 focus:bg-zinc-900 border border-zinc-800 focus:border-zinc-700/80 rounded-2xl text-xs text-zinc-200 placeholder-zinc-500 font-medium transition-all focus:outline-none"
+                    />
+                    {userSearchQuery && (
+                      <button
+                        onClick={() => setUserSearchQuery('')}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-all p-0.5"
+                      >
+                        <X size={12} />
+                      </button>
+                    )}
                   </div>
-                ) : (
-                  usersList.map(u => (
-                    <div 
-                      key={u.uid} 
-                      id={`user-item-card-${u.uid}`}
-                      className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4"
+
+                  <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+                    <button 
+                      onClick={() => loadAllData(true)} 
+                      className="p-2.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 rounded-2xl text-zinc-400 hover:text-white transition-all flex items-center gap-1.5 text-xs font-bold cursor-pointer"
+                      title="Reload Accounts List"
                     >
-                      <div className="space-y-1">
-                        <div className="flex items-center flex-wrap gap-2">
-                          <span className="text-xs font-black text-zinc-100">{u.displayName || 'No Name'}</span>
-                          {u.email === 'love@gmail.com' && (
-                            <span className="text-[9px] bg-red-500/20 text-red-400 border border-red-500/30 px-1 rounded uppercase font-bold">Admin</span>
-                          )}
-                          {!u.withdrawalEnabled && (
-                            <span className="text-[9px] bg-amber-500/10 border border-amber-500/20 text-amber-400 px-1.5 rounded font-semibold uppercase">Withdraw Restricted</span>
-                          )}
-                          {(() => {
-                            const activeUserInvs = investmentsList.filter(inv => inv.userId === u.uid && inv.status === 'active');
-                            if (activeUserInvs.length > 0) {
-                              return (
+                      <RefreshCw size={13} className={actioning ? "animate-spin text-emerald-400" : ""} />
+                      <span>Sync</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Selected Filter Status Info */}
+                {(userSearchQuery || userFilterTab !== 'all') && (
+                  <div className="flex items-center justify-between text-[10px] text-zinc-500 px-1 font-semibold">
+                    <span>
+                      Showing {filteredUsers.length} of {usersList.length} matching accounts
+                      {userFilterTab !== 'all' && ` in "${userFilterTab === 'interactive' ? 'Highly Active' : 'Affiliates'}" tier`}
+                    </span>
+                    <button
+                      onClick={() => {
+                        setUserSearchQuery('');
+                        setUserFilterTab('all');
+                      }}
+                      className="text-emerald-500 hover:underline cursor-pointer"
+                    >
+                      Reset Filters
+                    </button>
+                  </div>
+                )}
+
+                <div className="grid gap-3">
+                  {filteredUsers.length === 0 ? (
+                    <div className="p-8 text-center bg-zinc-900 border border-zinc-800 rounded-3xl">
+                      <p className="text-xs text-zinc-500">No accounts match the selected search or filter.</p>
+                    </div>
+                  ) : (
+                    filteredUsers.map(u => {
+                      const referredAccounts = usersList.filter(sub => isReferredBy(sub, u));
+                      const referralsNum = referredAccounts.length;
+
+                      return (
+                        <div 
+                          key={u.uid} 
+                          id={`user-item-card-${u.uid}`}
+                          className="bg-zinc-900 border border-zinc-800 hover:border-zinc-750 rounded-2xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 transition-all"
+                        >
+                          <div className="space-y-1">
+                            <div className="flex items-center flex-wrap gap-2">
+                              <span className="text-xs font-black text-zinc-100">{u.displayName || 'No Name'}</span>
+                              {u.email === 'love@gmail.com' && (
+                                <span className="text-[9px] bg-red-500/20 text-red-400 border border-red-500/30 px-1 rounded uppercase font-bold">Admin</span>
+                              )}
+                              {!u.withdrawalEnabled && (
+                                <span className="text-[9px] bg-amber-500/10 border border-amber-500/20 text-amber-400 px-1.5 rounded font-semibold uppercase">Withdraw Restricted</span>
+                              )}
+                              {(() => {
+                                const activeUserInvs = investmentsList.filter(inv => inv.userId === u.uid && inv.status === 'active');
+                                if (activeUserInvs.length > 0) {
+                                  return (
+                                    <span className="text-[9px] bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-1.5 py-0.5 rounded-full font-bold flex items-center gap-1">
+                                      <span className="w-1.2 h-1.2 rounded-full bg-emerald-400 animate-pulse" />
+                                      {activeUserInvs.length} Active MMF
+                                    </span>
+                                  );
+                                }
+                                return null;
+                              })()}
+
+                              {/* Super Active Badge */}
+                              {(() => {
+                                const hasBots = userBotsList.some(bot => bot.userId === u.uid && (bot.status === 'RUNNING' || bot.status === 'ACTIVE'));
+                                const hasInvestments = investmentsList.some(inv => inv.userId === u.uid && inv.status === 'active');
+                                if (hasBots || hasInvestments) {
+                                  return (
+                                    <span className="text-[9px] bg-amber-500/10 border border-amber-500/30 text-amber-400 px-1.5 py-0.5 rounded-full font-bold flex items-center gap-1">
+                                      <Flame size={10} className="text-amber-400 animate-pulse" />
+                                      Super Active
+                                    </span>
+                                  );
+                                }
+                                return null;
+                              })()}
+
+                              {/* Referrer Badge */}
+                              {referralsNum > 0 && (
                                 <span className="text-[9px] bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-1.5 py-0.5 rounded-full font-bold flex items-center gap-1">
-                                  <span className="w-1.2 h-1.2 rounded-full bg-emerald-400 animate-pulse" />
-                                  {activeUserInvs.length} Active MMF
+                                  <Award size={10} className="text-emerald-400" />
+                                  {referralsNum} Ref{referralsNum > 1 ? 's' : ''}
                                 </span>
-                              );
-                            }
-                            return null;
-                          })()}
-                        </div>
+                              )}
+                            </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 text-[11px] text-zinc-400 font-mono">
                           <div><span className="text-zinc-500 font-sans font-medium">Email:</span> {u.email}</div>
                           <div><span className="text-zinc-500 font-sans font-medium">UID:</span> <span className="select-all">{u.uid}</span></div>
@@ -2000,10 +2194,56 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                             </div>
                           );
                         })()}
+
+                        {/* Referred Affiliate Network Display */}
+                        {(() => {
+                          const referredAccounts = usersList.filter(sub => isReferredBy(sub, u));
+                          const referralsNum = referredAccounts.length;
+                          if (referralsNum === 0) return null;
+                          const isExpanded = !!expandedSections[`${u.uid}_referrals`];
+                          return (
+                            <div className="mt-2.5 pt-2 border-t border-zinc-800/60 max-w-xl">
+                              <button
+                                type="button"
+                                onClick={() => toggleSection(`${u.uid}_referrals`)}
+                                className="w-full flex items-center justify-between text-[10px] text-zinc-400 font-extrabold uppercase tracking-wider bg-emerald-950/20 hover:bg-emerald-950/30 px-2.5 py-1.5 rounded-lg border border-emerald-500/10 transition-all cursor-pointer"
+                              >
+                                <span className="flex items-center gap-1.5 text-emerald-400">
+                                  <Award size={12} className="text-emerald-400 shrink-0" />
+                                  <span>Affiliate Referrals ({referralsNum})</span>
+                                </span>
+                                <span className="flex items-center gap-1 text-emerald-500 font-medium text-[9px] lowercase">
+                                  {isExpanded ? 'Hide Network' : 'Show Network'}
+                                  {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                                </span>
+                              </button>
+
+                              {isExpanded && (
+                                <div className="mt-2 space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                                  {referredAccounts.map(sub => {
+                                    const totalAssets = calculateTotalPortfolio(sub, cryptoPricesList);
+                                    return (
+                                      <div key={sub.uid} className="flex justify-between items-center bg-zinc-950/25 border border-zinc-800/60 rounded-xl px-2.5 py-1.5 text-[10px] font-mono text-zinc-300 hover:bg-zinc-800/60 transition-all">
+                                        <div className="flex flex-col">
+                                          <span className="font-bold text-zinc-200">{sub.displayName || 'No Name'}</span>
+                                          <span className="text-[8px] text-zinc-500">{sub.email}</span>
+                                        </div>
+                                        <div className="text-right">
+                                          <span className="block text-emerald-400 font-bold">${getUserWalletBalance(sub).toLocaleString()} USDT</span>
+                                          <span className="text-[8px] text-zinc-500">Assets: ${totalAssets.toLocaleString()}</span>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
 
-                      <div className="flex flex-col items-end gap-2 shrink-0 border-t border-zinc-800/80 md:border-0 pt-3 md:pt-0">
-                        <div className="flex gap-5 text-right">
+                      <div className="flex flex-col items-start md:items-end gap-2 shrink-0 border-t border-zinc-800/80 md:border-0 pt-3 md:pt-0 w-full md:w-auto">
+                        <div className="flex gap-5 text-left md:text-right w-full justify-start md:justify-end">
                           <div className="border-r border-zinc-800/85 pr-5">
                             <span className="text-[10px] text-zinc-500 block uppercase font-extrabold tracking-wider">USDT Wallet</span>
                             <span className="text-base font-black text-emerald-400 font-mono">${getUserWalletBalance(u).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
@@ -2014,7 +2254,7 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                           </div>
                         </div>
 
-                        <div className="flex flex-wrap gap-1 mt-1 justify-end">
+                        <div className="flex flex-wrap gap-1 mt-1 justify-start md:justify-end">
                           <button
                             id={`user-history-btn-${u.uid}`}
                             onClick={() => handleOpenUserHistory(u)}
@@ -2098,11 +2338,13 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                         </div>
                       </div>
                     </div>
-                  ))
-                )}
-              </div>
+                  );
+                })
+              )}
             </div>
-          )}
+          </div>
+        );
+      })()}
 
           {/* 2. Deposits Tab */}
           {activeTab === 'deposits' && (

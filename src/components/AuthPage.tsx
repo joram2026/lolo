@@ -41,6 +41,7 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
 
   const COUNTRIES = [
     { code: 'Kenya', name: 'Kenya', flag: '🇰🇪', dialCode: '+254' },
+    { code: 'Uganda', name: 'Uganda', flag: '🇺🇬', dialCode: '+256' },
     { code: 'Nigeria', name: 'Nigeria', flag: '🇳🇬', dialCode: '+234' },
     { code: 'Ghana', name: 'Ghana', flag: '🇬🇭', dialCode: '+233' },
     { code: 'South Africa', name: 'South Africa', flag: '🇿🇦', dialCode: '+27' },
