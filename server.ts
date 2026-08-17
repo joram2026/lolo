@@ -117,8 +117,11 @@ async function startServer() {
         });
       }
 
-      // Generate 6-digit numeric OTP code
-      const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+      // Use provided 6-digit code or generate a secure new one
+      const providedCode = req.body?.code?.toString().trim();
+      const otpCode = (providedCode && /^\d{6}$/.test(providedCode))
+        ? providedCode
+        : Math.floor(100000 + Math.random() * 900000).toString();
       const expiresAt = now + 10 * 60 * 1000; // 10 minutes expiry
 
       otpStore.set(cleanEmail, {
