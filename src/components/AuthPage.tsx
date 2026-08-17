@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { auth, db } from '../firebase';
 import { useToast } from '../context/ToastContext';
 import { 
@@ -9,7 +9,8 @@ import {
   updatePassword
 } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp, getDoc, collection, query, where, getDocs, updateDoc, increment, addDoc, deleteDoc } from 'firebase/firestore';
-import { Shield, Mail, Lock, User, Phone, Sparkles, AlertCircle, RefreshCw, Eye, EyeOff, Globe, ChevronDown, Check, TrendingUp, Zap, Award, ArrowUpRight, Activity, DollarSign, Users, Percent, CheckCircle } from 'lucide-react';
+import { Shield, Mail, Lock, User, Phone, Sparkles, AlertCircle, RefreshCw, Eye, EyeOff, Globe, ChevronDown, Check, TrendingUp, Zap, Award, ArrowUpRight, Activity, DollarSign, Users, Percent, CheckCircle, ArrowLeft, KeyRound, CheckCheck } from 'lucide-react';
+import { validateEmailAddress } from '../utils/emailValidation';
 
 interface AuthPageProps {
   onSuccess: () => void;
@@ -38,6 +39,14 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
   const [displayName, setDisplayName] = useState('');
   const [country, setCountry] = useState('Kenya');
   const [isCountryOpen, setIsCountryOpen] = useState(false);
+
+  // Email verification OTP states for Sign Up
+  const [signUpStep, setSignUpStep] = useState<'details' | 'otp'>('details');
+  const [otpDigits, setOtpDigits] = useState<string[]>(['', '', '', '', '', '']);
+  const otpInputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [previewOtpCode, setPreviewOtpCode] = useState<string | null>(null);
+  const [emailSuggestion, setEmailSuggestion] = useState<string | null>(null);
 
   const COUNTRIES = [
     { code: 'Kenya', name: 'Kenya', flag: '🇰🇪', dialCode: '+254' },
@@ -75,6 +84,40 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
   const twoFactorError = twoFactorErrorState;
 
   const [showPassword, setShowPassword] = useState(false);
+
+  // Check email for domain suggestions / typos on change
+  useEffect(() => {
+    if (email && email.includes('@')) {
+      const validation = validateEmailAddress(email);
+      if (validation.suggestion) {
+        setEmailSuggestion(validation.suggestion);
+      } else {
+        setEmailSuggestion(null);
+      }
+    } else {
+      setEmailSuggestion(null);
+    }
+  }, [email]);
+
+  // Reset OTP step when switching views
+  useEffect(() => {
+    if (!isSignUp) {
+      setSignUpStep('details');
+      setOtpDigits(['', '', '', '', '', '']);
+      setPreviewOtpCode(null);
+    }
+  }, [isSignUp, path]);
+
+  // Resend OTP countdown timer
+  useEffect(() => {
+    let timer: any;
+    if (resendCooldown > 0) {
+      timer = setInterval(() => {
+        setResendCooldown((prev) => (prev > 0 ? prev - 1 : 0));
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [resendCooldown]);
 
   // Check URL parameters and localStorage for referral codes
   useEffect(() => {
@@ -124,6 +167,264 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
     onSuccess();
   };
 
+  // OTP Input event handlers
+  const handleOtpBoxChange = (index: number, val: string) => {
+    const numericVal = val.replace(/\D/g, '');
+    
+    if (numericVal.length > 1) {
+      // User pasted or typed multiple digits
+      const newDigits = [...otpDigits];
+      const chars = numericVal.slice(0, 6).split('');
+      chars.forEach((ch, idx) => {
+        if (index + idx < 6) {
+          newDigits[index + idx] = ch;
+        }
+      });
+      setOtpDigits(newDigits);
+      const nextFocus = Math.min(index + chars.length, 5);
+      otpInputRefs.current[nextFocus]?.focus();
+      return;
+    }
+
+    const newDigits = [...otpDigits];
+    newDigits[index] = numericVal;
+    setOtpDigits(newDigits);
+
+    if (numericVal && index < 5) {
+      otpInputRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const handleOtpBoxKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Backspace') {
+      if (!otpDigits[index] && index > 0) {
+        otpInputRefs.current[index - 1]?.focus();
+      }
+    } else if (e.key === 'ArrowLeft' && index > 0) {
+      otpInputRefs.current[index - 1]?.focus();
+    } else if (e.key === 'ArrowRight' && index < 5) {
+      otpInputRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const handleOtpBoxPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    if (!pasted) return;
+
+    const newDigits = ['', '', '', '', '', ''];
+    pasted.split('').forEach((ch, idx) => {
+      newDigits[idx] = ch;
+    });
+    setOtpDigits(newDigits);
+    const lastIdx = Math.min(pasted.length, 5);
+    otpInputRefs.current[lastIdx]?.focus();
+  };
+
+  // Request/Resend verification code
+  const handleResendOtp = async () => {
+    if (resendCooldown > 0 || loading) return;
+    const formattedEmail = email.trim().toLowerCase();
+    
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/send-email-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: formattedEmail, displayName: displayName.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to resend verification code.');
+      }
+
+      setResendCooldown(45);
+      if (data.previewCode) {
+        setPreviewOtpCode(data.previewCode);
+      }
+      setSuccessMsg('A new verification code has been dispatched to your email.');
+    } catch (err: any) {
+      setError(err.message || 'Failed to resend verification code.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Step 2: Final account verification and creation with OTP code
+  const handleFinalSignUpWithOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const enteredCode = otpDigits.join('').trim();
+    if (enteredCode.length !== 6) {
+      setError('Please enter the complete 6-digit verification code.');
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    const formattedEmail = email.trim().toLowerCase();
+
+    try {
+      // 1. Verify OTP code with server
+      const verifyRes = await fetch('/api/verify-email-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: formattedEmail, code: enteredCode }),
+      });
+      const verifyData = await verifyRes.json();
+      if (!verifyRes.ok) {
+        throw new Error(verifyData.error || 'Invalid verification code. Please check your inbox and try again.');
+      }
+
+      // 2. Clear referral/code parameters from the URL before signing in
+      navigate('/signup', true);
+
+      // 3. Handle Registration in Firebase Auth
+      let user;
+      try {
+        const userCredential = await createUserWithEmailAndPassword(auth, formattedEmail, deriveAuthPassword(formattedEmail));
+        user = userCredential.user;
+      } catch (regErr: any) {
+        if (regErr.code === 'auth/email-already-in-use') {
+          try {
+            const userCredential = await signInWithEmailAndPassword(auth, formattedEmail, deriveAuthPassword(formattedEmail));
+            user = userCredential.user;
+          } catch (loginErr: any) {
+            let version = 1;
+            let versionedEmail = '';
+            let success = false;
+            while (!success && version < 20) {
+              const parts = formattedEmail.split('@');
+              versionedEmail = `${parts[0]}+v${version}@${parts[1]}`;
+              try {
+                const userCredential = await createUserWithEmailAndPassword(auth, versionedEmail, deriveAuthPassword(formattedEmail));
+                user = userCredential.user;
+                success = true;
+              } catch (vErr: any) {
+                if (vErr.code === 'auth/email-already-in-use') {
+                  try {
+                    const userCredential = await signInWithEmailAndPassword(auth, versionedEmail, deriveAuthPassword(formattedEmail));
+                    user = userCredential.user;
+                    success = true;
+                  } catch (vLoginErr) {
+                    version++;
+                  }
+                } else {
+                  throw vErr;
+                }
+              }
+            }
+            if (!success) {
+              throw new Error('Could not recreate user account. Please try a different email address.');
+            }
+          }
+        } else {
+          throw regErr;
+        }
+      }
+
+      // Generate dynamic unique referral code for the new user
+      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+      let generatedCode = '';
+      for (let i = 0; i < 5; i++) {
+        generatedCode += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+
+      const trimmedReferral = referral.trim().toUpperCase();
+      const selectedCountryObj = COUNTRIES.find(c => c.code === country) || COUNTRIES[0];
+      const rawPhone = phone.trim().replace(/^0+/, '');
+      const formattedPhone = rawPhone.startsWith('+') ? rawPhone : `${selectedCountryObj.dialCode} ${rawPhone}`;
+
+      // Initialize user document in Firestore
+      const docRef = doc(db, 'users', user.uid);
+      await setDoc(docRef, {
+        uid: user.uid,
+        email: formattedEmail,
+        displayName: displayName.trim() || formattedEmail.split('@')[0],
+        phone: formattedPhone,
+        country: country,
+        balance: 0.0,
+        usdtBalance: 0.0,
+        referralSource: trimmedReferral,
+        uniqueCode: generatedCode,
+        createdAt: serverTimestamp(),
+        withdrawalEnabled: true,
+        walletPassword: '',
+        accountPassword: password,
+        authEmail: user.email,
+        emailVerified: true
+      });
+
+      // Save referral code mapping
+      try {
+        await setDoc(doc(db, 'referralCodes', generatedCode), {
+          uid: user.uid,
+          email: formattedEmail
+        });
+      } catch (mappingErr) {
+        console.error('Error saving referral code mapping:', mappingErr);
+      }
+
+      // Save session details to localStorage
+      localStorage.setItem('custom_user_email', formattedEmail);
+      localStorage.setItem('custom_user_uid', user.uid);
+
+      // Auto-credit referrer if referral code was used
+      if (trimmedReferral) {
+        try {
+          const refMappingSnap = await getDoc(doc(db, 'referralCodes', trimmedReferral));
+          if (refMappingSnap.exists()) {
+            const refData = refMappingSnap.data();
+            const referrerUid = refData.uid;
+            const referrerEmail = refData.email || '';
+
+            const referralsQuery = query(collection(db, 'users'), where('referralSource', '==', trimmedReferral));
+            const referralsSnap = await getDocs(referralsQuery);
+            const referralsCount = referralsSnap.size;
+
+            let rewardAmount = 0.10;
+            let tierName = 'Starter';
+            if (referralsCount >= 40) {
+              rewardAmount = 0.40;
+              tierName = 'Gold';
+            } else if (referralsCount >= 20) {
+              rewardAmount = 0.30;
+              tierName = 'Silver';
+            } else if (referralsCount >= 7) {
+              rewardAmount = 0.20;
+              tierName = 'Bronze';
+            }
+
+            await updateDoc(doc(db, 'users', referrerUid), {
+              balance: increment(rewardAmount),
+              usdtBalance: increment(rewardAmount)
+            });
+
+            await addDoc(collection(db, 'transactions'), {
+              userId: referrerUid,
+              userEmail: referrerEmail,
+              type: 'referral_reward',
+              amount: rewardAmount,
+              status: 'APPROVED',
+              createdAt: serverTimestamp(),
+              paymentMessage: `Referral bonus (${tierName} Tier): successfully invited ${formattedEmail}`
+            });
+          }
+        } catch (refErr) {
+          console.error('Error auto-crediting referral reward:', refErr);
+        }
+      }
+
+      localStorage.removeItem('pending_referral_code');
+      onSuccess();
+    } catch (err: any) {
+      console.error('Registration OTP verification error:', err);
+      setError(err.message || 'Verification failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -170,6 +471,21 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
         }, 3000);
 
       } else if (isSignUp) {
+        // Step 1: Pre-flight validation before sending OTP
+        if (!displayName.trim()) {
+          throw new Error('Please enter your display name.');
+        }
+
+        // Email validation & disposable domain check
+        const validation = validateEmailAddress(formattedEmail);
+        if (!validation.isValid) {
+          throw new Error(validation.error || 'Please enter a valid email address.');
+        }
+
+        if (!phone.trim()) {
+          throw new Error('Please enter your phone number.');
+        }
+
         if (!password || password.length < 6) {
           throw new Error('Password must be at least 6 characters.');
         }
@@ -177,170 +493,40 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
           throw new Error('Passwords do not match. Please verify that your password confirmation matches.');
         }
 
-        // Clear referral/code parameters from the URL before signing in to prevent immediate automatic sign-out
-        navigate('/signup', true);
-
-        // Check if user already exists in Firestore
+        // Check if user is already registered in Firestore
         const usersRef = collection(db, 'users');
         const q = query(usersRef, where('email', '==', formattedEmail));
         const querySnap = await getDocs(q);
 
         if (!querySnap.empty) {
-          throw new Error('This email address is already registered.');
+          throw new Error('This email address is already registered. Please sign in instead.');
         }
 
-        // Handle Registration
-        let user;
-        try {
-          const userCredential = await createUserWithEmailAndPassword(auth, formattedEmail, deriveAuthPassword(formattedEmail));
-          user = userCredential.user;
-        } catch (regErr: any) {
-          if (regErr.code === 'auth/email-already-in-use') {
-            // Firebase Auth account exists, but Firestore document was empty (deleted by admin)!
-            // Try to log in to the existing Firebase Auth account using the derived password
-            console.log('User already exists in Firebase Auth but deleted from Firestore. Attempting recovery...');
-            try {
-              const userCredential = await signInWithEmailAndPassword(auth, formattedEmail, deriveAuthPassword(formattedEmail));
-              user = userCredential.user;
-            } catch (loginErr: any) {
-              // If that fails (e.g. unmigrated or custom reset), fallback to versioned email registration!
-              console.log('Fallback to versioned email for deleted user signup...');
-              let version = 1;
-              let versionedEmail = '';
-              let success = false;
-              while (!success && version < 20) {
-                const parts = formattedEmail.split('@');
-                versionedEmail = `${parts[0]}+v${version}@${parts[1]}`;
-                try {
-                  const userCredential = await createUserWithEmailAndPassword(auth, versionedEmail, deriveAuthPassword(formattedEmail));
-                  user = userCredential.user;
-                  success = true;
-                } catch (vErr: any) {
-                  if (vErr.code === 'auth/email-already-in-use') {
-                    try {
-                      const userCredential = await signInWithEmailAndPassword(auth, versionedEmail, deriveAuthPassword(formattedEmail));
-                      user = userCredential.user;
-                      success = true;
-                    } catch (vLoginErr) {
-                      version++;
-                    }
-                  } else {
-                    throw vErr;
-                  }
-                }
-              }
-              if (!success) {
-                throw new Error('Could not recreate user account. Please try a different email address.');
-              }
-            }
-          } else {
-            throw regErr;
-          }
-        }
-
-        // Generate dynamic unique referral code for the new user
-        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-        let generatedCode = '';
-        for (let i = 0; i < 5; i++) {
-          generatedCode += chars.charAt(Math.floor(Math.random() * chars.length));
-        }
-
-        const trimmedReferral = referral.trim().toUpperCase();
-
-        const selectedCountryObj = COUNTRIES.find(c => c.code === country) || COUNTRIES[0];
-        const rawPhone = phone.trim().replace(/^0+/, '');
-        const formattedPhone = rawPhone.startsWith('+') ? rawPhone : `${selectedCountryObj.dialCode} ${rawPhone}`;
-
-        // Initialize user document in firestore with starting values, the unique referral code, and the accountPassword field
-        const docRef = doc(db, 'users', user.uid);
-        await setDoc(docRef, {
-          uid: user.uid,
-          email: formattedEmail,
-          displayName: displayName.trim() || formattedEmail.split('@')[0],
-          phone: formattedPhone,
-          country: country,
-          balance: 0.0, // Initial wallet balance starts at $0
-          usdtBalance: 0.0,
-          referralSource: trimmedReferral,
-          uniqueCode: generatedCode,
-          createdAt: serverTimestamp(),
-          withdrawalEnabled: true, // withdrawal allowed by default
-          walletPassword: '', // Blank password initially
-          accountPassword: password,
-          authEmail: user.email // Store the actual active authEmail used
+        // Request 6-digit OTP verification code from backend
+        const res = await fetch('/api/send-email-otp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: formattedEmail, displayName: displayName.trim() }),
         });
-
-        // Also save the newly created user's referral code mapping
-        try {
-          await setDoc(doc(db, 'referralCodes', generatedCode), {
-            uid: user.uid,
-            email: formattedEmail
-          });
-        } catch (mappingErr) {
-          console.error('Error saving referral code mapping:', mappingErr);
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || 'Failed to dispatch email verification code.');
         }
 
-        // Save session details to localStorage
-        localStorage.setItem('custom_user_email', formattedEmail);
-        localStorage.setItem('custom_user_uid', user.uid);
-
-        // If a referral code was provided, look up the referrer via referralCodes and award tiered USDT automatically
-        if (trimmedReferral) {
-          try {
-            const refMappingSnap = await getDoc(doc(db, 'referralCodes', trimmedReferral));
-            if (refMappingSnap.exists()) {
-              const refData = refMappingSnap.data();
-              const referrerUid = refData.uid;
-              const referrerEmail = refData.email || '';
-
-              // Query to see how many referrals this referrer currently has (includes the new user)
-              const referralsQuery = query(collection(db, 'users'), where('referralSource', '==', trimmedReferral));
-              const referralsSnap = await getDocs(referralsQuery);
-              const referralsCount = referralsSnap.size;
-
-              // Calculate reward based on tier milestones:
-              // < 7 referrals: Starter Tier ($0.10 USDT)
-              // 7 - 19 referrals: Bronze Tier ($0.20 USDT)
-              // 20 - 39 referrals: Silver Tier ($0.30 USDT)
-              // 40+ referrals: Gold Tier ($0.40 USDT)
-              let rewardAmount = 0.10;
-              let tierName = 'Starter';
-              if (referralsCount >= 40) {
-                rewardAmount = 0.40;
-                tierName = 'Gold';
-              } else if (referralsCount >= 20) {
-                rewardAmount = 0.30;
-                tierName = 'Silver';
-              } else if (referralsCount >= 7) {
-                rewardAmount = 0.20;
-                tierName = 'Bronze';
-              }
-
-              // Credit referrer's balance by the calculated tiered USDT
-              await updateDoc(doc(db, 'users', referrerUid), {
-                balance: increment(rewardAmount),
-                usdtBalance: increment(rewardAmount)
-              });
-
-              // Create an approved referral reward transaction record
-              await addDoc(collection(db, 'transactions'), {
-                userId: referrerUid,
-                userEmail: referrerEmail,
-                type: 'referral_reward',
-                amount: rewardAmount,
-                status: 'APPROVED',
-                createdAt: serverTimestamp(),
-                paymentMessage: `Referral bonus (${tierName} Tier): successfully invited ${formattedEmail}`
-              });
-            }
-          } catch (refErr) {
-            console.error('Error auto-crediting referral reward:', refErr);
-            // Non-blocking, registration succeeds anyway
-          }
+        setResendCooldown(45);
+        if (data.previewCode) {
+          setPreviewOtpCode(data.previewCode);
+        } else {
+          setPreviewOtpCode(null);
         }
 
-        localStorage.removeItem('pending_referral_code');
-        onSuccess();
+        setSignUpStep('otp');
+        setOtpDigits(['', '', '', '', '', '']);
+        setSuccessMsg(`Verification code sent to ${formattedEmail}`);
+        setTimeout(() => {
+          otpInputRefs.current[0]?.focus();
+        }, 100);
+
       } else {
         // Handle Sign In
         const usersRef = collection(db, 'users');
@@ -348,105 +534,40 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
         const querySnap = await getDocs(q);
 
         if (querySnap.empty) {
-          throw new Error('No registered account found with this email.');
+          throw new Error('No account found with this email address.');
         }
 
         const userDoc = querySnap.docs[0];
         const userData = userDoc.data();
-        const userUid = userDoc.id;
+        const activeUserUid = userDoc.id;
 
-        let activeUserUid = userUid;
-
-        if (userData.accountPassword) {
-          if (userData.accountPassword !== password) {
-            throw new Error('Incorrect password. Please try again.');
-          }
-
-          // Password correct! Sign in to Firebase Auth.
-          const targetAuthEmail = userData.authEmail || formattedEmail;
-          try {
-            const cred = await signInWithEmailAndPassword(auth, targetAuthEmail, deriveAuthPassword(formattedEmail));
-            activeUserUid = cred.user.uid;
-          } catch (authErr: any) {
-            console.warn('First auth attempt failed, trying alternative/legacy sign-in:', authErr);
-            try {
-              // Try with their actual typed password (in case they are unmigrated or had a custom password)
-              const cred = await signInWithEmailAndPassword(auth, targetAuthEmail, password);
-              activeUserUid = cred.user.uid;
-            } catch (authErr2: any) {
-              // Both failed! This means we cannot log into Firebase Auth (e.g. they forgot their old password and reset it while logged out).
-              // Since their Firestore password matched, they are authorized! We can self-heal by provisioning a new versioned Firebase Auth account!
-              console.log('Bypassing failed Auth session and provisioning a fresh versioned Auth user...');
-              const currentVersion = userData.authEmailVersion || 0;
-              const nextVersion = currentVersion + 1;
-              const parts = formattedEmail.split('@');
-              const versionedAuthEmail = `${parts[0]}+v${nextVersion}@${parts[1]}`;
-              
-              // Create the user in Firebase Auth
-              const newCredential = await createUserWithEmailAndPassword(auth, versionedAuthEmail, deriveAuthPassword(formattedEmail));
-              const newUser = newCredential.user;
-              activeUserUid = newUser.uid;
-              
-              // Migrate their Firestore user document to the new UID (document ID)!
-              const oldDocRef = doc(db, 'users', userUid);
-              const oldDocSnap = await getDoc(oldDocRef);
-              if (oldDocSnap.exists()) {
-                const oldData = oldDocSnap.data();
-                await setDoc(doc(db, 'users', newUser.uid), {
-                  ...oldData,
-                  uid: newUser.uid,
-                  authEmail: versionedAuthEmail,
-                  authEmailVersion: nextVersion
-                });
-                // Delete the old Firestore document to prevent duplicates!
-                await deleteDoc(oldDocRef);
-              }
-              
-              // Migrate historical transactions to the new user.uid!
-              const txQuery = query(collection(db, 'transactions'), where('userId', '==', userUid));
-              const txSnap = await getDocs(txQuery);
-              for (const txDoc of txSnap.docs) {
-                await updateDoc(doc(db, 'transactions', txDoc.id), {
-                  userId: newUser.uid
-                });
-              }
-              
-              console.log('Migration to versioned auth completed successfully!');
-            }
-          }
-          localStorage.setItem('custom_user_email', formattedEmail);
-          localStorage.setItem('custom_user_uid', activeUserUid);
-        } else {
-          // Existing unmigrated user: Sign in with typed password
-          const userCredential = await signInWithEmailAndPassword(auth, formattedEmail, password);
-          const user = userCredential.user;
-          activeUserUid = user.uid;
-
-          // Migrate
-          try {
-            await updatePassword(user, deriveAuthPassword(formattedEmail));
-          } catch (migErr) {
-            console.error('Failed to update Auth password during migration:', migErr);
-          }
-
-          // Update Firestore
-          await updateDoc(doc(db, 'users', user.uid), {
-            accountPassword: password,
-            authEmail: formattedEmail
-          });
-
-          localStorage.setItem('custom_user_email', formattedEmail);
-          localStorage.setItem('custom_user_uid', user.uid);
+        // Verify password against Firestore accountPassword
+        const firestorePassword = userData.accountPassword;
+        if (!firestorePassword || firestorePassword !== password) {
+          throw new Error('Incorrect password. Please verify your credentials or use the reset password option.');
         }
-        
-        // Ensure firestore document exists (just in case they were created externally)
-        const docRef = doc(db, 'users', activeUserUid);
-        const docSnap = await getDoc(docRef);
-        let has2fa = false;
 
-        if (docSnap.exists()) {
-          const uData = docSnap.data();
-          if (uData.twoFactorEnabled) {
+        const authEmailToUse = userData.authEmail || userData.email || formattedEmail;
+
+        try {
+          await signInWithEmailAndPassword(auth, authEmailToUse, deriveAuthPassword(formattedEmail));
+        } catch (authSignInErr: any) {
+          try {
+            await signInWithEmailAndPassword(auth, formattedEmail, deriveAuthPassword(formattedEmail));
+          } catch (secondAuthErr: any) {
+            console.log('Firebase Auth internal credential fallback...');
+          }
+        }
+
+        localStorage.setItem('custom_user_email', formattedEmail);
+        localStorage.setItem('custom_user_uid', activeUserUid);
+
+        let has2fa = false;
+        const docRef = doc(db, 'users', activeUserUid);
+        const freshSnap = await getDoc(docRef);
+        if (freshSnap.exists()) {
+          const freshData = freshSnap.data();
+          if (freshData.twoFactorEnabled && freshData.twoFactorSecret) {
             has2fa = true;
           }
         } else {
@@ -598,6 +719,110 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
                     </button>
                   </form>
                 </div>
+              ) : isSignUp && signUpStep === 'otp' ? (
+                /* Step 2: 6-Digit Email Verification Code Input Screen */
+                <div className="space-y-5 animate-in fade-in zoom-in-95 duration-200">
+                  <div className="text-center space-y-1.5">
+                    <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-600 mx-auto flex items-center justify-center shadow-xs">
+                      <Mail size={22} className="stroke-[2.2]" />
+                    </div>
+                    <h2 className="text-lg font-bold text-zinc-900">Verify Your Email</h2>
+                    <p className="text-xs text-zinc-500 leading-relaxed px-1">
+                      We sent a 6-digit confirmation passcode to{' '}
+                      <span className="font-semibold text-zinc-800 break-all">{email.trim().toLowerCase()}</span>
+                    </p>
+                    <button
+                      id="auth-edit-email-btn"
+                      type="button"
+                      onClick={() => setSignUpStep('details')}
+                      className="text-[11px] text-amber-600 hover:text-amber-700 font-semibold hover:underline cursor-pointer inline-flex items-center gap-1 mt-0.5"
+                    >
+                      <ArrowLeft size={11} /> Edit email address
+                    </button>
+                  </div>
+
+                  {previewOtpCode && (
+                    <div className="bg-amber-50 border border-amber-300/80 rounded-xl p-2.5 text-center text-xs text-amber-900 shadow-xs">
+                      <span className="font-bold">Preview Code:</span>{' '}
+                      <span className="font-mono font-black text-sm tracking-widest text-amber-700 select-all">{previewOtpCode}</span>
+                    </div>
+                  )}
+
+                  <form onSubmit={handleFinalSignUpWithOtp} className="space-y-4">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-zinc-400 uppercase tracking-wider block text-center">
+                        Enter 6-Digit Passcode
+                      </label>
+                      <div className="flex justify-between gap-1.5 sm:gap-2">
+                        {otpDigits.map((digit, idx) => (
+                          <input
+                            key={idx}
+                            id={`auth-otp-box-${idx}`}
+                            ref={(el) => { otpInputRefs.current[idx] = el; }}
+                            type="text"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            maxLength={1}
+                            autoFocus={idx === 0}
+                            value={digit}
+                            onChange={(e) => handleOtpBoxChange(idx, e.target.value)}
+                            onKeyDown={(e) => handleOtpBoxKeyDown(idx, e)}
+                            onPaste={handleOtpBoxPaste}
+                            className="w-10 sm:w-11 h-12 text-center text-lg font-bold font-mono bg-zinc-50 border border-zinc-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-zinc-900 shadow-xs transition-all"
+                          />
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Verify & Create Account Button */}
+                    <button
+                      id="auth-verify-otp-btn"
+                      type="submit"
+                      disabled={loading || otpDigits.join('').length !== 6}
+                      className="w-full flex items-center justify-center gap-2 py-3 bg-gradient-to-r from-amber-500 to-amber-600 text-white hover:from-amber-600 hover:to-amber-700 rounded-xl text-xs font-bold transition-all disabled:bg-zinc-100 disabled:text-zinc-400 shadow-md shadow-amber-500/10 cursor-pointer"
+                    >
+                      {loading ? (
+                        <>
+                          <RefreshCw size={14} className="animate-spin" />
+                          <span>Verifying & Creating Account...</span>
+                        </>
+                      ) : (
+                        <>
+                          <CheckCheck size={15} />
+                          <span>Verify & Create Account</span>
+                        </>
+                      )}
+                    </button>
+
+                    {/* Resend Code & Back Controls */}
+                    <div className="flex flex-col items-center gap-2 pt-1">
+                      {resendCooldown > 0 ? (
+                        <span className="text-xs text-zinc-400 font-medium">
+                          Resend code in <strong className="font-mono text-zinc-600">{resendCooldown}s</strong>
+                        </span>
+                      ) : (
+                        <button
+                          id="auth-resend-otp-btn"
+                          type="button"
+                          disabled={loading}
+                          onClick={handleResendOtp}
+                          className="text-xs font-bold text-amber-600 hover:text-amber-700 hover:underline cursor-pointer disabled:opacity-50"
+                        >
+                          Resend Verification Code
+                        </button>
+                      )}
+
+                      <button
+                        id="auth-back-to-details-btn"
+                        type="button"
+                        onClick={() => setSignUpStep('details')}
+                        className="text-[11px] text-zinc-500 hover:text-zinc-700 font-medium cursor-pointer"
+                      >
+                        Back to Registration Details
+                      </button>
+                    </div>
+                  </form>
+                </div>
               ) : (
                 <>
                   <div className="space-y-1">
@@ -608,7 +833,7 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
                       {isReset 
                         ? 'Enter your email and a new password to reset your account password.' 
                         : isSignUp 
-                          ? 'Sign up and start making profits.' 
+                          ? 'Sign up with email verification and start making profits.' 
                           : 'Enter your credentials to make profits.'
                       }
                     </p>
@@ -727,6 +952,23 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
                           className="w-full pl-9 pr-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 placeholder-zinc-400 text-zinc-800"
                         />
                       </div>
+
+                      {/* Live Typo Auto-Suggestion Banner */}
+                      {isSignUp && emailSuggestion && (
+                        <div className="flex items-center justify-between bg-amber-50 border border-amber-200/80 rounded-lg px-2.5 py-1 text-[11px] text-amber-900 mt-1">
+                          <span>
+                            Did you mean <strong className="font-semibold">{emailSuggestion}</strong>?
+                          </span>
+                          <button
+                            id="auth-apply-email-suggestion"
+                            type="button"
+                            onClick={() => setEmail(emailSuggestion)}
+                            className="text-amber-700 font-bold hover:underline ml-2 cursor-pointer shrink-0"
+                          >
+                            Fix
+                          </button>
+                        </div>
+                      )}
                     </div>
 
                     {/* Phone Number - Sign Up Only */}
@@ -924,7 +1166,7 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
                           {isReset 
                             ? 'Update Password' 
                             : isSignUp 
-                              ? 'Create Account' 
+                              ? 'Continue & Verify Email' 
                               : 'Log In'
                           }
                         </span>
