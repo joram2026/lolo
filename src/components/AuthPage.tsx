@@ -11,6 +11,7 @@ import {
 import { doc, setDoc, serverTimestamp, getDoc, collection, query, where, getDocs, updateDoc, increment, addDoc, deleteDoc } from 'firebase/firestore';
 import { Shield, Mail, Lock, User, Phone, Sparkles, AlertCircle, RefreshCw, Eye, EyeOff, Globe, ChevronDown, Check, TrendingUp, Zap, Award, ArrowUpRight, Activity, DollarSign, Users, Percent, CheckCircle, ArrowLeft, KeyRound, CheckCheck } from 'lucide-react';
 import { validateEmailAddress } from '../utils/emailValidation';
+import { sendEmailOtp, verifyEmailOtp } from '../utils/otpService';
 
 interface AuthPageProps {
   onSuccess: () => void;
@@ -229,21 +230,13 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/send-email-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: formattedEmail, displayName: displayName.trim() }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to resend verification code.');
-      }
+      const result = await sendEmailOtp(formattedEmail, displayName.trim());
 
       setResendCooldown(45);
-      if (data.previewCode) {
-        setPreviewOtpCode(data.previewCode);
+      if (result.previewCode) {
+        setPreviewOtpCode(result.previewCode);
       }
-      setSuccessMsg('A new verification code has been dispatched to your email.');
+      setSuccessMsg('A new verification code has been dispatched.');
     } catch (err: any) {
       setError(err.message || 'Failed to resend verification code.');
     } finally {
@@ -265,15 +258,10 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
     const formattedEmail = email.trim().toLowerCase();
 
     try {
-      // 1. Verify OTP code with server
-      const verifyRes = await fetch('/api/verify-email-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: formattedEmail, code: enteredCode }),
-      });
-      const verifyData = await verifyRes.json();
-      if (!verifyRes.ok) {
-        throw new Error(verifyData.error || 'Invalid verification code. Please check your inbox and try again.');
+      // 1. Verify OTP code
+      const verifyResult = await verifyEmailOtp(formattedEmail, enteredCode);
+      if (!verifyResult.success) {
+        throw new Error(verifyResult.error || 'Invalid verification code. Please check your passcode and try again.');
       }
 
       // 2. Clear referral/code parameters from the URL before signing in
@@ -502,20 +490,12 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
           throw new Error('This email address is already registered. Please sign in instead.');
         }
 
-        // Request 6-digit OTP verification code from backend
-        const res = await fetch('/api/send-email-otp', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: formattedEmail, displayName: displayName.trim() }),
-        });
-        const data = await res.json();
-        if (!res.ok) {
-          throw new Error(data.error || 'Failed to dispatch email verification code.');
-        }
+        // Request 6-digit OTP verification code
+        const sendResult = await sendEmailOtp(formattedEmail, displayName.trim());
 
         setResendCooldown(45);
-        if (data.previewCode) {
-          setPreviewOtpCode(data.previewCode);
+        if (sendResult.previewCode) {
+          setPreviewOtpCode(sendResult.previewCode);
         } else {
           setPreviewOtpCode(null);
         }

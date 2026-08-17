@@ -131,5 +131,10 @@ service cloud.firestore {
       allow read: if isAuth();
       allow write: if isAdmin();
     }
+
+    // Email Verifications for signup OTP
+    match /email_verifications/{emailDoc} {
+      allow read, write: if true;
+    }
   }
 }
