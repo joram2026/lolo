@@ -84,8 +84,11 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
         })
       });
       if (response.ok) {
-        const data = await response.json();
-        setAuditResult(data);
+        const text = await response.text();
+        if (text.trim().startsWith('{') && text.trim().endsWith('}')) {
+          const data = JSON.parse(text);
+          setAuditResult(data);
+        }
       } else {
         console.warn('AI Receipt Verification API returned error status.');
       }
