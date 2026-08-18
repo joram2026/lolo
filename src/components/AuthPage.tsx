@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { motion } from 'motion/react';
 import { auth, db } from '../firebase';
 import { useToast } from '../context/ToastContext';
 import { 
@@ -9,7 +10,7 @@ import {
   updatePassword
 } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp, getDoc, collection, query, where, getDocs, updateDoc, increment, addDoc, deleteDoc } from 'firebase/firestore';
-import { Shield, Mail, Lock, User, Phone, Sparkles, AlertCircle, RefreshCw, Eye, EyeOff, Globe, ChevronDown, Check, TrendingUp, Zap, Award, ArrowUpRight, Activity, DollarSign, Users, Percent, CheckCircle, ArrowLeft, KeyRound, CheckCheck } from 'lucide-react';
+import { Shield, Mail, Lock, User, Phone, Sparkles, AlertCircle, RefreshCw, Eye, EyeOff, Globe, ChevronDown, Check, TrendingUp, Zap, Award, ArrowUpRight, Activity, DollarSign, Users, Percent, CheckCircle, ArrowLeft, KeyRound, CheckCheck, Headphones } from 'lucide-react';
 import { validateEmailAddress } from '../utils/emailValidation';
 import { sendEmailOtp, verifyEmailOtp } from '../utils/otpService';
 
@@ -58,6 +59,8 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
   const [referral, setReferral] = useState(() => localStorage.getItem('pending_referral_code') || '');
   const referralNotifiedRef = React.useRef(false);
   const toast = useToast();
+  const [isDraggingSupport, setIsDraggingSupport] = useState(false);
+  const dragStartTimeRef = useRef<number>(0);
   const [loading, setLoading] = useState(false);
   const [errorState, setErrorState] = useState<string | null>(null);
   const setError = (msg: string | null) => {
@@ -582,39 +585,172 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
   };
 
   return (
-    <div id="auth-page-container" className="min-h-screen bg-gradient-to-br from-[#FFFBF0] via-[#FFF3D6] to-[#FFEBB5] text-zinc-800 font-sans relative overflow-hidden flex flex-col justify-center items-center py-12">
+    <div id="auth-page-container" className="min-h-screen bg-gradient-to-br from-[#FFFDF7] via-[#FFF6DE] to-[#EEF8EC] text-zinc-800 font-sans relative overflow-hidden flex flex-col justify-center items-center py-12">
       <style>{`
         @keyframes float-slow {
           0%, 100% { transform: translateY(0px) rotate(0deg); }
-          50% { transform: translateY(-15px) rotate(5deg); }
+          50% { transform: translateY(-16px) rotate(4deg); }
         }
         .animate-float-slow {
-          animation: float-slow 8s ease-in-out infinite;
+          animation: float-slow 9s ease-in-out infinite;
         }
         @keyframes float-fast {
           0%, 100% { transform: translateY(0px) rotate(0deg); }
-          50% { transform: translateY(-8px) rotate(-3deg); }
+          50% { transform: translateY(-10px) rotate(-4deg); }
         }
         .animate-float-fast {
-          animation: float-fast 5s ease-in-out infinite;
+          animation: float-fast 6s ease-in-out infinite;
+        }
+        @keyframes drift-up {
+          0% { transform: translateY(0px) scale(0.96); opacity: 0.25; }
+          50% { transform: translateY(-12px) scale(1.02); opacity: 0.45; }
+          100% { transform: translateY(0px) scale(0.96); opacity: 0.25; }
+        }
+        .animate-drift-up {
+          animation: drift-up 7s ease-in-out infinite;
+        }
+        @keyframes shimmer-gold {
+          0%, 100% { opacity: 0.3; }
+          50% { opacity: 0.65; }
+        }
+        .animate-shimmer-gold {
+          animation: shimmer-gold 4s ease-in-out infinite;
         }
       `}</style>
 
-      {/* 1. Floating Forex Background Icons */}
+      {/* 1. Money-Themed Background System */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden select-none z-0">
-        <div className="absolute top-[18%] left-[4%] opacity-[0.08] animate-float-slow text-amber-600">
-          <div className="text-6xl sm:text-9xl font-black font-serif">₿</div>
+        {/* Ambient Wealth & Golden Glows */}
+        <div className="absolute -top-32 left-1/2 -translate-x-1/2 w-[650px] h-[450px] bg-gradient-to-b from-amber-300/25 via-amber-200/15 to-transparent rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-36 -left-20 w-[450px] h-[450px] bg-emerald-400/15 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute top-1/3 -right-24 w-[400px] h-[400px] bg-amber-400/15 rounded-full blur-3xl pointer-events-none" />
+
+        {/* Banknote Micro-Security Pattern / Currency Lattice Grid */}
+        <div className="absolute inset-0 bg-[radial-gradient(#d97706_0.7px,transparent_0.7px)] [background-size:24px_24px] opacity-[0.06]" />
+
+        {/* Banknote Guilloche / Security Curve Watermarks */}
+        <svg className="absolute -top-10 -left-10 w-96 h-96 opacity-[0.08] text-emerald-800" viewBox="0 0 200 200" fill="none">
+          <circle cx="100" cy="100" r="80" stroke="currentColor" strokeWidth="1" strokeDasharray="3 3" />
+          <circle cx="100" cy="100" r="60" stroke="currentColor" strokeWidth="1.5" />
+          <circle cx="100" cy="100" r="40" stroke="currentColor" strokeWidth="0.75" />
+          <path d="M20,100 Q60,20 100,100 T180,100" stroke="currentColor" strokeWidth="1" />
+          <path d="M20,100 Q60,180 100,100 T180,100" stroke="currentColor" strokeWidth="1" />
+          <path d="M100,20 Q20,60 100,100 T100,180" stroke="currentColor" strokeWidth="1" />
+          <path d="M100,20 Q180,60 100,100 T100,180" stroke="currentColor" strokeWidth="1" />
+        </svg>
+
+        <svg className="absolute -bottom-16 -right-16 w-[28rem] h-[28rem] opacity-[0.07] text-amber-800" viewBox="0 0 200 200" fill="none">
+          <circle cx="100" cy="100" r="90" stroke="currentColor" strokeWidth="1.5" />
+          <circle cx="100" cy="100" r="70" stroke="currentColor" strokeWidth="1" strokeDasharray="4 2" />
+          <circle cx="100" cy="100" r="50" stroke="currentColor" strokeWidth="1.5" />
+          <polygon points="100,15 125,75 190,75 137,115 158,175 100,140 42,175 63,115 10,75 75,75" stroke="currentColor" strokeWidth="0.8" />
+        </svg>
+
+        {/* Floating Banknote Card 1 (Top Left) */}
+        <div className="absolute top-[12%] left-[3%] lg:left-[8%] opacity-35 hidden sm:block animate-float-slow">
+          <div className="w-44 h-24 rounded-2xl bg-gradient-to-br from-emerald-50 to-emerald-100/80 border-2 border-emerald-300/80 p-2.5 shadow-lg shadow-emerald-600/5 rotate-[-8deg] backdrop-blur-xs flex flex-col justify-between">
+            <div className="flex justify-between items-center text-emerald-800">
+              <span className="font-mono font-black text-xs">$100</span>
+              <span className="text-[9px] font-bold tracking-widest uppercase">FEDERAL RESERVE</span>
+              <span className="font-mono font-black text-xs">$100</span>
+            </div>
+            <div className="flex items-center justify-center">
+              <div className="w-9 h-9 rounded-full border border-emerald-400 bg-emerald-200/50 flex items-center justify-center text-emerald-800 font-bold text-sm font-serif">
+                $
+              </div>
+            </div>
+            <div className="flex justify-between items-center text-[8px] font-mono text-emerald-700 font-semibold">
+              <span>SERIES 2026</span>
+              <span>SECURED VAULT</span>
+            </div>
+          </div>
         </div>
-        <div className="absolute bottom-[20%] left-[6%] opacity-[0.06] animate-float-fast text-emerald-600">
-          <div className="text-7xl sm:text-[10rem] font-black font-sans">$</div>
+
+        {/* Floating Banknote Card 2 (Bottom Right) */}
+        <div className="absolute bottom-[14%] right-[3%] lg:right-[8%] opacity-35 hidden sm:block animate-float-fast">
+          <div className="w-44 h-24 rounded-2xl bg-gradient-to-br from-amber-50 to-amber-100/90 border-2 border-amber-300/80 p-2.5 shadow-lg shadow-amber-600/5 rotate-[10deg] backdrop-blur-xs flex flex-col justify-between">
+            <div className="flex justify-between items-center text-amber-900">
+              <span className="font-mono font-black text-xs">1000</span>
+              <span className="text-[9px] font-bold tracking-widest uppercase">GOLD BOND</span>
+              <span className="font-mono font-black text-xs">1000</span>
+            </div>
+            <div className="flex items-center justify-center">
+              <div className="w-9 h-9 rounded-full border border-amber-400 bg-amber-200/60 flex items-center justify-center text-amber-900 font-bold text-xs font-mono">
+                ₮
+              </div>
+            </div>
+            <div className="flex justify-between items-center text-[8px] font-mono text-amber-800 font-semibold">
+              <span>MOREX TREASURY</span>
+              <span>100% BACKED</span>
+            </div>
+          </div>
         </div>
-        <div className="absolute top-[25%] right-[6%] opacity-[0.05] animate-float-slow text-blue-600">
-          <div className="text-6xl sm:text-9xl font-bold font-sans">€</div>
+
+        {/* Floating Gold Coin Badges */}
+        <div className="absolute top-[28%] left-[2%] lg:left-[5%] animate-float-fast opacity-40">
+          <div className="w-16 h-16 rounded-full bg-gradient-to-br from-amber-200 via-amber-400 to-amber-600 border-2 border-white shadow-md flex items-center justify-center text-amber-950 font-black text-2xl font-serif rotate-[-12deg]">
+            $
+          </div>
         </div>
-        <div className="absolute bottom-[15%] right-[4%] opacity-[0.07] animate-float-fast text-indigo-600">
-          <div className="text-6xl sm:text-9xl font-bold font-sans">£</div>
+
+        <div className="absolute bottom-[28%] left-[4%] lg:left-[7%] animate-float-slow opacity-35">
+          <div className="w-14 h-14 rounded-full bg-gradient-to-br from-amber-100 via-amber-300 to-amber-500 border-2 border-white shadow-md flex items-center justify-center text-amber-950 font-black text-xl font-mono rotate-[15deg]">
+            ₿
+          </div>
         </div>
-        <div className="absolute inset-0 bg-[radial-gradient(#d97706_0.5px,transparent_0.5px)] [background-size:20px_20px] opacity-[0.04]" />
+
+        <div className="absolute top-[16%] right-[4%] lg:right-[7%] animate-float-slow opacity-35">
+          <div className="w-14 h-14 rounded-full bg-gradient-to-br from-emerald-200 via-emerald-400 to-emerald-600 border-2 border-white shadow-md flex items-center justify-center text-emerald-950 font-black text-xl font-sans rotate-[8deg]">
+            €
+          </div>
+        </div>
+
+        <div className="absolute bottom-[24%] right-[2%] lg:right-[6%] animate-float-fast opacity-40">
+          <div className="w-16 h-16 rounded-full bg-gradient-to-br from-amber-200 via-amber-400 to-yellow-500 border-2 border-white shadow-md flex items-center justify-center text-amber-950 font-black text-2xl font-sans rotate-[-10deg]">
+            £
+          </div>
+        </div>
+
+        {/* Floating Financial Candlestick Chart Cluster (Left) */}
+        <div className="absolute top-[48%] left-[3%] lg:left-[6%] opacity-30 hidden md:flex items-end gap-2 animate-drift-up">
+          <div className="flex flex-col items-center">
+            <div className="w-0.5 h-3 bg-emerald-600"></div>
+            <div className="w-3.5 h-8 bg-emerald-500 rounded-xs"></div>
+            <div className="w-0.5 h-2 bg-emerald-600"></div>
+          </div>
+          <div className="flex flex-col items-center">
+            <div className="w-0.5 h-2 bg-emerald-600"></div>
+            <div className="w-3.5 h-12 bg-emerald-500 rounded-xs"></div>
+            <div className="w-0.5 h-4 bg-emerald-600"></div>
+          </div>
+          <div className="flex flex-col items-center">
+            <div className="w-0.5 h-4 bg-emerald-600"></div>
+            <div className="w-3.5 h-16 bg-emerald-400 rounded-xs"></div>
+            <div className="w-0.5 h-3 bg-emerald-600"></div>
+          </div>
+        </div>
+
+        {/* Floating Profit Badges (Right) */}
+        <div className="absolute top-[44%] right-[3%] lg:right-[6%] opacity-40 hidden md:block animate-drift-up">
+          <div className="space-y-2">
+            <div className="px-3 py-1.5 rounded-xl bg-emerald-50/90 border border-emerald-300 text-emerald-700 font-mono text-xs font-black shadow-sm flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              +$1,450.00 ROI
+            </div>
+            <div className="px-3 py-1.5 rounded-xl bg-amber-50/90 border border-amber-300 text-amber-800 font-mono text-xs font-black shadow-sm flex items-center gap-1.5">
+              <span>⚡</span>
+              PROFIT SECURED
+            </div>
+          </div>
+        </div>
+
+        {/* Big Subtle Backdrop Currency Symbols */}
+        <div className="absolute top-[8%] left-[25%] opacity-[0.04] text-amber-600 font-serif font-black text-9xl pointer-events-none">
+          $
+        </div>
+        <div className="absolute bottom-[8%] right-[28%] opacity-[0.04] text-emerald-700 font-mono font-black text-9xl pointer-events-none">
+          ₿
+        </div>
       </div>
 
       {/* 2. Centered Auth Container */}
@@ -1165,6 +1301,56 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
             </div>
 
       </div>
+
+      {/* Draggable Floating Support Icon for Auth Pages */}
+      <motion.div
+        id="draggable-auth-floating-support"
+        drag
+        dragMomentum={false}
+        dragElastic={0.12}
+        whileHover={{ scale: 1.08 }}
+        whileTap={{ scale: 0.92 }}
+        onDragStart={() => {
+          dragStartTimeRef.current = Date.now();
+          setIsDraggingSupport(true);
+        }}
+        onDragEnd={() => {
+          setTimeout(() => {
+            setIsDraggingSupport(false);
+          }, 200);
+        }}
+        className="fixed bottom-6 right-5 z-50 touch-none select-none cursor-grab active:cursor-grabbing"
+      >
+        <a
+          id="auth-floating-support-btn"
+          href="https://t.me/Morexsuppor"
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => {
+            if (isDraggingSupport || (dragStartTimeRef.current > 0 && Date.now() - dragStartTimeRef.current < 250)) {
+              e.preventDefault();
+            }
+          }}
+          className="relative flex items-center justify-center w-13 h-13 rounded-full bg-gradient-to-tr from-amber-500 via-amber-400 to-amber-300 text-zinc-950 shadow-xl shadow-amber-500/40 border-2 border-white focus:outline-none group active:shadow-inner"
+          title="24/7 Support (@Morexsuppor)"
+          aria-label="Open 24/7 Customer Support"
+        >
+          {/* Live Online Status Dot */}
+          <span className="absolute top-0 right-0 flex h-3.5 w-3.5 -mt-0.5 -mr-0.5 pointer-events-none">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-emerald-500 border-2 border-white"></span>
+          </span>
+
+          {/* Support Headset Icon */}
+          <Headphones size={22} className="text-zinc-950 group-hover:scale-110 transition-transform" />
+
+          {/* Tooltip on Desktop Hover */}
+          <div className="absolute right-full mr-2.5 top-1/2 -translate-y-1/2 px-2.5 py-1 bg-zinc-900/90 backdrop-blur-sm text-white text-[11px] font-bold rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-md hidden sm:flex items-center gap-1.5 border border-zinc-800">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+            <span>Customer Support</span>
+          </div>
+        </a>
+      </motion.div>
     </div>
   );
 }
