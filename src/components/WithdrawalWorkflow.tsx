@@ -11,6 +11,38 @@ import {
 import { CoinIcon } from './StandardUserDashboard';
 import { useToast } from '../context/ToastContext';
 
+const getNetworkMetadata = (networkName: string) => {
+  const norm = (networkName || '').toUpperCase().trim();
+  if (norm.includes('TRC20') || norm.includes('TRON') || norm === 'TRX') {
+    return { fullName: 'Tron', badge: 'TRC-20' };
+  }
+  if (norm.includes('ERC20') || norm.includes('ETH') || norm.includes('ETHEREUM')) {
+    return { fullName: 'Ethereum', badge: 'ERC-20' };
+  }
+  if (norm.includes('BEP20') || norm.includes('BSC') || norm.includes('BINANCE')) {
+    return { fullName: 'BNB Chain', badge: 'BEP-20' };
+  }
+  if (norm.includes('SOL') || norm.includes('SPL') || norm.includes('SOLANA')) {
+    return { fullName: 'Solana', badge: 'SPL' };
+  }
+  if (norm.includes('BTC') || norm.includes('BITCOIN')) {
+    return { fullName: 'Bitcoin', badge: 'Native' };
+  }
+  if (norm.includes('POLYGON') || norm.includes('MATIC')) {
+    return { fullName: 'Polygon', badge: 'MATIC' };
+  }
+  if (norm.includes('ARBITRUM') || norm.includes('ARB')) {
+    return { fullName: 'Arbitrum', badge: 'ARB' };
+  }
+  if (norm.includes('OPTIMISM') || norm.includes('OP')) {
+    return { fullName: 'Optimism', badge: 'OP' };
+  }
+  if (norm.includes('AVAX') || norm.includes('AVALANCHE')) {
+    return { fullName: 'Avalanche', badge: 'C-Chain' };
+  }
+  return { fullName: networkName, badge: '' };
+};
+
 interface WithdrawalWorkflowProps {
   user: any;
   onBack: () => void;
@@ -658,25 +690,70 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
                   </div>
                 </div>
 
-                {/* Network Picker */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-zinc-500">Select Network</label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {selectedCoin.networks.map(net => (
-                      <button
-                        key={net}
-                        id={`withdraw-network-btn-${net}`}
-                        type="button"
-                        onClick={() => setSelectedNetwork(net)}
-                        className={`py-2 px-3 rounded-xl border text-xs font-semibold transition-all text-center cursor-pointer ${
-                          selectedNetwork === net
-                            ? 'bg-amber-500/10 border-amber-500 text-amber-600 font-bold'
-                            : 'bg-white border-zinc-200 text-zinc-500 hover:text-zinc-850'
-                        }`}
-                      >
-                        {net}
-                      </button>
-                    ))}
+                {/* Clean Noticeable Network Selector */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-zinc-700 uppercase tracking-wider">
+                      Select Network
+                    </label>
+                    {selectedNetwork && (
+                      <span className="text-xs font-black font-mono text-amber-600 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
+                        {selectedNetwork}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {selectedCoin.networks.map(net => {
+                      const isSelected = selectedNetwork === net;
+                      const netInfo = getNetworkMetadata(net);
+
+                      return (
+                        <button
+                          key={net}
+                          id={`withdraw-network-btn-${net}`}
+                          type="button"
+                          onClick={() => setSelectedNetwork(net)}
+                          className={`py-2 px-3 rounded-xl border-2 transition-all flex items-center justify-between gap-2 cursor-pointer text-left ${
+                            isSelected
+                              ? 'bg-amber-500 text-white border-amber-500 shadow-xs'
+                              : 'bg-white border-zinc-200 text-zinc-800 hover:border-amber-400 hover:bg-amber-50/20 shadow-2xs'
+                          }`}
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className={`font-mono font-black text-xs tracking-tight ${
+                                isSelected ? 'text-white' : 'text-zinc-900'
+                              }`}>
+                                {net}
+                              </span>
+                              {netInfo.badge && (
+                                <span className={`text-[9px] font-mono font-bold px-1 py-0.5 rounded leading-none uppercase ${
+                                  isSelected ? 'bg-white/20 text-white' : 'bg-zinc-100 text-zinc-600'
+                                }`}>
+                                  {netInfo.badge}
+                                </span>
+                              )}
+                            </div>
+                            <p className={`text-[10px] font-medium truncate mt-0.5 leading-tight ${
+                              isSelected ? 'text-amber-100' : 'text-zinc-500'
+                            }`}>
+                              {netInfo.fullName}
+                            </p>
+                          </div>
+
+                          <div className="shrink-0">
+                            {isSelected ? (
+                              <div className="w-4 h-4 rounded-full bg-white text-amber-600 flex items-center justify-center shadow-2xs">
+                                <Check size={11} strokeWidth={3.5} />
+                              </div>
+                            ) : (
+                              <div className="w-3.5 h-3.5 rounded-full border-2 border-zinc-300" />
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 

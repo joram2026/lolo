@@ -12,7 +12,7 @@ import {
   User, LogOut, ArrowRightLeft, ShieldCheck, Activity, Wallet, 
   HelpCircle, RefreshCw, Coins, ArrowRight, MessageSquare, AlertCircle,
   History, ArrowLeft, X, ChevronDown, ChevronRight, Check, Lock, Unlock, Eye, EyeOff, Sparkles, BookOpen, Zap, Send,
-  Cpu, Play, Pause, Bot, Crown, Gift, ListFilter, CheckCircle, CheckCircle2, Users, Globe, Clock
+  Cpu, Play, Pause, Bot, Crown, Gift, ListFilter, CheckCircle, CheckCircle2, Users, Globe, Clock, Headphones
 } from 'lucide-react';
 import { RunningBotView } from './RunningBotView';
 import { getTradingPairConfig, TradingPairBadge, DEFAULT_BOT_TRADING_PAIRS } from '../utils/pairUtils';
@@ -1003,6 +1003,8 @@ export default function StandardUserDashboard({
   const [pricesLoaded, setPricesLoaded] = useState(false);
   const [isUsingFallbackPrices, setIsUsingFallbackPrices] = useState(false);
   const [pricesLoadError, setPricesLoadError] = useState<string | null>(null);
+  const [isDraggingSupport, setIsDraggingSupport] = useState(false);
+  const dragStartTimeRef = useRef<number>(0);
 
   const loading = !userLoaded || (!pricesLoaded && !isUsingFallbackPrices);
 
@@ -6963,6 +6965,58 @@ export default function StandardUserDashboard({
             );
           })}
         </footer>
+      )}
+
+      {/* Draggable Floating Support Icon (Visible on Home & Wallet tabs) */}
+      {(activeTab === 'home' || activeTab === 'wallet') && !isHideFooter && (
+        <motion.div
+          id="draggable-floating-support"
+          drag
+          dragMomentum={false}
+          dragElastic={0.12}
+          whileHover={{ scale: 1.08 }}
+          whileTap={{ scale: 0.92 }}
+          onDragStart={() => {
+            dragStartTimeRef.current = Date.now();
+            setIsDraggingSupport(true);
+          }}
+          onDragEnd={() => {
+            setTimeout(() => {
+              setIsDraggingSupport(false);
+            }, 200);
+          }}
+          className="fixed bottom-20 right-4 z-40 touch-none select-none cursor-grab active:cursor-grabbing"
+        >
+          <a
+            id="floating-support-telegram-btn"
+            href="https://t.me/Morexsuppor"
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => {
+              if (isDraggingSupport || (dragStartTimeRef.current > 0 && Date.now() - dragStartTimeRef.current < 250)) {
+                e.preventDefault();
+              }
+            }}
+            className="relative flex items-center justify-center w-13 h-13 rounded-full bg-gradient-to-tr from-amber-500 via-amber-400 to-amber-300 text-zinc-950 shadow-xl shadow-amber-500/40 border-2 border-white focus:outline-none group active:shadow-inner"
+            title="24/7 Support (@Morexsuppor)"
+            aria-label="Open 24/7 Customer Support"
+          >
+            {/* Live Online Status Dot */}
+            <span className="absolute top-0 right-0 flex h-3.5 w-3.5 -mt-0.5 -mr-0.5 pointer-events-none">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-emerald-500 border-2 border-white"></span>
+            </span>
+
+            {/* Support Headset Icon */}
+            <Headphones size={22} className="text-zinc-950 group-hover:scale-110 transition-transform" />
+
+            {/* Tooltip on Desktop Hover */}
+            <div className="absolute right-full mr-2.5 top-1/2 -translate-y-1/2 px-2.5 py-1 bg-zinc-900/90 backdrop-blur-sm text-white text-[11px] font-bold rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-md hidden sm:flex items-center gap-1.5 border border-zinc-800">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+              <span>Customer Support</span>
+            </div>
+          </a>
+        </motion.div>
       )}
 
 

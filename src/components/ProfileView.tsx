@@ -7,7 +7,7 @@ import { useToast } from '../context/ToastContext';
 import { 
   Shield, Key, Sparkles, User, Gift, Check, ArrowLeft, AlertCircle, 
   Smartphone, Copy, CheckCircle2, QrCode, Power, Lock, ShieldAlert,
-  ChevronRight, ChevronDown, ChevronUp, HelpCircle, MessageSquare, Send, Download, Laptop,
+  ChevronRight, ChevronDown, ChevronUp, HelpCircle, Send, Download, Laptop,
   Gamepad2, LayoutGrid, Clapperboard, BookOpen, Star, Share2, Plus, 
   Search, MoreVertical, Info, ShieldCheck, X
 } from 'lucide-react';
@@ -697,7 +697,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                 </div>
                 <div className="flex-1 min-w-0 text-left">
                   <h4 className="text-sm font-bold text-zinc-700 group-hover:text-zinc-900 transition-colors">Customer Support</h4>
-                  <p className="text-[11px] text-zinc-500 mt-0.5 leading-tight">Get 24/7 assistance via WhatsApp & Telegram</p>
+                  <p className="text-[11px] text-zinc-500 mt-0.5 leading-tight">Get 24/7 assistance via Telegram (@Morexsuppor)</p>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-100 text-emerald-600">
@@ -1574,47 +1574,31 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
 
             {/* Support Channels */}
             <div className="space-y-3">
-              {/* WhatsApp Business Option */}
+              {/* Telegram Official Support Option */}
               <a
-                href="https://wa.me/#"
+                id="telegram-official-support-link"
+                href="https://t.me/Morexsuppor"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-4 bg-[#FFF8E1] hover:bg-[#FFF8E1]/80 border border-zinc-200 hover:border-zinc-300 p-4 rounded-2xl transition-all group cursor-pointer no-underline block shadow-sm"
+                className="flex items-center gap-4 bg-[#FFF8E1] hover:bg-[#FFF8E1]/80 border-2 border-amber-300/80 hover:border-amber-400 p-4 sm:p-5 rounded-2xl transition-all group cursor-pointer no-underline block shadow-sm"
               >
-                <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 shrink-0 group-hover:bg-emerald-100 transition-all">
-                  <MessageSquare size={18} />
+                <div className="w-12 h-12 rounded-2xl bg-sky-500 text-white flex items-center justify-center shrink-0 group-hover:scale-105 shadow-xs transition-all">
+                  <Send size={22} className="translate-x-0.5" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h4 className="text-sm font-bold text-zinc-800 group-hover:text-zinc-950 transition-colors">WhatsApp Support</h4>
-                  <p className="text-[11px] text-zinc-500 mt-0.5">Instant chats, transfer guides, and rapid answers</p>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h4 className="text-base font-black text-zinc-900 group-hover:text-zinc-950 transition-colors">Telegram Support</h4>
+                    <span className="text-[11px] font-mono font-bold px-2 py-0.5 rounded-md bg-sky-50 text-sky-700 border border-sky-200">
+                      @Morexsuppor
+                    </span>
+                  </div>
+                  <p className="text-xs text-zinc-500 mt-1">Direct 24/7 live assistance, transfer guides, and rapid answers</p>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
-                  <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-100 text-emerald-600">
+                  <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-600">
                     Online
                   </span>
-                  <ChevronRight size={16} className="text-zinc-400 group-hover:text-zinc-600 transition-colors" />
-                </div>
-              </a>
-
-              {/* Telegram Channel Option */}
-              <a
-                href="https://t.me/#"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-4 bg-[#FFF8E1] hover:bg-[#FFF8E1]/80 border border-zinc-200 hover:border-zinc-300 p-4 rounded-2xl transition-all group cursor-pointer no-underline block shadow-sm"
-              >
-                <div className="w-10 h-10 rounded-xl bg-sky-50 flex items-center justify-center text-sky-600 shrink-0 group-hover:bg-sky-100 transition-all">
-                  <Send size={18} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h4 className="text-sm font-bold text-zinc-800 group-hover:text-zinc-950 transition-colors">Telegram Support</h4>
-                  <p className="text-[11px] text-zinc-500 mt-0.5">Secure messaging, automated ticket opening, and news</p>
-                </div>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-sky-50 border border-sky-100 text-sky-600">
-                    Online
-                  </span>
-                  <ChevronRight size={16} className="text-zinc-400 group-hover:text-zinc-600 transition-colors" />
+                  <ChevronRight size={18} className="text-zinc-400 group-hover:text-zinc-600 transition-colors" />
                 </div>
               </a>
             </div>
