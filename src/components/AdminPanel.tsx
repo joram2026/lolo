@@ -127,7 +127,22 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
   const [editingLead, setEditingLead] = useState<CopyTraderLead | null>(null);
   const [isAddLeadModalOpen, setIsAddLeadModalOpen] = useState(false);
   const [isSavingLead, setIsSavingLead] = useState(false);
-  const [leadForm, setLeadForm] = useState({
+  const [leadForm, setLeadForm] = useState<{
+    name: string;
+    photoUrl: string;
+    description: string;
+    signalsPerDay: string;
+    winRate: string;
+    minCapital: string;
+    maxCapital: string;
+    analysisCommission: string;
+    dayProfitRate: string;
+    contractDurationDays: string;
+    tradingPairs: string;
+    riskLevel: string;
+    signals: { id: string; time: string; code: string }[];
+    extraSignals: { id: string; time: string; code: string; profitRate: string; label?: string }[];
+  }>({
     name: '',
     photoUrl: '',
     description: '',
@@ -139,11 +154,12 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
     dayProfitRate: '2.0',
     contractDurationDays: '30',
     tradingPairs: 'BTC/USDT, ETH/USDT, SOL/USDT, XRP/USDT',
-    sig1Time: '13:00',
-    sig1Code: 'SIG1300',
-    sig2Time: '20:00',
-    sig2Code: 'SIG2000',
-    riskLevel: 'Low Risk'
+    riskLevel: 'Low Risk',
+    signals: [
+      { id: 'sig-1', time: '13:00', code: 'SIG1300' },
+      { id: 'sig-2', time: '20:00', code: 'SIG2000' }
+    ],
+    extraSignals: []
   });
 
   // Referral Deposit Configuration state
@@ -1549,25 +1565,45 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
       dayProfitRate: '2.0',
       contractDurationDays: '30',
       tradingPairs: 'BTC/USDT, ETH/USDT, SOL/USDT, XRP/USDT',
-      sig1Time: '13:00',
-      sig1Code: 'SIG1300',
-      sig2Time: '20:00',
-      sig2Code: 'SIG2000',
-      riskLevel: 'Low Risk'
+      riskLevel: 'Low Risk',
+      signals: [
+        { id: 'sig-1', time: '13:00', code: 'SIG1300' },
+        { id: 'sig-2', time: '20:00', code: 'SIG2000' }
+      ],
+      extraSignals: []
     });
     setIsAddLeadModalOpen(true);
   };
 
   const handleOpenEditLead = (lead: CopyTraderLead) => {
     setEditingLead(lead);
-    const sig1 = lead.signals?.[0];
-    const sig2 = lead.signals?.[1];
+
+    const existingSignals = Array.isArray(lead.signals) && lead.signals.length > 0
+      ? lead.signals.map((s, idx) => ({
+          id: s.id || `sig-${idx + 1}`,
+          time: s.time || (idx === 0 ? '13:00' : '20:00'),
+          code: s.code || `SIG${idx + 1}`
+        }))
+      : [
+          { id: 'sig-1', time: '13:00', code: 'SIG1300' },
+          { id: 'sig-2', time: '20:00', code: 'SIG2000' }
+        ];
+
+    const existingExtraSignals = Array.isArray(lead.extraSignals)
+      ? lead.extraSignals.map((es, idx) => ({
+          id: es.id || `extra-${idx + 1}`,
+          time: es.time || '16:30',
+          code: es.code || 'EXTRA500',
+          profitRate: (es.profitRate ?? 3.5).toString(),
+          label: es.label || `Extra Signal ${idx + 1}`
+        }))
+      : [];
 
     setLeadForm({
       name: lead.name || '',
       photoUrl: lead.photoUrl || '',
       description: lead.description || '',
-      signalsPerDay: lead.signalsPerDay || '2 signals/day',
+      signalsPerDay: lead.signalsPerDay || `${existingSignals.length} signals/day`,
       winRate: lead.winRate || '98.5%',
       minCapital: (lead.minCapital ?? 50).toString(),
       maxCapital: (lead.maxCapital ?? 10000).toString(),
@@ -1575,13 +1611,77 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
       dayProfitRate: (lead.dayProfitRate ?? 2.0).toString(),
       contractDurationDays: (lead.contractDurationDays ?? 30).toString(),
       tradingPairs: lead.tradingPairs ? lead.tradingPairs.join(', ') : 'BTC/USDT, ETH/USDT, SOL/USDT, XRP/USDT',
-      sig1Time: sig1?.time || '13:00',
-      sig1Code: sig1?.code || 'SIG1300',
-      sig2Time: sig2?.time || '20:00',
-      sig2Code: sig2?.code || 'SIG2000',
-      riskLevel: lead.riskLevel || 'Low Risk'
+      riskLevel: lead.riskLevel || 'Low Risk',
+      signals: existingSignals,
+      extraSignals: existingExtraSignals
     });
     setIsAddLeadModalOpen(true);
+  };
+
+  // Daily Signals Management Handlers (Tied to 1-Day Profit Rate)
+  const handleAddDailySignal = () => {
+    const nextIdx = leadForm.signals.length + 1;
+    const defaultTimes = ['13:00', '20:00', '16:00', '11:00', '18:00', '22:00'];
+    const nextTime = defaultTimes[leadForm.signals.length % defaultTimes.length];
+    const newSig = {
+      id: `sig-${Date.now()}-${nextIdx}`,
+      time: nextTime,
+      code: `SIG${nextTime.replace(':', '')}`
+    };
+    setLeadForm(prev => ({
+      ...prev,
+      signals: [...prev.signals, newSig]
+    }));
+  };
+
+  const handleDeleteDailySignal = (index: number) => {
+    if (leadForm.signals.length <= 1) {
+      showFeedback('error', 'An expert lead must have at least one daily signal.');
+      return;
+    }
+    setLeadForm(prev => ({
+      ...prev,
+      signals: prev.signals.filter((_, idx) => idx !== index)
+    }));
+  };
+
+  const handleUpdateDailySignal = (index: number, field: 'time' | 'code', value: string) => {
+    setLeadForm(prev => {
+      const updated = [...prev.signals];
+      updated[index] = { ...updated[index], [field]: value };
+      return { ...prev, signals: updated };
+    });
+  };
+
+  // Extra Signals Management Handlers (Standalone Profit Rate & Locked Principal)
+  const handleAddExtraSignal = () => {
+    const nextIdx = leadForm.extraSignals.length + 1;
+    const newExtra = {
+      id: `extra-${Date.now()}-${nextIdx}`,
+      time: '16:30',
+      code: `EXTRA${nextIdx > 1 ? nextIdx * 100 : '500'}`,
+      profitRate: '3.5',
+      label: `Extra Signal ${nextIdx}`
+    };
+    setLeadForm(prev => ({
+      ...prev,
+      extraSignals: [...prev.extraSignals, newExtra]
+    }));
+  };
+
+  const handleDeleteExtraSignal = (index: number) => {
+    setLeadForm(prev => ({
+      ...prev,
+      extraSignals: prev.extraSignals.filter((_, idx) => idx !== index)
+    }));
+  };
+
+  const handleUpdateExtraSignal = (index: number, field: 'time' | 'code' | 'profitRate' | 'label', value: string) => {
+    setLeadForm(prev => {
+      const updated = [...prev.extraSignals];
+      updated[index] = { ...updated[index], [field]: value };
+      return { ...prev, extraSignals: updated };
+    });
   };
 
   const handleSaveLead = async () => {
@@ -1600,16 +1700,34 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
         ? leadForm.tradingPairs.split(',').map(s => s.trim().toUpperCase()).filter(Boolean)
         : ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'XRP/USDT'];
 
-      const signalsList = [
-        { id: 'sig-1', time: leadForm.sig1Time.trim() || '13:00', code: leadForm.sig1Code.trim() || 'SIG1300' },
-        { id: 'sig-2', time: leadForm.sig2Time.trim() || '20:00', code: leadForm.sig2Code.trim() || 'SIG2000' }
-      ];
+      const sanitizedSignals = (leadForm.signals.length > 0 ? leadForm.signals : [
+        { id: 'sig-1', time: '13:00', code: 'SIG1300' }
+      ]).map((sig, idx) => ({
+        id: sig.id || `sig-${idx + 1}`,
+        time: sig.time.trim() || '13:00',
+        code: sig.code.trim().toUpperCase() || `SIG${idx + 1}`
+      }));
+
+      const sanitizedExtraSignals = leadForm.extraSignals.map((es, idx) => ({
+        id: es.id || `extra-${idx + 1}`,
+        time: es.time.trim() || '16:30',
+        code: es.code.trim().toUpperCase() || `EXTRA${idx + 1}`,
+        profitRate: parseFloat(es.profitRate) || 3.5,
+        isExtra: true,
+        label: es.label?.trim() || `Extra Signal ${idx + 1}`
+      }));
+
+      const signalsCount = sanitizedSignals.length;
+      const extraCount = sanitizedExtraSignals.length;
+      const signalsLabel = extraCount > 0
+        ? `${signalsCount} signals/day (+${extraCount} Extra)`
+        : `${signalsCount} signals/day`;
 
       const leadData: Partial<CopyTraderLead> = {
         name: leadForm.name.trim(),
         photoUrl: leadForm.photoUrl.trim() || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=400',
         description: leadForm.description.trim(),
-        signalsPerDay: `${signalsList.length} signals/day`,
+        signalsPerDay: signalsLabel,
         winRate: leadForm.winRate.trim() || '98.5%',
         minCapital: parseFloat(leadForm.minCapital) || 50,
         maxCapital: parseFloat(leadForm.maxCapital) || 10000,
@@ -1617,7 +1735,8 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
         dayProfitRate: parseFloat(leadForm.dayProfitRate) || 2.0,
         contractDurationDays: parseInt(leadForm.contractDurationDays) || 30,
         tradingPairs: pairs,
-        signals: signalsList,
+        signals: sanitizedSignals,
+        extraSignals: sanitizedExtraSignals,
         riskLevel: leadForm.riskLevel || 'Low Risk',
         updatedAt: new Date().toISOString()
       };
@@ -3200,10 +3319,17 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                               {lead.winRate || '98.5%'} Win
                             </span>
                           </div>
-                          <div className="flex items-center gap-2 text-[10px] text-zinc-400 font-mono">
-                            <span className="text-amber-400 font-bold">⚡ {lead.signalsPerDay}</span>
+                          <div className="flex items-center gap-2 text-[10px] text-zinc-400 font-mono flex-wrap">
+                            <span className="text-amber-400 font-bold">⚡ {lead.signals?.length || 2} Signal{(lead.signals?.length || 2) === 1 ? '' : 's'}/day</span>
+                            {lead.extraSignals && lead.extraSignals.length > 0 && (
+                              <span className="px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 font-black text-[9px] font-mono uppercase tracking-wide">
+                                +{lead.extraSignals.length} Extra Signal{lead.extraSignals.length > 1 ? 's' : ''}
+                              </span>
+                            )}
                             <span>•</span>
-                            <span>Min Capital: ${lead.minCapital ?? 100}</span>
+                            <span>Min: ${lead.minCapital ?? 50}</span>
+                            <span>•</span>
+                            <span className="text-emerald-400 font-bold">1-Day Rate: {lead.dayProfitRate ?? 2.0}%</span>
                           </div>
                           <p className="text-[11px] text-zinc-400 line-clamp-2 leading-snug">
                             {lead.description}
@@ -4496,55 +4622,182 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                 />
               </div>
 
-              {/* Signals Config */}
-              <div className="p-3 bg-zinc-950/70 border border-zinc-850 rounded-2xl space-y-2">
-                <span className="text-[10px] font-black uppercase text-amber-400 tracking-wider block">Daily Trading Signals Schedule & Admin Codes</span>
-                
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="space-y-1">
-                    <label className="text-[9px] font-bold text-zinc-500 uppercase block">Signal 1 Time (HH:MM)</label>
-                    <input
-                      type="text"
-                      placeholder="13:00"
-                      value={leadForm.sig1Time}
-                      onChange={(e) => setLeadForm({ ...leadForm, sig1Time: e.target.value })}
-                      className="w-full p-2 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-white font-mono"
-                    />
+              {/* Regular Signals Config (Tied to 1-Day Profit Rate) */}
+              <div className="p-4 bg-zinc-950 border border-zinc-800/90 rounded-2xl space-y-3">
+                <div className="flex items-center justify-between gap-2 border-b border-zinc-900 pb-2.5">
+                  <div>
+                    <span className="text-[11px] font-black uppercase text-amber-400 tracking-wider block">Regular Daily Signals</span>
+                    <span className="text-[10px] text-zinc-500 font-semibold">Tied to 1-Day Profit Rate ({leadForm.dayProfitRate || '0'}%)</span>
                   </div>
-                  <div className="space-y-1">
-                    <label className="text-[9px] font-bold text-zinc-500 uppercase block">Signal 1 Code</label>
-                    <input
-                      type="text"
-                      placeholder="SIG1300"
-                      value={leadForm.sig1Code}
-                      onChange={(e) => setLeadForm({ ...leadForm, sig1Code: e.target.value })}
-                      className="w-full p-2 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-amber-400 font-mono font-bold uppercase"
-                    />
-                  </div>
+                  <button
+                    type="button"
+                    onClick={handleAddDailySignal}
+                    className="flex items-center gap-1 px-2.5 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-lg text-[10px] font-black cursor-pointer transition-colors"
+                  >
+                    <Plus size={12} />
+                    <span>Add Daily Signal</span>
+                  </button>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="space-y-1">
-                    <label className="text-[9px] font-bold text-zinc-500 uppercase block">Signal 2 Time (HH:MM)</label>
-                    <input
-                      type="text"
-                      placeholder="20:00"
-                      value={leadForm.sig2Time}
-                      onChange={(e) => setLeadForm({ ...leadForm, sig2Time: e.target.value })}
-                      className="w-full p-2 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-white font-mono"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[9px] font-bold text-zinc-500 uppercase block">Signal 2 Code</label>
-                    <input
-                      type="text"
-                      placeholder="SIG2000"
-                      value={leadForm.sig2Code}
-                      onChange={(e) => setLeadForm({ ...leadForm, sig2Code: e.target.value })}
-                      className="w-full p-2 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-amber-400 font-mono font-bold uppercase"
-                    />
-                  </div>
+                {/* Live Profit Share Breakdown Banner */}
+                <div className="px-3 py-2 bg-zinc-900/80 border border-zinc-800 rounded-xl flex items-center justify-between gap-2 text-[10px] font-mono">
+                  <span className="text-zinc-400">
+                    {leadForm.signals.length} Signal{leadForm.signals.length === 1 ? '' : 's'} @ {leadForm.dayProfitRate || '0'}% total / day:
+                  </span>
+                  <span className="text-emerald-400 font-bold">
+                    +{( (parseFloat(leadForm.dayProfitRate) || 0) / (leadForm.signals.length || 1) ).toFixed(2)}% per regular signal
+                  </span>
                 </div>
+
+                <div className="space-y-2.5">
+                  {leadForm.signals.map((sig, idx) => (
+                    <div key={sig.id || idx} className="p-3 bg-zinc-900/60 border border-zinc-850 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
+                      <div className="flex items-center gap-2">
+                        <span className="w-5 h-5 rounded-full bg-amber-500/20 text-amber-400 text-[10px] font-black flex items-center justify-center font-mono">
+                          {idx + 1}
+                        </span>
+                        <span className="text-xs font-bold text-zinc-300">Signal #{idx + 1}</span>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 flex-1 w-full sm:w-auto">
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-bold text-zinc-500 uppercase block">Time (HH:MM)</label>
+                          <input
+                            type="text"
+                            placeholder="13:00"
+                            value={sig.time}
+                            onChange={(e) => handleUpdateDailySignal(idx, 'time', e.target.value)}
+                            className="w-full p-2 bg-zinc-950 border border-zinc-800 rounded-lg text-xs text-white font-mono"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-bold text-zinc-500 uppercase block">Signal Code</label>
+                          <input
+                            type="text"
+                            placeholder="SIG1300"
+                            value={sig.code}
+                            onChange={(e) => handleUpdateDailySignal(idx, 'code', e.target.value)}
+                            className="w-full p-2 bg-zinc-950 border border-zinc-800 rounded-lg text-xs text-amber-400 font-mono font-bold uppercase"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-end gap-2 w-full sm:w-auto">
+                        <span className="px-2 py-1 bg-emerald-500/10 text-emerald-400 text-[10px] font-mono font-bold rounded-lg border border-emerald-500/20 whitespace-nowrap">
+                          +{( (parseFloat(leadForm.dayProfitRate) || 0) / (leadForm.signals.length || 1) ).toFixed(2)}%
+                        </span>
+                        {leadForm.signals.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteDailySignal(idx)}
+                            className="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-lg cursor-pointer transition-colors"
+                            title="Delete Signal"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Extra Signals Config (Standalone Profit Rate & Locked Principal) */}
+              <div className="p-4 bg-zinc-950 border border-amber-500/30 rounded-2xl space-y-3 relative overflow-hidden">
+                <div className="flex items-center justify-between gap-2 border-b border-zinc-900 pb-2.5">
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] font-black uppercase text-amber-400 tracking-wider">Extra Signals</span>
+                      <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[9px] font-bold uppercase">Standalone Rate</span>
+                    </div>
+                    <span className="text-[10px] text-zinc-500 font-semibold block mt-0.5">
+                      Traded with user's locked principal capital at its own independent profit rate.
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleAddExtraSignal}
+                    className="flex items-center gap-1 px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-zinc-950 rounded-lg text-[10px] font-black cursor-pointer transition-colors shadow-sm shrink-0"
+                  >
+                    <Plus size={12} />
+                    <span>Add Extra Signal</span>
+                  </button>
+                </div>
+
+                {leadForm.extraSignals.length === 0 ? (
+                  <div className="py-4 px-3 border border-dashed border-zinc-800 rounded-xl text-center">
+                    <p className="text-[11px] text-zinc-500">No extra signals added yet.</p>
+                    <p className="text-[10px] text-zinc-600 mt-0.5">Click <strong className="text-amber-400">"Add Extra Signal"</strong> to create a bonus or flash signal with a custom profit rate.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {leadForm.extraSignals.map((es, idx) => (
+                      <div key={es.id || idx} className="p-3.5 bg-zinc-900/80 border border-amber-500/20 rounded-xl space-y-2.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono text-[9px] font-black uppercase">
+                              Extra #{idx + 1}
+                            </span>
+                            <input
+                              type="text"
+                              placeholder="e.g. VIP Bonus Signal"
+                              value={es.label || ''}
+                              onChange={(e) => handleUpdateExtraSignal(idx, 'label', e.target.value)}
+                              className="text-xs font-bold bg-transparent text-white border-b border-zinc-800 focus:border-amber-400 outline-none pb-0.5"
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteExtraSignal(idx)}
+                            className="flex items-center gap-1 px-2 py-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-lg text-[10px] font-bold cursor-pointer transition-colors"
+                          >
+                            <Trash2 size={11} />
+                            <span>Delete</span>
+                          </button>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                          <div className="space-y-1">
+                            <label className="text-[9px] font-bold text-zinc-500 uppercase block">Time (HH:MM)</label>
+                            <input
+                              type="text"
+                              placeholder="16:30"
+                              value={es.time}
+                              onChange={(e) => handleUpdateExtraSignal(idx, 'time', e.target.value)}
+                              className="w-full p-2 bg-zinc-950 border border-zinc-800 rounded-lg text-xs text-white font-mono"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[9px] font-bold text-zinc-500 uppercase block">Signal Code</label>
+                            <input
+                              type="text"
+                              placeholder="EXTRA500"
+                              value={es.code}
+                              onChange={(e) => handleUpdateExtraSignal(idx, 'code', e.target.value)}
+                              className="w-full p-2 bg-zinc-950 border border-zinc-800 rounded-lg text-xs text-amber-400 font-mono font-bold uppercase"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[9px] font-bold text-amber-400 uppercase block">Own Profit Rate (%)</label>
+                            <input
+                              type="number"
+                              step="0.1"
+                              placeholder="3.5"
+                              value={es.profitRate}
+                              onChange={(e) => handleUpdateExtraSignal(idx, 'profitRate', e.target.value)}
+                              className="w-full p-2 bg-zinc-950 border border-amber-500/40 rounded-lg text-xs text-emerald-400 font-mono font-bold"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="text-[10px] text-zinc-400 font-mono flex items-center justify-between pt-1 border-t border-zinc-850">
+                          <span>Trade Capital Used:</span>
+                          <span className="text-amber-400 font-bold">User Locked Principal Capital</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="space-y-1">

@@ -532,8 +532,15 @@ export default function StandardUserDashboard({
   const [isTransferring, setIsTransferring] = useState<boolean>(false);
 
   // Helper to determine active signal window for expert (1 hour valid duration from start time)
+  // Seamlessly handles both regular daily signals and standalone extra signals
   const getActiveSignalForLead = (lead: CopyTraderLead) => {
-    if (!lead.signals || lead.signals.length === 0) return null;
+    const regularSignals = Array.isArray(lead.signals) ? lead.signals.map(s => ({ ...s, isExtra: false })) : [];
+    const extraSignals = Array.isArray(lead.extraSignals) ? lead.extraSignals.map(es => ({ ...es, isExtra: true })) : [];
+    const allSignals: { id?: string; time: string; code: string; isExtra?: boolean; profitRate?: number; label?: string }[] = [
+      ...regularSignals,
+      ...extraSignals
+    ];
+    if (allSignals.length === 0) return null;
     
     const now = new Date();
     const pad = (n: number) => n.toString().padStart(2, '0');
@@ -555,7 +562,7 @@ export default function StandardUserDashboard({
     const d = pad(kenyaDateParts[1]);
     const y = kenyaDateParts[2];
 
-    for (const sig of lead.signals) {
+    for (const sig of allSignals) {
       if (!sig.time) continue;
       const parts = sig.time.split(':');
       if (parts.length < 2) continue;
@@ -1836,55 +1843,77 @@ export default function StandardUserDashboard({
       return;
     }
 
-    // 3. Amount Validation
-    const amount = parseFloat(copyTradeAmountInput);
-    const minCap = selectedLeadForCopy.minCapital ?? 50;
-    const maxCap = selectedLeadForCopy.maxCapital ?? 10000;
+    // Check for existing active contract to get locked principal
+    const existingActiveContract = userCopyTrades.find(
+      t => (t.leadId === selectedLeadForCopy.id || t.leadName === selectedLeadForCopy.name) && t.status === 'ACTIVE'
+    );
 
-    if (isNaN(amount) || amount < minCap) {
-      toast.error(`Trade amount must be at least $${minCap}.`, 'Invalid Trade Amount');
-      return;
-    }
+    const isExtraSignal = Boolean(activeSignal.isExtra);
+    const lockedPrincipalCapital = existingActiveContract?.contractCapital || existingActiveContract?.amount || parseFloat(copyTradeAmountInput) || (selectedLeadForCopy.minCapital ?? 50);
 
-    if (amount > maxCap) {
-      toast.error(`Trade amount cannot exceed $${maxCap}.`, 'Exceeds Maximum');
-      return;
-    }
+    // 3. Amount & Capital Validation
+    let amount = parseFloat(copyTradeAmountInput);
+    if (isExtraSignal) {
+      // Extra signals trade directly on the user's locked principal capital
+      amount = lockedPrincipalCapital;
+    } else {
+      const minCap = selectedLeadForCopy.minCapital ?? 50;
+      const maxCap = selectedLeadForCopy.maxCapital ?? 10000;
 
-    const tradeBal = profile?.tradeBalance ?? 0;
-    const { rawLockedCapital, activeContractCapitalByLead } = getCopyTradeLockedAndFree();
-    const currentLeadKey = selectedLeadForCopy.id || selectedLeadForCopy.name;
-    const currentLeadLockedCap = activeContractCapitalByLead[currentLeadKey] || 0;
-    const lockedInOtherExperts = Math.max(0, rawLockedCapital - currentLeadLockedCap);
-    const availableForThisLead = Math.max(0, tradeBal - lockedInOtherExperts);
-
-    if (amount > availableForThisLead) {
-      if (lockedInOtherExperts > 0) {
-        toast.error(
-          `Insufficient available balance. You currently have $${lockedInOtherExperts.toFixed(2)} locked in active contracts with other experts. To trade with ${selectedLeadForCopy.name}, please transfer additional funds into your Copy Trade Balance.`,
-          'Capital Locked In Other Contract'
-        );
-      } else {
-        toast.error(
-          `Insufficient Copy Trade Balance ($${tradeBal.toFixed(2)} USD available). Please transfer funds from your Wallet into your Copy Trade Balance.`,
-          'Insufficient Trade Balance'
-        );
+      if (isNaN(amount) || amount < minCap) {
+        toast.error(`Trade amount must be at least ${minCap}.`, 'Invalid Trade Amount');
+        return;
       }
-      return;
+
+      if (amount > maxCap) {
+        toast.error(`Trade amount cannot exceed ${maxCap}.`, 'Exceeds Maximum');
+        return;
+      }
+
+      const tradeBal = profile?.tradeBalance ?? 0;
+      const { rawLockedCapital, activeContractCapitalByLead } = getCopyTradeLockedAndFree();
+      const currentLeadKey = selectedLeadForCopy.id || selectedLeadForCopy.name;
+      const currentLeadLockedCap = activeContractCapitalByLead[currentLeadKey] || 0;
+      const lockedInOtherExperts = Math.max(0, rawLockedCapital - currentLeadLockedCap);
+      const availableForThisLead = Math.max(0, tradeBal - lockedInOtherExperts);
+
+      if (amount > availableForThisLead) {
+        if (lockedInOtherExperts > 0) {
+          toast.error(
+            `Insufficient available balance. You currently have ${lockedInOtherExperts.toFixed(2)} locked in active contracts with other experts. To trade with ${selectedLeadForCopy.name}, please transfer additional funds into your Copy Trade Balance.`,
+            'Capital Locked In Other Contract'
+          );
+        } else {
+          toast.error(
+            `Insufficient Copy Trade Balance (${tradeBal.toFixed(2)} USD available). Please transfer funds from your Wallet into your Copy Trade Balance.`,
+            'Insufficient Trade Balance'
+          );
+        }
+        return;
+      }
     }
 
     setIsSubmittingCopy(true);
     try {
       // 4. Calculate Profits and Commissions
-      const numSignals = selectedLeadForCopy.signals?.length || 2;
-      const dayRate = selectedLeadForCopy.dayProfitRate ?? 2.0;
-      const signalProfitPercent = dayRate / numSignals; // e.g. 2% / 2 = 1%
+      let signalProfitPercent = 0;
+      if (isExtraSignal) {
+        // Extra signal has its own profit rate, independent of 1-day profit rate and daily signals count
+        signalProfitPercent = activeSignal.profitRate ?? 3.5;
+      } else {
+        // Regular signal: 1-day profit rate divided by regular daily signals count
+        const numSignals = selectedLeadForCopy.signals?.length || 1;
+        const dayRate = selectedLeadForCopy.dayProfitRate ?? 2.0;
+        signalProfitPercent = dayRate / numSignals;
+      }
+
       const grossProfit = amount * (signalProfitPercent / 100);
       const commissionPct = selectedLeadForCopy.analysisCommission ?? 10;
       const commissionDeducted = grossProfit * (commissionPct / 100);
       const netProfit = grossProfit - commissionDeducted;
 
       // 5. Update User's Trade Balance
+      const tradeBal = profile?.tradeBalance ?? 0;
       const userRef = doc(db, 'users', user.uid);
       const newTradeBal = tradeBal + netProfit;
       await updateDoc(userRef, {
@@ -1892,10 +1921,6 @@ export default function StandardUserDashboard({
       });
 
       // 6. Record or Update Copy Trade Contract
-      const existingActiveContract = userCopyTrades.find(
-        t => (t.leadId === selectedLeadForCopy.id || t.leadName === selectedLeadForCopy.name) && t.status === 'ACTIVE'
-      );
-
       const entryPriceVal = (67100 + Math.random() * 400).toFixed(2);
       const exitPriceVal = (67800 + Math.random() * 400).toFixed(2);
 
@@ -1907,6 +1932,9 @@ export default function StandardUserDashboard({
         grossProfit: parseFloat(grossProfit.toFixed(2)),
         commissionCut: parseFloat(commissionDeducted.toFixed(2)),
         netProfit: parseFloat(netProfit.toFixed(2)),
+        isExtra: isExtraSignal,
+        profitRate: signalProfitPercent,
+        signalLabel: activeSignal.label || (isExtraSignal ? 'Extra Signal' : 'Regular Signal'),
         entryPrice: entryPriceVal,
         exitPrice: exitPriceVal,
         executedAt: new Date().toISOString()
@@ -1962,7 +1990,9 @@ export default function StandardUserDashboard({
         amount: netProfit,
         status: 'APPROVED',
         createdAt: new Date(),
-        paymentMessage: `Copy Trade Signal Executed (${copyTradePair}) with ${selectedLeadForCopy.name}. Profit: +$${netProfit.toFixed(2)} USD (Gross $${grossProfit.toFixed(2)} - Analysis Commission $${commissionDeducted.toFixed(2)})`
+        paymentMessage: isExtraSignal
+          ? `Copy Trade Extra Signal Executed (${copyTradePair}) with ${selectedLeadForCopy.name} [Rate: ${signalProfitPercent.toFixed(2)}% on Locked Principal ${amount.toFixed(2)}]. Profit: +${netProfit.toFixed(2)} USD (Gross ${grossProfit.toFixed(2)} - Analysis Commission ${commissionDeducted.toFixed(2)})`
+          : `Copy Trade Signal Executed (${copyTradePair}) with ${selectedLeadForCopy.name}. Profit: +${netProfit.toFixed(2)} USD (Gross ${grossProfit.toFixed(2)} - Analysis Commission ${commissionDeducted.toFixed(2)})`
       });
 
       // Pop settlement trade ticket slip modal
@@ -1977,14 +2007,20 @@ export default function StandardUserDashboard({
         netProfit: parseFloat(netProfit.toFixed(2)),
         commissionPct,
         newBalance: newTradeBal,
-        entryPrice: (67100 + Math.random() * 400).toFixed(2),
-        exitPrice: (67800 + Math.random() * 400).toFixed(2),
+        entryPrice: entryPriceVal,
+        exitPrice: exitPriceVal,
         executedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         leadObj: selectedLeadForCopy
       });
 
       setSelectedLeadForCopy(null);
       setCopySignalCodeInput('');
+      toast.success(
+        isExtraSignal
+          ? `Extra Signal executed successfully! +${netProfit.toFixed(2)} USD credited to your Trade Balance.`
+          : `Signal trade executed! +${netProfit.toFixed(2)} USD credited to your Trade Balance.`,
+        'Trade Executed'
+      );
     } catch (err: any) {
       console.error("Copy trade error:", err);
       toast.error(`Failed to execute copy trade: ${err.message}`, 'Trade Execution Error');
@@ -5290,7 +5326,7 @@ export default function StandardUserDashboard({
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                             {selectedLeadForCopy.signals.map((sig, idx) => {
                               const activeSig = getActiveSignalForLead(selectedLeadForCopy);
-                              const isActive = activeSig && activeSig.time === sig.time;
+                              const isActive = activeSig && activeSig.time === sig.time && !activeSig.isExtra;
                               const isExecuted = isSignalExecutedToday(selectedLeadForCopy, sig);
                               const fmtSig = formatSignalTimeForCountry(sig.time, profile?.country);
 
@@ -5341,17 +5377,17 @@ export default function StandardUserDashboard({
 
                                     <div className="flex items-center gap-2 mt-1 flex-wrap">
                                       <span className={`text-[10px] font-medium ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>
-                                        Signal #{idx + 1}
+                                        Regular Signal #{idx + 1}
                                       </span>
                                     </div>
                                   </div>
 
                                   <div className="text-right shrink-0">
-                                    <span className={`text-[9px] font-extrabold block uppercase ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>Profit Share</span>
+                                    <span className={`text-[9px] font-extrabold block uppercase ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>Daily Share</span>
                                     <span className={`text-xs font-extrabold font-mono ${
                                       isExecuted ? 'text-zinc-400 line-through' : isLightTheme ? 'text-emerald-700' : 'text-emerald-400'
                                     }`}>
-                                      +{( (selectedLeadForCopy.dayProfitRate ?? 2.0) / (selectedLeadForCopy.signals.length || 1) ).toFixed(2)}%
+                                      +{((selectedLeadForCopy.dayProfitRate ?? 2.0) / (selectedLeadForCopy.signals.length || 1)).toFixed(2)}%
                                     </span>
                                   </div>
                                 </div>
@@ -5359,7 +5395,88 @@ export default function StandardUserDashboard({
                             })}
                           </div>
                         ) : (
-                          <p className={`text-xs italic ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>No trading signals scheduled by expert.</p>
+                          <p className={`text-xs italic ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>No regular trading signals scheduled by expert.</p>
+                        )}
+
+                        {/* Extra Signals Section */}
+                        {selectedLeadForCopy.extraSignals && selectedLeadForCopy.extraSignals.length > 0 && (
+                          <div className="space-y-2 pt-2 border-t border-dashed border-zinc-200 dark:border-zinc-800">
+                            <div className="flex items-center justify-between">
+                              <span className={`text-xs font-extrabold uppercase tracking-wider flex items-center gap-1.5 text-amber-500`}>
+                                <span>⚡ Standalone Extra Signals</span>
+                              </span>
+                              <span className="text-[10px] text-zinc-400 font-medium">Traded on locked principal</span>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                              {selectedLeadForCopy.extraSignals.map((es, idx) => {
+                                const activeSig = getActiveSignalForLead(selectedLeadForCopy);
+                                const isActive = activeSig && activeSig.time === es.time && activeSig.isExtra;
+                                const isExecuted = isSignalExecutedToday(selectedLeadForCopy, es);
+                                const fmtSig = formatSignalTimeForCountry(es.time, profile?.country);
+
+                                return (
+                                  <div
+                                    key={`extra-${idx}`}
+                                    className={`p-3.5 rounded-xl border transition-all flex items-center justify-between ${
+                                      isExecuted
+                                        ? isLightTheme ? 'bg-zinc-100/80 border-zinc-200 text-zinc-500' : 'bg-slate-900/60 border-slate-800 text-zinc-500'
+                                        : isActive
+                                        ? isLightTheme ? 'bg-amber-100/90 border-amber-400 text-amber-950 shadow-xs' : 'bg-amber-500/20 border-amber-500 text-amber-200 shadow-sm'
+                                        : isLightTheme ? 'bg-amber-50/40 border-amber-200/80 text-zinc-800' : 'bg-amber-950/20 border-amber-900/40 text-zinc-300'
+                                    }`}
+                                  >
+                                    <div className="min-w-0 flex-1 pr-2">
+                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                        {fmtSig.isDifferentCountry ? (
+                                          <>
+                                            <span className="text-xs sm:text-sm font-black font-mono tracking-tight text-amber-700 dark:text-amber-300">
+                                              {fmtSig.localTimeStr}
+                                            </span>
+                                            <span className={`text-[9px] font-extrabold font-mono px-1.5 py-0.5 rounded ${
+                                              isLightTheme ? 'bg-amber-100 text-amber-900 border border-amber-200' : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                                            }`}>
+                                              {fmtSig.userCountryInfo.flag} {fmtSig.userCountryInfo.code}
+                                            </span>
+                                          </>
+                                        ) : (
+                                          <span className="text-xs sm:text-sm font-black font-mono tracking-tight">
+                                            {es.time || '18:00'} EAT
+                                          </span>
+                                        )}
+
+                                        {isExecuted ? (
+                                          <span className="px-1.5 py-0.5 rounded-full bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 text-[9px] font-black uppercase tracking-wider flex items-center gap-1">
+                                            <CheckCircle size={10} className="text-emerald-500" /> Executed
+                                          </span>
+                                        ) : isActive ? (
+                                          <span className="px-1.5 py-0.5 rounded-full bg-amber-500 text-slate-950 text-[9px] font-black uppercase tracking-wider animate-pulse">
+                                            Active Extra (1h)
+                                          </span>
+                                        ) : (
+                                          <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[9px] font-extrabold uppercase">
+                                            Extra
+                                          </span>
+                                        )}
+                                      </div>
+
+                                      <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                        <span className={`text-[10px] font-medium ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                                          {es.label || `Extra Signal #${idx + 1}`}
+                                        </span>
+                                      </div>
+                                    </div>
+
+                                    <div className="text-right shrink-0">
+                                      <span className={`text-[9px] font-extrabold block uppercase text-amber-500`}>Extra Rate</span>
+                                      <span className={`text-xs font-extrabold font-mono text-amber-400 ${isExecuted ? 'line-through opacity-60' : ''}`}>
+                                        +{(es.profitRate ?? 3.5).toFixed(2)}%
+                                      </span>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
                         )}
                       </div>
 
@@ -5670,35 +5787,66 @@ export default function StandardUserDashboard({
                       </div>
 
                       {/* Trade Summary Review Box */}
-                      <div className={`p-4 rounded-2xl border space-y-2.5 text-xs ${
-                        isLightTheme ? 'bg-zinc-50 border-zinc-200' : 'bg-slate-950 border-slate-800'
-                      }`}>
-                        <div className="flex justify-between items-center pb-2 border-b border-zinc-200/60 dark:border-slate-800">
-                          <span className={`font-bold ${isLightTheme ? 'text-zinc-600' : 'text-zinc-400'}`}>Expert Trader</span>
-                          <span className="font-extrabold">{selectedLeadForCopy.name}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className={`font-bold ${isLightTheme ? 'text-zinc-600' : 'text-zinc-400'}`}>Selected Trading Pair</span>
-                          <span className="font-black font-mono text-amber-600 dark:text-amber-400">{copyTradePair}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className={`font-bold ${isLightTheme ? 'text-zinc-600' : 'text-zinc-400'}`}>Trade Capital</span>
-                          <span className="font-black font-mono text-sm">${(parseFloat(copyTradeAmountInput) || 0).toFixed(2)} USD</span>
-                        </div>
-                        <div className="flex justify-between items-center pt-1 border-t border-zinc-200/60 dark:border-slate-800">
-                          <span className={`font-bold ${isLightTheme ? 'text-zinc-600' : 'text-zinc-400'}`}>Est. Net Profit</span>
-                          <span className="font-black font-mono text-emerald-600 dark:text-emerald-400">
-                            +${(() => {
-                              const amt = parseFloat(copyTradeAmountInput) || 0;
-                              const numSigs = selectedLeadForCopy.signals?.length || 2;
-                              const dayRate = selectedLeadForCopy.dayProfitRate ?? 2.0;
-                              const gross = amt * ((dayRate / numSigs) / 100);
-                              const comm = gross * ((selectedLeadForCopy.analysisCommission ?? 10) / 100);
-                              return (gross - comm).toFixed(2);
-                            })()} USD
-                          </span>
-                        </div>
-                      </div>
+                      {(() => {
+                        const activeSig = getActiveSignalForLead(selectedLeadForCopy);
+                        const isExtra = Boolean(activeSig?.isExtra) || (selectedLeadForCopy.extraSignals || []).some(es => (es.code || '').toUpperCase() === copySignalCodeInput.trim().toUpperCase());
+                        
+                        const existingActiveContract = userCopyTrades.find(
+                          t => (t.leadId === selectedLeadForCopy.id || t.leadName === selectedLeadForCopy.name) && t.status === 'ACTIVE'
+                        );
+                        const lockedPrincipalCapital = existingActiveContract?.contractCapital || existingActiveContract?.amount || parseFloat(copyTradeAmountInput) || (selectedLeadForCopy.minCapital ?? 50);
+
+                        const tradeCap = isExtra ? lockedPrincipalCapital : (parseFloat(copyTradeAmountInput) || 0);
+
+                        let rate = 0;
+                        if (isExtra) {
+                          const matchedExtra = (selectedLeadForCopy.extraSignals || []).find(es => (es.code || '').toUpperCase() === copySignalCodeInput.trim().toUpperCase()) || activeSig;
+                          rate = matchedExtra?.profitRate ?? 3.5;
+                        } else {
+                          const numSigs = selectedLeadForCopy.signals?.length || 1;
+                          const dayRate = selectedLeadForCopy.dayProfitRate ?? 2.0;
+                          rate = dayRate / numSigs;
+                        }
+
+                        const gross = tradeCap * (rate / 100);
+                        const comm = gross * ((selectedLeadForCopy.analysisCommission ?? 10) / 100);
+                        const net = gross - comm;
+
+                        return (
+                          <div className={`p-4 rounded-2xl border space-y-2.5 text-xs ${
+                            isLightTheme ? 'bg-zinc-50 border-zinc-200' : 'bg-slate-950 border-slate-800'
+                          }`}>
+                            <div className="flex justify-between items-center pb-2 border-b border-zinc-200/60 dark:border-slate-800">
+                              <span className={`font-bold ${isLightTheme ? 'text-zinc-600' : 'text-zinc-400'}`}>Expert Trader</span>
+                              <span className="font-extrabold">{selectedLeadForCopy.name}</span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <span className={`font-bold ${isLightTheme ? 'text-zinc-600' : 'text-zinc-400'}`}>Selected Trading Pair</span>
+                              <span className="font-black font-mono text-amber-600 dark:text-amber-400">{copyTradePair}</span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <span className={`font-bold ${isLightTheme ? 'text-zinc-600' : 'text-zinc-400'}`}>
+                                {isExtra ? 'Traded Principal (Locked Capital)' : 'Trade Capital'}
+                              </span>
+                              <span className="font-black font-mono text-sm">${tradeCap.toFixed(2)} USD</span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <span className={`font-bold ${isLightTheme ? 'text-zinc-600' : 'text-zinc-400'}`}>
+                                {isExtra ? 'Extra Signal Profit Rate' : 'Signal Profit Rate'}
+                              </span>
+                              <span className={`font-black font-mono ${isExtra ? 'text-amber-500' : 'text-emerald-500'}`}>
+                                +{rate.toFixed(2)}% {isExtra ? '(Standalone)' : ''}
+                              </span>
+                            </div>
+                            <div className="flex justify-between items-center pt-1 border-t border-zinc-200/60 dark:border-slate-800">
+                              <span className={`font-bold ${isLightTheme ? 'text-zinc-600' : 'text-zinc-400'}`}>Est. Net Profit</span>
+                              <span className="font-black font-mono text-emerald-600 dark:text-emerald-400">
+                                +${net.toFixed(2)} USD
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })()}
 
                       {/* Executed Warning if applicable */}
                       {(() => {
@@ -6052,14 +6200,32 @@ export default function StandardUserDashboard({
                                   {lead.winRate || '98.5%'} Win
                                 </span>
                               </div>
-                              <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 font-mono block mt-0.5">
-                                ⚡ {lead.signalsPerDay}
-                              </span>
-                              <span className={`text-[9px] font-semibold px-2 py-0.5 rounded-md inline-block mt-1 ${
-                                isLightTheme ? 'bg-amber-100 text-amber-900' : 'bg-slate-800 text-zinc-300'
-                              }`}>
-                                {lead.riskLevel || 'Low Risk'}
-                              </span>
+                              <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                                <span className={`text-[10px] font-bold font-mono ${
+                                  isLightTheme ? 'text-amber-700' : 'text-amber-400'
+                                }`}>
+                                  ⚡ {lead.signals?.length || 2} Signals/day
+                                </span>
+                                {lead.extraSignals && lead.extraSignals.length > 0 && (
+                                  <span className={`px-2 py-0.5 rounded-full font-black text-[9px] font-mono uppercase tracking-wide border shadow-2xs ${
+                                    isLightTheme
+                                      ? 'bg-amber-100/90 text-amber-900 border-amber-300'
+                                      : 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                                  }`}>
+                                    +{lead.extraSignals.length} Extra
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2 mt-1">
+                                <span className={`text-[9px] font-semibold px-2 py-0.5 rounded-md inline-block ${
+                                  isLightTheme ? 'bg-amber-100 text-amber-900' : 'bg-slate-800 text-zinc-300'
+                                }`}>
+                                  {lead.riskLevel || 'Low Risk'}
+                                </span>
+                                <span className="text-[10px] font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                                  1-Day: {lead.dayProfitRate ?? 2.0}%
+                                </span>
+                              </div>
                             </div>
                           </div>
 

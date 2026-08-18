@@ -46,7 +46,6 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
   const [otpDigits, setOtpDigits] = useState<string[]>(['', '', '', '', '', '']);
   const otpInputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const [resendCooldown, setResendCooldown] = useState(0);
-  const [previewOtpCode, setPreviewOtpCode] = useState<string | null>(null);
   const [emailSuggestion, setEmailSuggestion] = useState<string | null>(null);
 
   const COUNTRIES = [
@@ -105,7 +104,6 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
     if (!isSignUp) {
       setSignUpStep('details');
       setOtpDigits(['', '', '', '', '', '']);
-      setPreviewOtpCode(null);
     }
   }, [isSignUp, path]);
 
@@ -230,13 +228,10 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
     setLoading(true);
     setError(null);
     try {
-      const result = await sendEmailOtp(formattedEmail, displayName.trim());
+      await sendEmailOtp(formattedEmail, displayName.trim());
 
       setResendCooldown(45);
-      if (result.previewCode) {
-        setPreviewOtpCode(result.previewCode);
-      }
-      setSuccessMsg('A new verification code has been dispatched.');
+      setSuccessMsg('A new verification code has been dispatched to your email.');
     } catch (err: any) {
       setError(err.message || 'Failed to resend verification code.');
     } finally {
@@ -491,15 +486,9 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
         }
 
         // Request 6-digit OTP verification code
-        const sendResult = await sendEmailOtp(formattedEmail, displayName.trim());
+        await sendEmailOtp(formattedEmail, displayName.trim());
 
         setResendCooldown(45);
-        if (sendResult.previewCode) {
-          setPreviewOtpCode(sendResult.previewCode);
-        } else {
-          setPreviewOtpCode(null);
-        }
-
         setSignUpStep('otp');
         setOtpDigits(['', '', '', '', '', '']);
         setSuccessMsg(`Verification code sent to ${formattedEmail}`);
@@ -720,13 +709,6 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
                       <ArrowLeft size={11} /> Edit email address
                     </button>
                   </div>
-
-                  {previewOtpCode && (
-                    <div className="bg-amber-50 border border-amber-300/80 rounded-xl p-2.5 text-center text-xs text-amber-900 shadow-xs">
-                      <span className="font-bold">Preview Code:</span>{' '}
-                      <span className="font-mono font-black text-sm tracking-widest text-amber-700 select-all">{previewOtpCode}</span>
-                    </div>
-                  )}
 
                   <form onSubmit={handleFinalSignUpWithOtp} className="space-y-4">
                     <div className="space-y-2">

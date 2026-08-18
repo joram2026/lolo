@@ -177,6 +177,9 @@ export interface SignalSchedule {
   id: string;
   time: string; // e.g. "13:00" or "1:00 PM"
   code: string; // e.g. "SIG1300"
+  isExtra?: boolean;
+  profitRate?: number; // standalone profit rate for extra signal (e.g. 3.5%)
+  label?: string; // optional label e.g. "VIP Bonus Signal"
 }
 
 export interface CopyTraderLead {
@@ -190,10 +193,11 @@ export interface CopyTraderLead {
   minCapital?: number; // e.g. 50
   maxCapital?: number; // e.g. 10000
   analysisCommission?: number; // % e.g. 10
-  dayProfitRate?: number; // % e.g. 2.0
+  dayProfitRate?: number; // % e.g. 2.0 (split equally across regular daily signals)
   contractDurationDays?: number; // e.g. 30 (excluding Sundays)
   tradingPairs?: string[]; // e.g. ["BTC/USDT", "ETH/USDT", "SOL/USDT"]
-  signals?: SignalSchedule[]; // list of signals per day with time and code
+  signals?: SignalSchedule[]; // list of regular signals per day with time and code
+  extraSignals?: SignalSchedule[]; // standalone extra signals with their own profit rates
   riskLevel?: string; // e.g. "Low Risk", "Moderate", "High"
   createdAt?: any;
   updatedAt?: any;
