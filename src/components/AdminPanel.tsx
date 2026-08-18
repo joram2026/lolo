@@ -1008,14 +1008,33 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
             });
           }
 
-          // 2. Referrer First Deposit Commission
+          // 2. Referrer First Deposit Commission & 24h Extra Signal Pass
           if (referrerUid && referrerRef && referrerData) {
             const commissionAmount = parseFloat(((depositAmountUSD * referrerPct) / 100).toFixed(2));
+            
+            // Calculate 24h Extra Signal Boost Pass (stacked if existing pass is still active)
+            const nowMs = Date.now();
+            let baseExpiryMs = nowMs;
+            if (referrerData.extraSignalPassUntil) {
+              const existingPassMs = referrerData.extraSignalPassUntil.seconds
+                ? referrerData.extraSignalPassUntil.seconds * 1000
+                : referrerData.extraSignalPassUntil.toMillis
+                ? referrerData.extraSignalPassUntil.toMillis()
+                : new Date(referrerData.extraSignalPassUntil).getTime();
+              if (existingPassMs > nowMs) {
+                baseExpiryMs = existingPassMs;
+              }
+            }
+            const newExpiryDate = new Date(baseExpiryMs + (24 * 60 * 60 * 1000));
+            const referrerUpdates: any = {
+              extraSignalPassUntil: newExpiryDate
+            };
 
             if (commissionAmount > 0) {
               const currentRefBal = getUserWalletBalance(referrerData);
               const newReferrerBalance = parseFloat((currentRefBal + commissionAmount).toFixed(2));
-              transaction.update(referrerRef, { balance: newReferrerBalance, usdtBalance: newReferrerBalance });
+              referrerUpdates.balance = newReferrerBalance;
+              referrerUpdates.usdtBalance = newReferrerBalance;
 
               const commissionTxRef = doc(collection(db, 'transactions'));
               transaction.set(commissionTxRef, {
@@ -1026,10 +1045,30 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                 amount: commissionAmount,
                 status: 'APPROVED',
                 createdAt: serverTimestamp(),
-                paymentMessage: `Referral First Deposit Bonus (${referrerPct}% of $${depositAmountUSD.toFixed(2)} deposit by ${tx.userEmail})`
+                paymentMessage: `Referral First Deposit Bonus (${referrerPct}% of $${depositAmountUSD.toFixed(2)} deposit by ${tx.userEmail}) + 24h Extra Signal Pass`
               });
             }
+
+            transaction.update(referrerRef, referrerUpdates);
           }
+        } else if (isFirstDeposit && referrerUid && referrerRef && referrerData) {
+          // Even if deposit threshold wasn't met for commission, grant the 24h Extra Signal pass for referring a depositor
+          const nowMs = Date.now();
+          let baseExpiryMs = nowMs;
+          if (referrerData.extraSignalPassUntil) {
+            const existingPassMs = referrerData.extraSignalPassUntil.seconds
+              ? referrerData.extraSignalPassUntil.seconds * 1000
+              : referrerData.extraSignalPassUntil.toMillis
+              ? referrerData.extraSignalPassUntil.toMillis()
+              : new Date(referrerData.extraSignalPassUntil).getTime();
+            if (existingPassMs > nowMs) {
+              baseExpiryMs = existingPassMs;
+            }
+          }
+          const newExpiryDate = new Date(baseExpiryMs + (24 * 60 * 60 * 1000));
+          transaction.update(referrerRef, {
+            extraSignalPassUntil: newExpiryDate
+          });
         }
 
         // Prepare user updates payload

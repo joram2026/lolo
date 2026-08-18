@@ -11,6 +11,7 @@ export interface UserAccount {
   referralSource?: string;
   uniqueCode?: string;
   hasMadeFirstDeposit?: boolean;
+  extraSignalPassUntil?: any; // Firestore Timestamp / ISO Date for referral-earned 24h bonus extra signal passes
   createdAt: any; // Firestore Timestamp
   withdrawalEnabled: boolean;
   walletPassword?: string;

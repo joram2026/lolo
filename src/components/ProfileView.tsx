@@ -910,6 +910,40 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
               );
             })()}
 
+            {/* Extra Signal 24-Hour Pass Reward Card */}
+            {(() => {
+              const passUntil = profile?.extraSignalPassUntil?.toDate ? profile.extraSignalPassUntil.toDate() : (profile?.extraSignalPassUntil ? new Date(profile.extraSignalPassUntil) : null);
+              const isPassActive = passUntil && passUntil > new Date();
+              const remainingHours = isPassActive ? Math.ceil((passUntil.getTime() - Date.now()) / (1000 * 60 * 60)) : 0;
+
+              return (
+                <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent border border-amber-500/30 text-zinc-900 dark:text-white shadow-xs space-y-2">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 text-[10px] sm:text-[11px] font-extrabold uppercase tracking-wider border border-amber-500/30">
+                      <span>⚡ 24h Extra Signal Bonus</span>
+                    </div>
+                    {isPassActive ? (
+                      <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300 border border-emerald-300 text-[10px] font-black uppercase tracking-wider flex items-center gap-1">
+                        <Sparkles size={11} className="animate-pulse text-amber-500" />
+                        <span>Active ({remainingHours}h left)</span>
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-zinc-500 font-medium">Per First Deposit</span>
+                    )}
+                  </div>
+
+                  <div>
+                    <h3 className="text-xs sm:text-sm font-black text-amber-800 dark:text-amber-300">
+                      Unlock 24 Hours of Extra Trading Signals
+                    </h3>
+                    <p className="text-[10px] sm:text-[11px] text-zinc-600 dark:text-zinc-300 leading-relaxed mt-0.5">
+                      Whenever a friend you refer completes their first deposit, you automatically unlock <strong>24 hours of Copy Trading Extra Signals</strong> to execute standalone bonus trades on your active contract principal!
+                    </p>
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* 2. REFERRAL EARNINGS & STATS CARD */}
             {(() => {
               const milestoneEarnings = (() => {

@@ -12,7 +12,7 @@ import {
   User, LogOut, ArrowRightLeft, ShieldCheck, Activity, Wallet, 
   HelpCircle, RefreshCw, Coins, ArrowRight, MessageSquare, AlertCircle,
   History, ArrowLeft, X, ChevronDown, ChevronRight, Check, Lock, Unlock, Eye, EyeOff, Sparkles, BookOpen, Zap, Send,
-  Cpu, Play, Pause, Bot, Crown, Gift, ListFilter, CheckCircle, CheckCircle2, Users, Globe, Clock, Headphones
+  Cpu, Play, Pause, Bot, Crown, Gift, ListFilter, CheckCircle, CheckCircle2, Users, Globe, Clock, Headphones, Share2
 } from 'lucide-react';
 import { RunningBotView } from './RunningBotView';
 import { getTradingPairConfig, TradingPairBadge, DEFAULT_BOT_TRADING_PAIRS } from '../utils/pairUtils';
@@ -745,6 +745,81 @@ export default function StandardUserDashboard({
       isUnlocked,
       daysRemainingCalendar,
       hoursRemainingModulo
+    };
+  };
+
+  // Helper to determine if the user is eligible for Extra Signals:
+  // 1. New User Welcome Boost: First 3 days (72h) from active contract start
+  // 2. Referral First-Deposit Pass: Unlocked for 24h from a referred user's first deposit (extraSignalPassUntil > now)
+  const getExtraSignalEligibility = (lead?: CopyTraderLead | null) => {
+    const now = Date.now();
+
+    // 1. Check New User Contract Boost (First 3 Days = 72 hours)
+    let contractTrade: UserCopyTrade | undefined;
+    if (lead) {
+      contractTrade = userCopyTrades.find(
+        t => (t.leadId === lead.id || t.leadName === lead.name) && t.status === 'ACTIVE'
+      );
+    }
+    if (!contractTrade) {
+      contractTrade = userCopyTrades.find(t => t.status === 'ACTIVE');
+    }
+
+    if (contractTrade) {
+      const startMs = contractTrade.contractStartDate?.seconds
+        ? contractTrade.contractStartDate.seconds * 1000
+        : contractTrade.createdAt?.seconds
+        ? contractTrade.createdAt.seconds * 1000
+        : new Date(contractTrade.contractStartDate || contractTrade.createdAt || Date.now()).getTime();
+
+      const elapsedMs = now - startMs;
+      const seventyTwoHoursMs = 72 * 60 * 60 * 1000;
+      if (elapsedMs >= 0 && elapsedMs < seventyTwoHoursMs) {
+        const remainingMs = seventyTwoHoursMs - elapsedMs;
+        const hoursLeft = Math.ceil(remainingMs / (1000 * 60 * 60));
+        const dayNumber = Math.min(3, Math.floor(elapsedMs / (24 * 60 * 60 * 1000)) + 1);
+        return {
+          eligible: true,
+          reason: 'new_user_boost' as const,
+          hoursLeft,
+          dayNumber,
+          badgeText: `3-Day Welcome Boost (Day ${dayNumber}/3 • ${hoursLeft}h left)`,
+          description: 'You are within the 3-day welcome window from your contract start. All high-yield Extra Signals are unlocked!'
+        };
+      }
+    }
+
+    // 2. Check Referral First-Deposit 24h Pass
+    const extraPass = (profile as any)?.extraSignalPassUntil;
+    if (extraPass) {
+      const passExpiryMs = extraPass.seconds
+        ? extraPass.seconds * 1000
+        : extraPass.toMillis
+        ? extraPass.toMillis()
+        : new Date(extraPass).getTime();
+
+      if (passExpiryMs > now) {
+        const remainingMs = passExpiryMs - now;
+        const hoursLeft = Math.ceil(remainingMs / (1000 * 60 * 60));
+        return {
+          eligible: true,
+          reason: 'referral_boost' as const,
+          hoursLeft,
+          dayNumber: 0,
+          badgeText: `24h Referral Boost Active (${hoursLeft}h left)`,
+          description: 'Unlocked for 24 hours from your referral completing their first deposit!'
+        };
+      }
+    }
+
+    // 3. Locked
+    return {
+      eligible: false,
+      reason: 'locked' as const,
+      hoursLeft: 0,
+      dayNumber: 0,
+      badgeText: 'Extra Signal Locked',
+      description: 'Unlocked for the first 3 days of your contract, or for 24h whenever someone you referred makes their first deposit.'
     };
   };
 
@@ -1851,6 +1926,19 @@ export default function StandardUserDashboard({
     );
 
     const isExtraSignal = Boolean(activeSignal.isExtra);
+
+    // Validate Extra Signal Access Eligibility (First 3 Days of Contract OR 24h Referral Boost)
+    if (isExtraSignal) {
+      const eligibility = getExtraSignalEligibility(selectedLeadForCopy);
+      if (!eligibility.eligible) {
+        toast.error(
+          'Extra Signals are available for the first 3 days of your contract, or for 24h whenever a user you referred makes their first deposit. Invite a friend to unlock a 24-hour pass!',
+          'Extra Signal Locked'
+        );
+        return;
+      }
+    }
+
     const lockedPrincipalCapital = existingActiveContract?.contractCapital || existingActiveContract?.amount || parseFloat(copyTradeAmountInput) || (selectedLeadForCopy.minCapital ?? 50);
 
     // 3. Amount & Capital Validation
@@ -5401,85 +5489,148 @@ export default function StandardUserDashboard({
                         )}
 
                         {/* Extra Signals Section */}
-                        {selectedLeadForCopy.extraSignals && selectedLeadForCopy.extraSignals.length > 0 && (
-                          <div className="space-y-2 pt-2 border-t border-dashed border-zinc-200 dark:border-zinc-800">
-                            <div className="flex items-center justify-between">
-                              <span className={`text-xs font-extrabold uppercase tracking-wider flex items-center gap-1.5 text-amber-500`}>
-                                <span>⚡ Standalone Extra Signals</span>
-                              </span>
-                              <span className="text-[10px] text-zinc-400 font-medium">Traded on locked principal</span>
-                            </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                              {selectedLeadForCopy.extraSignals.map((es, idx) => {
-                                const activeSig = getActiveSignalForLead(selectedLeadForCopy);
-                                const isActive = activeSig && activeSig.time === es.time && activeSig.isExtra;
-                                const isExecuted = isSignalExecutedToday(selectedLeadForCopy, es);
-                                const fmtSig = formatSignalTimeForCountry(es.time, profile?.country);
+                        {selectedLeadForCopy.extraSignals && selectedLeadForCopy.extraSignals.length > 0 && (() => {
+                          const extraEligibility = getExtraSignalEligibility(selectedLeadForCopy);
 
-                                return (
-                                  <div
-                                    key={`extra-${idx}`}
-                                    className={`p-3.5 rounded-xl border transition-all flex items-center justify-between ${
-                                      isExecuted
-                                        ? isLightTheme ? 'bg-zinc-100/80 border-zinc-200 text-zinc-500' : 'bg-slate-900/60 border-slate-800 text-zinc-500'
-                                        : isActive
-                                        ? isLightTheme ? 'bg-amber-100/90 border-amber-400 text-amber-950 shadow-xs' : 'bg-amber-500/20 border-amber-500 text-amber-200 shadow-sm'
-                                        : isLightTheme ? 'bg-amber-50/40 border-amber-200/80 text-zinc-800' : 'bg-amber-950/20 border-amber-900/40 text-zinc-300'
-                                    }`}
+                          return (
+                            <div className="space-y-2.5 pt-2.5 border-t border-dashed border-zinc-200 dark:border-zinc-800">
+                              <div className="flex items-center justify-between flex-wrap gap-2">
+                                <span className={`text-xs font-extrabold uppercase tracking-wider flex items-center gap-1.5 text-amber-500`}>
+                                  <span>⚡ Standalone Extra Signals</span>
+                                </span>
+                                
+                                {extraEligibility.eligible ? (
+                                  <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider flex items-center gap-1 border shadow-2xs ${
+                                    extraEligibility.reason === 'new_user_boost'
+                                      ? isLightTheme ? 'bg-emerald-100 text-emerald-900 border-emerald-300' : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                                      : isLightTheme ? 'bg-amber-100 text-amber-900 border-amber-300' : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                                  }`}>
+                                    <Sparkles size={11} className="shrink-0 animate-pulse text-amber-500" />
+                                    <span>{extraEligibility.badgeText}</span>
+                                  </span>
+                                ) : (
+                                  <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider flex items-center gap-1 border ${
+                                    isLightTheme ? 'bg-zinc-100 text-zinc-600 border-zinc-300' : 'bg-slate-800 text-zinc-400 border-slate-700'
+                                  }`}>
+                                    <Lock size={10} className="shrink-0 text-amber-500" />
+                                    <span>Extra Signals Locked</span>
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Eligibility Status Banner */}
+                              {!extraEligibility.eligible ? (
+                                <div className={`p-3 rounded-xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 text-xs ${
+                                  isLightTheme ? 'bg-amber-50/90 border-amber-200 text-amber-950' : 'bg-amber-950/20 border-amber-900/40 text-amber-200'
+                                }`}>
+                                  <div className="flex items-start gap-2 min-w-0">
+                                    <Lock size={15} className="text-amber-500 shrink-0 mt-0.5" />
+                                    <div className="space-y-0.5">
+                                      <p className="font-extrabold text-[11px] uppercase tracking-wide">How to Unlock Extra Signals</p>
+                                      <p className="text-[11px] leading-relaxed opacity-90">
+                                        Extra Signals unlock for the <strong className="underline">first 3 days</strong> of an active contract, or for <strong className="underline">24 hours</strong> whenever a friend you referred completes their first deposit.
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedLeadForCopy(null);
+                                      setActiveTab('earn');
+                                    }}
+                                    className="shrink-0 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-[10px] uppercase tracking-wider transition-all flex items-center gap-1 shadow-xs active:scale-95 cursor-pointer whitespace-nowrap"
                                   >
-                                    <div className="min-w-0 flex-1 pr-2">
-                                      <div className="flex items-center gap-1.5 flex-wrap">
-                                        {fmtSig.isDifferentCountry ? (
-                                          <>
-                                            <span className="text-xs sm:text-sm font-black font-mono tracking-tight text-amber-700 dark:text-amber-300">
-                                              {fmtSig.localTimeStr}
-                                            </span>
-                                            <span className={`text-[9px] font-extrabold font-mono px-1.5 py-0.5 rounded ${
-                                              isLightTheme ? 'bg-amber-100 text-amber-900 border border-amber-200' : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                                            }`}>
-                                              {fmtSig.userCountryInfo.flag} {fmtSig.userCountryInfo.code}
-                                            </span>
-                                          </>
-                                        ) : (
-                                          <span className="text-xs sm:text-sm font-black font-mono tracking-tight">
-                                            {es.time || '18:00'} EAT
-                                          </span>
-                                        )}
+                                    <Share2 size={12} />
+                                    <span>Invite & Unlock (+24h)</span>
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className={`px-3 py-2 rounded-xl border text-[11px] flex items-center gap-2 font-medium ${
+                                  isLightTheme ? 'bg-emerald-50 border-emerald-200 text-emerald-900' : 'bg-emerald-950/20 border-emerald-900/40 text-emerald-200'
+                                }`}>
+                                  <Sparkles size={13} className="text-emerald-500 shrink-0" />
+                                  <span>{extraEligibility.description}</span>
+                                </div>
+                              )}
 
-                                        {isExecuted ? (
-                                          <span className="px-1.5 py-0.5 rounded-full bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 text-[9px] font-black uppercase tracking-wider flex items-center gap-1">
-                                            <CheckCircle size={10} className="text-emerald-500" /> Executed
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                {selectedLeadForCopy.extraSignals.map((es, idx) => {
+                                  const activeSig = getActiveSignalForLead(selectedLeadForCopy);
+                                  const isActive = activeSig && activeSig.time === es.time && activeSig.isExtra;
+                                  const isExecuted = isSignalExecutedToday(selectedLeadForCopy, es);
+                                  const fmtSig = formatSignalTimeForCountry(es.time, profile?.country);
+
+                                  return (
+                                    <div
+                                      key={`extra-${idx}`}
+                                      className={`p-3.5 rounded-xl border transition-all flex items-center justify-between ${
+                                        isExecuted
+                                          ? isLightTheme ? 'bg-zinc-100/80 border-zinc-200 text-zinc-500' : 'bg-slate-900/60 border-slate-800 text-zinc-500'
+                                          : !extraEligibility.eligible
+                                          ? isLightTheme ? 'bg-zinc-50 border-zinc-200 text-zinc-500 opacity-75' : 'bg-slate-900/40 border-slate-800 text-zinc-500 opacity-75'
+                                          : isActive
+                                          ? isLightTheme ? 'bg-amber-100/90 border-amber-400 text-amber-950 shadow-xs' : 'bg-amber-500/20 border-amber-500 text-amber-200 shadow-sm'
+                                          : isLightTheme ? 'bg-amber-50/40 border-amber-200/80 text-zinc-800' : 'bg-amber-950/20 border-amber-900/40 text-zinc-300'
+                                      }`}
+                                    >
+                                      <div className="min-w-0 flex-1 pr-2">
+                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                          {fmtSig.isDifferentCountry ? (
+                                            <>
+                                              <span className="text-xs sm:text-sm font-black font-mono tracking-tight text-amber-700 dark:text-amber-300">
+                                                {fmtSig.localTimeStr}
+                                              </span>
+                                              <span className={`text-[9px] font-extrabold font-mono px-1.5 py-0.5 rounded ${
+                                                isLightTheme ? 'bg-amber-100 text-amber-900 border border-amber-200' : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                                              }`}>
+                                                {fmtSig.userCountryInfo.flag} {fmtSig.userCountryInfo.code}
+                                              </span>
+                                            </>
+                                          ) : (
+                                            <span className="text-xs sm:text-sm font-black font-mono tracking-tight">
+                                              {es.time || '18:00'} EAT
+                                            </span>
+                                          )}
+
+                                          {isExecuted ? (
+                                            <span className="px-1.5 py-0.5 rounded-full bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 text-[9px] font-black uppercase tracking-wider flex items-center gap-1">
+                                              <CheckCircle size={10} className="text-emerald-500" /> Executed
+                                            </span>
+                                          ) : !extraEligibility.eligible ? (
+                                            <span className="px-1.5 py-0.5 rounded bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 text-[9px] font-extrabold uppercase flex items-center gap-1">
+                                              <Lock size={9} /> Locked
+                                            </span>
+                                          ) : isActive ? (
+                                            <span className="px-1.5 py-0.5 rounded-full bg-amber-500 text-slate-950 text-[9px] font-black uppercase tracking-wider animate-pulse">
+                                              Active Extra (1h)
+                                            </span>
+                                          ) : (
+                                            <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[9px] font-extrabold uppercase">
+                                              Extra
+                                            </span>
+                                          )}
+                                        </div>
+
+                                        <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                          <span className={`text-[10px] font-medium ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                                            {es.label || `Extra Signal #${idx + 1}`}
                                           </span>
-                                        ) : isActive ? (
-                                          <span className="px-1.5 py-0.5 rounded-full bg-amber-500 text-slate-950 text-[9px] font-black uppercase tracking-wider animate-pulse">
-                                            Active Extra (1h)
-                                          </span>
-                                        ) : (
-                                          <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[9px] font-extrabold uppercase">
-                                            Extra
-                                          </span>
-                                        )}
+                                        </div>
                                       </div>
 
-                                      <div className="flex items-center gap-2 mt-1 flex-wrap">
-                                        <span className={`text-[10px] font-medium ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>
-                                          {es.label || `Extra Signal #${idx + 1}`}
+                                      <div className="text-right shrink-0">
+                                        <span className={`text-[9px] font-extrabold block uppercase text-amber-500`}>Extra Rate</span>
+                                        <span className={`text-xs font-extrabold font-mono text-amber-400 ${isExecuted || !extraEligibility.eligible ? 'opacity-60' : ''}`}>
+                                          +{(es.profitRate ?? 3.5).toFixed(2)}%
                                         </span>
                                       </div>
                                     </div>
-
-                                    <div className="text-right shrink-0">
-                                      <span className={`text-[9px] font-extrabold block uppercase text-amber-500`}>Extra Rate</span>
-                                      <span className={`text-xs font-extrabold font-mono text-amber-400 ${isExecuted ? 'line-through opacity-60' : ''}`}>
-                                        +{(es.profitRate ?? 3.5).toFixed(2)}%
-                                      </span>
-                                    </div>
-                                  </div>
-                                );
-                              })}
+                                  );
+                                })}
+                              </div>
                             </div>
-                          </div>
-                        )}
+                          );
+                        })()}
                       </div>
 
                       {/* Step 1 Actions */}
@@ -5792,6 +5943,7 @@ export default function StandardUserDashboard({
                       {(() => {
                         const activeSig = getActiveSignalForLead(selectedLeadForCopy);
                         const isExtra = Boolean(activeSig?.isExtra) || (selectedLeadForCopy.extraSignals || []).some(es => (es.code || '').toUpperCase() === copySignalCodeInput.trim().toUpperCase());
+                        const extraEligibility = isExtra ? getExtraSignalEligibility(selectedLeadForCopy) : null;
                         
                         const existingActiveContract = userCopyTrades.find(
                           t => (t.leadId === selectedLeadForCopy.id || t.leadName === selectedLeadForCopy.name) && t.status === 'ACTIVE'
@@ -5815,36 +5967,80 @@ export default function StandardUserDashboard({
                         const net = gross - comm;
 
                         return (
-                          <div className={`p-4 rounded-2xl border space-y-2.5 text-xs ${
-                            isLightTheme ? 'bg-zinc-50 border-zinc-200' : 'bg-slate-950 border-slate-800'
-                          }`}>
-                            <div className="flex justify-between items-center pb-2 border-b border-zinc-200/60 dark:border-slate-800">
-                              <span className={`font-bold ${isLightTheme ? 'text-zinc-600' : 'text-zinc-400'}`}>Expert Trader</span>
-                              <span className="font-extrabold">{selectedLeadForCopy.name}</span>
-                            </div>
-                            <div className="flex justify-between items-center">
-                              <span className={`font-bold ${isLightTheme ? 'text-zinc-600' : 'text-zinc-400'}`}>Selected Trading Pair</span>
-                              <span className="font-black font-mono text-amber-600 dark:text-amber-400">{copyTradePair}</span>
-                            </div>
-                            <div className="flex justify-between items-center">
-                              <span className={`font-bold ${isLightTheme ? 'text-zinc-600' : 'text-zinc-400'}`}>
-                                {isExtra ? 'Traded Principal (Locked Capital)' : 'Trade Capital'}
-                              </span>
-                              <span className="font-black font-mono text-sm">${tradeCap.toFixed(2)} USD</span>
-                            </div>
-                            <div className="flex justify-between items-center">
-                              <span className={`font-bold ${isLightTheme ? 'text-zinc-600' : 'text-zinc-400'}`}>
-                                {isExtra ? 'Extra Signal Profit Rate' : 'Signal Profit Rate'}
-                              </span>
-                              <span className={`font-black font-mono ${isExtra ? 'text-amber-500' : 'text-emerald-500'}`}>
-                                +{rate.toFixed(2)}% {isExtra ? '(Standalone)' : ''}
-                              </span>
-                            </div>
-                            <div className="flex justify-between items-center pt-1 border-t border-zinc-200/60 dark:border-slate-800">
-                              <span className={`font-bold ${isLightTheme ? 'text-zinc-600' : 'text-zinc-400'}`}>Est. Net Profit</span>
-                              <span className="font-black font-mono text-emerald-600 dark:text-emerald-400">
-                                +${net.toFixed(2)} USD
-                              </span>
+                          <div className="space-y-3">
+                            {/* Extra Signal Eligibility Banner in Step 3 */}
+                            {isExtra && (
+                              extraEligibility?.eligible ? (
+                                <div className={`p-3 rounded-2xl border flex items-center justify-between gap-2 text-xs ${
+                                  extraEligibility.reason === 'new_user_boost'
+                                    ? isLightTheme ? 'bg-emerald-50 border-emerald-300 text-emerald-950' : 'bg-emerald-950/20 border-emerald-500/40 text-emerald-300'
+                                    : isLightTheme ? 'bg-amber-50 border-amber-300 text-amber-950' : 'bg-amber-950/20 border-amber-500/40 text-amber-300'
+                                }`}>
+                                  <div className="flex items-center gap-2">
+                                    <Sparkles size={16} className="text-amber-500 shrink-0 animate-pulse" />
+                                    <span className="font-extrabold">{extraEligibility.badgeText}</span>
+                                  </div>
+                                  <span className="text-[10px] uppercase tracking-wider font-bold opacity-80">Extra Unlocked</span>
+                                </div>
+                              ) : (
+                                <div className={`p-3.5 rounded-2xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs ${
+                                  isLightTheme ? 'bg-amber-50/90 border-amber-300 text-amber-950' : 'bg-amber-950/30 border-amber-800 text-amber-200'
+                                }`}>
+                                  <div className="flex items-start gap-2.5">
+                                    <Lock size={16} className="text-amber-500 shrink-0 mt-0.5" />
+                                    <div>
+                                      <p className="font-black text-xs uppercase tracking-wide">Extra Signal Is Locked</p>
+                                      <p className="text-[11px] opacity-90 mt-0.5">
+                                        Extra Signals unlock for the <strong>first 3 days</strong> of a contract or for <strong>24h</strong> when a referral completes their first deposit.
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedLeadForCopy(null);
+                                      setActiveTab('earn');
+                                    }}
+                                    className="shrink-0 px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-[11px] uppercase tracking-wider transition-all flex items-center gap-1 shadow-xs active:scale-95 cursor-pointer whitespace-nowrap"
+                                  >
+                                    <Share2 size={13} />
+                                    <span>Invite & Unlock (+24h)</span>
+                                  </button>
+                                </div>
+                              )
+                            )}
+
+                            <div className={`p-4 rounded-2xl border space-y-2.5 text-xs ${
+                              isLightTheme ? 'bg-zinc-50 border-zinc-200' : 'bg-slate-950 border-slate-800'
+                            }`}>
+                              <div className="flex justify-between items-center pb-2 border-b border-zinc-200/60 dark:border-slate-800">
+                                <span className={`font-bold ${isLightTheme ? 'text-zinc-600' : 'text-zinc-400'}`}>Expert Trader</span>
+                                <span className="font-extrabold">{selectedLeadForCopy.name}</span>
+                              </div>
+                              <div className="flex justify-between items-center">
+                                <span className={`font-bold ${isLightTheme ? 'text-zinc-600' : 'text-zinc-400'}`}>Selected Trading Pair</span>
+                                <span className="font-black font-mono text-amber-600 dark:text-amber-400">{copyTradePair}</span>
+                              </div>
+                              <div className="flex justify-between items-center">
+                                <span className={`font-bold ${isLightTheme ? 'text-zinc-600' : 'text-zinc-400'}`}>
+                                  {isExtra ? 'Traded Principal (Locked Capital)' : 'Trade Capital'}
+                                </span>
+                                <span className="font-black font-mono text-sm">${tradeCap.toFixed(2)} USD</span>
+                              </div>
+                              <div className="flex justify-between items-center">
+                                <span className={`font-bold ${isLightTheme ? 'text-zinc-600' : 'text-zinc-400'}`}>
+                                  {isExtra ? 'Extra Signal Profit Rate' : 'Signal Profit Rate'}
+                                </span>
+                                <span className={`font-black font-mono ${isExtra ? 'text-amber-500' : 'text-emerald-500'}`}>
+                                  +{rate.toFixed(2)}% {isExtra ? '(Standalone)' : ''}
+                                </span>
+                              </div>
+                              <div className="flex justify-between items-center pt-1 border-t border-zinc-200/60 dark:border-slate-800">
+                                <span className={`font-bold ${isLightTheme ? 'text-zinc-600' : 'text-zinc-400'}`}>Est. Net Profit</span>
+                                <span className="font-black font-mono text-emerald-600 dark:text-emerald-400">
+                                  +${net.toFixed(2)} USD
+                                </span>
+                              </div>
                             </div>
                           </div>
                         );
@@ -5902,13 +6098,20 @@ export default function StandardUserDashboard({
                         {(() => {
                           const activeSig = getActiveSignalForLead(selectedLeadForCopy);
                           const isDone = activeSig ? isSignalExecutedToday(selectedLeadForCopy, activeSig) : false;
+                          const isExtra = Boolean(activeSig?.isExtra) || (selectedLeadForCopy.extraSignals || []).some(es => (es.code || '').toUpperCase() === copySignalCodeInput.trim().toUpperCase());
+                          const extraEligibility = isExtra ? getExtraSignalEligibility(selectedLeadForCopy) : null;
+                          const isBlockedByLock = isExtra && extraEligibility && !extraEligibility.eligible;
 
                           return (
                             <button
                               type="button"
-                              disabled={isSubmittingCopy || isDone}
+                              disabled={isSubmittingCopy || isDone || Boolean(isBlockedByLock)}
                               onClick={handleExecuteCopyTrade}
-                              className="w-full sm:flex-1 py-3 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs sm:text-sm shadow-md shadow-amber-500/20 border border-amber-400 cursor-pointer transition-all flex items-center justify-center gap-2 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
+                              className={`w-full sm:flex-1 py-3 px-4 rounded-xl font-extrabold text-xs sm:text-sm shadow-md border cursor-pointer transition-all flex items-center justify-center gap-2 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap ${
+                                isBlockedByLock
+                                  ? 'bg-zinc-300 dark:bg-slate-800 border-zinc-400 dark:border-slate-700 text-zinc-600 dark:text-zinc-400'
+                                  : 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-amber-500/20 border-amber-400'
+                              }`}
                             >
                               {isSubmittingCopy ? (
                                 <RefreshCw size={16} className="animate-spin" />
@@ -5916,6 +6119,11 @@ export default function StandardUserDashboard({
                                 <span className="flex items-center gap-1.5">
                                   <CheckCircle size={15} className="shrink-0 text-slate-900" />
                                   <span>Signal Executed Today</span>
+                                </span>
+                              ) : isBlockedByLock ? (
+                                <span className="flex items-center gap-1.5">
+                                  <Lock size={15} className="shrink-0" />
+                                  <span>Extra Signal Locked</span>
                                 </span>
                               ) : (
                                 <span className="flex items-center gap-1.5">
