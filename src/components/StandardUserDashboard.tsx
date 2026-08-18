@@ -18,6 +18,8 @@ import { RunningBotView } from './RunningBotView';
 import { getTradingPairConfig, TradingPairBadge, DEFAULT_BOT_TRADING_PAIRS } from '../utils/pairUtils';
 import { syncLiveCryptoPrices } from '../utils/cryptoApi';
 import { getUserTimezoneInfo, formatSignalTimeForCountry } from '../utils/timezones';
+import { ExpertAvatar } from './ExpertAvatar';
+import { preloadTraderImages } from '../utils/imageUtils';
 
 interface StandardUserDashboardProps {
   user: any;
@@ -1295,9 +1297,11 @@ export default function StandardUserDashboard({
         leads = [...DEFAULT_COPY_LEADS];
       }
       setCopyLeads(leads);
+      preloadTraderImages(leads.map(l => l.photoUrl));
     }, (err) => {
       console.error("Error fetching copy trader leads:", err);
       setCopyLeads([...DEFAULT_COPY_LEADS]);
+      preloadTraderImages(DEFAULT_COPY_LEADS.map(l => l.photoUrl));
     });
 
     // Real-time listener for User Copy Trades
@@ -5262,14 +5266,14 @@ export default function StandardUserDashboard({
                     isLightTheme ? 'border-zinc-200' : 'border-slate-800'
                   }`}>
                     <div className="flex items-center gap-3">
-                      <div className="w-14 h-14 rounded-2xl overflow-hidden border-2 border-amber-500/80 shadow-md shrink-0">
-                        <img 
-                          src={selectedLeadForCopy.photoUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80'} 
-                          alt={selectedLeadForCopy.name} 
-                          className="w-full h-full object-cover"
-                          referrerPolicy="no-referrer"
-                        />
-                      </div>
+                      <ExpertAvatar 
+                        photoUrl={selectedLeadForCopy.photoUrl} 
+                        name={selectedLeadForCopy.name} 
+                        className="w-14 h-14" 
+                        size={160} 
+                        roundedClassName="rounded-2xl" 
+                        borderClassName="border-2 border-amber-500/80" 
+                      />
                       <div>
                         <div className="flex items-center gap-2">
                           <h3 className={`font-extrabold text-lg sm:text-xl tracking-tight ${isLightTheme ? 'text-zinc-900' : 'text-white'}`}>
@@ -6277,13 +6281,13 @@ export default function StandardUserDashboard({
                             {/* Top Header: Lead Expert Profile & Lock Status Badge */}
                             <div className="flex items-start justify-between gap-3">
                               <div className="flex items-center gap-3 min-w-0">
-                                <img 
-                                  src={trade.leadPhotoUrl} 
-                                  alt={trade.leadName} 
-                                  className="w-11 h-11 rounded-full object-cover border-2 border-emerald-500 shrink-0"
-                                  onError={(e) => {
-                                    (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=400';
-                                  }}
+                                <ExpertAvatar 
+                                  photoUrl={trade.leadPhotoUrl} 
+                                  name={trade.leadName} 
+                                  className="w-11 h-11" 
+                                  size={140} 
+                                  roundedClassName="rounded-full" 
+                                  borderClassName="border-2 border-emerald-500" 
                                 />
                                 <div className="min-w-0 flex-1">
                                   <h5 className={`font-black text-sm truncate flex items-center gap-1.5 ${isLightTheme ? 'text-zinc-900' : 'text-white'}`}>
@@ -6393,13 +6397,13 @@ export default function StandardUserDashboard({
 
                         <div className="space-y-3">
                           <div className="flex items-start gap-3">
-                            <img 
-                              src={lead.photoUrl} 
-                              alt={lead.name}
-                              className="w-14 h-14 rounded-full object-cover border-2 border-emerald-500/50 shrink-0 shadow-md"
-                              onError={(e) => {
-                                (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=400';
-                              }}
+                            <ExpertAvatar 
+                              photoUrl={lead.photoUrl} 
+                              name={lead.name} 
+                              className="w-14 h-14" 
+                              size={160} 
+                              roundedClassName="rounded-full" 
+                              borderClassName="border-2 border-emerald-500/50" 
                             />
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center justify-between gap-1">
@@ -7495,13 +7499,13 @@ export default function StandardUserDashboard({
               }`}>
                 {/* Expert Name */}
                 <div className="flex items-center gap-3">
-                  <img 
-                    src={trade.leadPhotoUrl} 
-                    alt={trade.leadName} 
-                    className="w-10 h-10 rounded-full object-cover border-2 border-emerald-500 shrink-0 shadow-xs"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=400';
-                    }}
+                  <ExpertAvatar 
+                    photoUrl={trade.leadPhotoUrl} 
+                    name={trade.leadName} 
+                    className="w-10 h-10" 
+                    size={120} 
+                    roundedClassName="rounded-full" 
+                    borderClassName="border-2 border-emerald-500" 
                   />
                   <div>
                     <span className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/15">
@@ -7705,13 +7709,13 @@ export default function StandardUserDashboard({
               isLightTheme ? 'bg-zinc-50 border-zinc-200' : 'bg-slate-950/80 border-slate-800'
             }`}>
               <div className="flex items-center gap-3 min-w-0">
-                <img 
-                  src={settledTradeReceipt.leadPhotoUrl} 
-                  alt={settledTradeReceipt.leadName} 
-                  className="w-10 h-10 rounded-full object-cover border-2 border-emerald-500 shrink-0"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=400';
-                  }}
+                <ExpertAvatar 
+                  photoUrl={settledTradeReceipt.leadPhotoUrl} 
+                  name={settledTradeReceipt.leadName} 
+                  className="w-10 h-10" 
+                  size={120} 
+                  roundedClassName="rounded-full" 
+                  borderClassName="border-2 border-emerald-500" 
                 />
                 <div className="min-w-0">
                   <h4 className={`font-black text-sm truncate ${isLightTheme ? 'text-zinc-900' : 'text-white'}`}>

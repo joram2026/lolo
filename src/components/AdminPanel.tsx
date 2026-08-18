@@ -9,6 +9,7 @@ import {
 import { UserAccount, Transaction, CryptoNetwork, P2PMerchant, CryptoPrice, ArbitrageConfig, BotTemplate, DepositBonusTier, ReferralDepositConfig, CopyTraderLead } from '../types';
 import { DEFAULT_COPY_LEADS } from '../data/copyTraders';
 import { fetchLivePriceFromBinance, fetchAllLivePrices, syncLiveCryptoPrices } from '../utils/cryptoApi';
+import { ExpertAvatar } from './ExpertAvatar';
 import { 
   Users, CheckCircle2, XCircle, Settings, ShieldAlert, Key, 
   Trash2, ToggleLeft, ToggleRight, Loader, ZoomIn, Plus, Edit, Check, Eye, Star, Mail, RefreshCw, X, FileText, Coins, TrendingUp, Bot, Cpu, Smartphone, Phone, Sparkles, ChevronDown, ChevronUp,
@@ -3343,13 +3344,13 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                   {copyLeadsList.map((lead) => (
                     <div key={lead.id} className="bg-zinc-950 border border-zinc-800/80 rounded-2xl p-4 flex flex-col justify-between space-y-3 relative overflow-hidden">
                       <div className="flex items-start gap-3">
-                        <img 
-                          src={lead.photoUrl} 
-                          alt={lead.name}
-                          className="w-12 h-12 rounded-full object-cover border-2 border-emerald-500/40 shrink-0"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=400';
-                          }}
+                        <ExpertAvatar 
+                          photoUrl={lead.photoUrl} 
+                          name={lead.name} 
+                          className="w-12 h-12" 
+                          size={140} 
+                          roundedClassName="rounded-full" 
+                          borderClassName="border-2 border-emerald-500/40" 
                         />
                         <div className="space-y-1 min-w-0 flex-1">
                           <div className="flex items-center justify-between gap-2">
