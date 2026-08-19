@@ -24,6 +24,7 @@
   ],
   "id": "/?source=pwa",
   "start_url": "/?source=pwa",
+  "scope": "/",
   "background_color": "#FFF3D6",
   "theme_color": "#FFF3D6",
   "display": "standalone",
