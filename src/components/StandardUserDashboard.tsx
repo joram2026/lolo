@@ -12,7 +12,8 @@ import {
   User, LogOut, ArrowRightLeft, ShieldCheck, Activity, Wallet, 
   HelpCircle, RefreshCw, Coins, ArrowRight, MessageSquare, AlertCircle,
   History, ArrowLeft, X, ChevronDown, ChevronRight, Check, Lock, Unlock, Eye, EyeOff, Sparkles, BookOpen, Zap, Send,
-  Cpu, Play, Pause, Bot, Crown, Gift, ListFilter, CheckCircle, CheckCircle2, Users, Globe, Clock, Headphones, Share2
+  Cpu, Play, Pause, Bot, Crown, Gift, ListFilter, CheckCircle, CheckCircle2, Users, Globe, Clock, Headphones, Share2,
+  Copy, Calculator, Percent, Flame, ExternalLink, UserPlus
 } from 'lucide-react';
 import { RunningBotView } from './RunningBotView';
 import { getTradingPairConfig, TradingPairBadge, DEFAULT_BOT_TRADING_PAIRS } from '../utils/pairUtils';
@@ -535,6 +536,16 @@ export default function StandardUserDashboard({
 
   // Helper to determine active signal window for expert (1 hour valid duration from start time)
   // Seamlessly handles both regular daily signals and standalone extra signals
+  const [signalClockTick, setSignalClockTick] = useState<number>(Date.now());
+
+  useEffect(() => {
+    if (!selectedLeadForCopy) return;
+    const timer = setInterval(() => {
+      setSignalClockTick(Date.now());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [selectedLeadForCopy]);
+
   const getActiveSignalForLead = (lead: CopyTraderLead) => {
     const regularSignals = Array.isArray(lead.signals) ? lead.signals.map(s => ({ ...s, isExtra: false })) : [];
     const extraSignals = Array.isArray(lead.extraSignals) ? lead.extraSignals.map(es => ({ ...es, isExtra: true })) : [];
@@ -582,6 +593,141 @@ export default function StandardUserDashboard({
       }
     }
     return null;
+  };
+
+  // Helper for live terminal status countdown & upcoming signal calculation
+  const getLeadSignalWindowCountdown = (lead: CopyTraderLead) => {
+    const regularSignals = Array.isArray(lead.signals) ? lead.signals.map(s => ({ ...s, isExtra: false })) : [];
+    const extraSignals = Array.isArray(lead.extraSignals) ? lead.extraSignals.map(es => ({ ...es, isExtra: true })) : [];
+    const allSignals: { id?: string; time: string; code: string; isExtra?: boolean; profitRate?: number; label?: string }[] = [
+      ...regularSignals,
+      ...extraSignals
+    ];
+    if (allSignals.length === 0) {
+      return { isActive: false, activeSignal: null, nextSignal: null, countdownText: 'No Signals Scheduled', signalTime: '--:--', code: '' };
+    }
+
+    const now = new Date();
+    const pad = (n: number) => n.toString().padStart(2, '0');
+
+    let kenyaDateParts: number[];
+    try {
+      kenyaDateParts = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Africa/Nairobi',
+        year: 'numeric',
+        month: 'numeric',
+        day: 'numeric',
+      }).format(now).split('/').map(Number);
+    } catch {
+      kenyaDateParts = [now.getMonth() + 1, now.getDate(), now.getFullYear()];
+    }
+
+    const m = pad(kenyaDateParts[0]);
+    const d = pad(kenyaDateParts[1]);
+    const y = kenyaDateParts[2];
+
+    // Check if active right now
+    for (const sig of allSignals) {
+      if (!sig.time) continue;
+      const parts = sig.time.split(':');
+      if (parts.length < 2) continue;
+      const sigHour = parseInt(parts[0], 10);
+      const sigMin = parseInt(parts[1], 10);
+      if (isNaN(sigHour) || isNaN(sigMin)) continue;
+
+      const isoKenya = `${y}-${m}-${d}T${pad(sigHour)}:${pad(sigMin)}:00+03:00`;
+      const sigStartMs = new Date(isoKenya).getTime();
+      const sigEndMs = sigStartMs + 3600000;
+
+      if (now.getTime() >= sigStartMs && now.getTime() < sigEndMs) {
+        const diffSecs = Math.max(0, Math.floor((sigEndMs - now.getTime()) / 1000));
+        const remMins = Math.floor(diffSecs / 60);
+        const remSecs = diffSecs % 60;
+        return {
+          isActive: true,
+          activeSignal: sig,
+          nextSignal: null,
+          remainingMs: sigEndMs - now.getTime(),
+          countdownText: `${remMins}m ${remSecs < 10 ? '0' : ''}${remSecs}s`,
+          signalTime: sig.time,
+          code: sig.code
+        };
+      }
+    }
+
+    // Find next upcoming signal
+    let closestFutureMs = Infinity;
+    let closestSig = allSignals[0];
+
+    for (const sig of allSignals) {
+      if (!sig.time) continue;
+      const parts = sig.time.split(':');
+      if (parts.length < 2) continue;
+      const sigHour = parseInt(parts[0], 10);
+      const sigMin = parseInt(parts[1], 10);
+      if (isNaN(sigHour) || isNaN(sigMin)) continue;
+
+      const todayIso = `${y}-${m}-${d}T${pad(sigHour)}:${pad(sigMin)}:00+03:00`;
+      const todayMs = new Date(todayIso).getTime();
+      if (todayMs > now.getTime() && todayMs < closestFutureMs) {
+        closestFutureMs = todayMs;
+        closestSig = sig;
+      }
+    }
+
+    if (closestFutureMs === Infinity) {
+      for (const sig of allSignals) {
+        if (!sig.time) continue;
+        const parts = sig.time.split(':');
+        if (parts.length < 2) continue;
+        const sigHour = parseInt(parts[0], 10);
+        const sigMin = parseInt(parts[1], 10);
+        if (isNaN(sigHour) || isNaN(sigMin)) continue;
+
+        const tomorrow = new Date(now.getTime() + 24 * 3600000);
+        let tomParts: number[];
+        try {
+          tomParts = new Intl.DateTimeFormat('en-US', {
+            timeZone: 'Africa/Nairobi',
+            year: 'numeric',
+            month: 'numeric',
+            day: 'numeric',
+          }).format(tomorrow).split('/').map(Number);
+        } catch {
+          tomParts = [tomorrow.getMonth() + 1, tomorrow.getDate(), tomorrow.getFullYear()];
+        }
+        const tomIso = `${tomParts[2]}-${pad(tomParts[0])}-${pad(tomParts[1])}T${pad(sigHour)}:${pad(sigMin)}:00+03:00`;
+        const tomMs = new Date(tomIso).getTime();
+        if (tomMs < closestFutureMs) {
+          closestFutureMs = tomMs;
+          closestSig = sig;
+        }
+      }
+    }
+
+    const diffSecs = Math.max(0, Math.floor((closestFutureMs - now.getTime()) / 1000));
+    const hours = Math.floor(diffSecs / 3600);
+    const mins = Math.floor((diffSecs % 3600) / 60);
+    const secs = diffSecs % 60;
+
+    return {
+      isActive: false,
+      activeSignal: null,
+      nextSignal: closestSig,
+      remainingMs: closestFutureMs - now.getTime(),
+      countdownText: hours > 0 ? `${hours}h ${mins}m ${secs < 10 ? '0' : ''}${secs}s` : `${mins}m ${secs < 10 ? '0' : ''}${secs}s`,
+      signalTime: closestSig?.time || '13:00',
+      code: closestSig?.code || ''
+    };
+  };
+
+  const handleCopyReferralLink = () => {
+    const code = profile?.uniqueCode || profile?.referralSource || user?.uid?.substring(0, 8) || 'MOREX';
+    const link = `${window.location.origin}/?ref=${code}`;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(link);
+    }
+    toast.success('Referral link copied to clipboard! Share with friends to unlock 24h of +3.5% Extra Signal access on their first deposit.', 'Referral Link Copied');
   };
 
   // Helper to check if a specific signal code or signal time has already been executed today by the user
@@ -1874,14 +2020,27 @@ export default function StandardUserDashboard({
   const handleOpenCopyModal = (lead: CopyTraderLead) => {
     setActiveTab('earn');
     setSelectedLeadForCopy(lead);
-    setCopyTradeStep(1);
-    const defaultPair = lead.tradingPairs && lead.tradingPairs.length > 0 ? lead.tradingPairs[0] : 'BTC/USDT';
+
+    // Check if user already has an active running contract with this expert
+    const existingActiveContract = userCopyTrades.find(
+      t => (t.leadId === lead.id || (t.leadName && t.leadName.toLowerCase() === lead.name.toLowerCase())) && t.status === 'ACTIVE'
+    );
+
+    // Option 1: Context-Aware Smart Step Navigation (Skip Redundant Steps)
+    if (existingActiveContract) {
+      setCopyTradeStep(3); // Jump straight to Signal Execution
+    } else {
+      setCopyTradeStep(1); // First time: Start with overview
+    }
+
+    const defaultPair = existingActiveContract?.tradingPair || (lead.tradingPairs && lead.tradingPairs.length > 0 ? lead.tradingPairs[0] : 'BTC/USDT');
     setCopyTradePair(defaultPair);
 
-    const initialAmount = getLatestContractAmountForLead(lead);
+    const initialAmount = existingActiveContract?.contractCapital || existingActiveContract?.amount || getLatestContractAmountForLead(lead);
     setCopyTradeAmountInput(initialAmount.toString());
 
     setCopySignalCodeInput('');
+    setExecutionAnimStep(0);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -1988,7 +2147,15 @@ export default function StandardUserDashboard({
     }
 
     setIsSubmittingCopy(true);
+    setExecutionAnimStep(1); // Phase 1: Cryptographic validation
+
     try {
+      await new Promise(r => setTimeout(r, 400));
+      setExecutionAnimStep(2); // Phase 2: Master node matching & order execution
+      await new Promise(r => setTimeout(r, 500));
+      setExecutionAnimStep(3); // Phase 3: Instant settlement & balance crediting
+      await new Promise(r => setTimeout(r, 400));
+
       // 4. Calculate Profits and Commissions
       let signalProfitPercent = 0;
       if (isExtraSignal) {
@@ -2120,6 +2287,7 @@ export default function StandardUserDashboard({
       toast.error(`Failed to execute copy trade: ${err.message}`, 'Trade Execution Error');
     } finally {
       setIsSubmittingCopy(false);
+      setExecutionAnimStep(0);
     }
   };
 
@@ -5258,138 +5426,189 @@ export default function StandardUserDashboard({
                 </div>
 
                 {/* Main Page Content Card */}
-                <div className={`w-full p-5 sm:p-7 rounded-3xl border shadow-xl space-y-6 ${
+                <div className={`w-full p-4 sm:p-6 rounded-2xl sm:rounded-3xl border shadow-lg space-y-4 ${
                   isLightTheme ? 'bg-white border-zinc-200 text-zinc-900 shadow-slate-900/5' : 'bg-slate-900 border-slate-800 text-white shadow-black/40'
                 }`}>
-                  {/* Page Header */}
-                  <div className={`flex items-center justify-between pb-4 border-b ${
-                    isLightTheme ? 'border-zinc-200' : 'border-slate-800'
-                  }`}>
-                    <div className="flex items-center gap-3">
-                      <ExpertAvatar 
-                        photoUrl={selectedLeadForCopy.photoUrl} 
-                        name={selectedLeadForCopy.name} 
-                        className="w-14 h-14" 
-                        size={160} 
-                        roundedClassName="rounded-2xl" 
-                        borderClassName="border-2 border-amber-500/80" 
-                      />
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h3 className={`font-extrabold text-lg sm:text-xl tracking-tight ${isLightTheme ? 'text-zinc-900' : 'text-white'}`}>
-                            {selectedLeadForCopy.name}
-                          </h3>
-                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase font-mono ${
-                            isLightTheme ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                          }`}>
-                            {selectedLeadForCopy.winRate}% Win
-                          </span>
-                        </div>
-                        <p className={`text-xs font-medium mt-0.5 ${isLightTheme ? 'text-zinc-600' : 'text-zinc-400'}`}>
-                          Copy Trade Terminal • Step {copyTradeStep} of 3
-                        </p>
-                      </div>
-                    </div>
-                  </div>
+                  {/* Compact Header & Live Signal Window Status */}
+                  {(() => {
+                    const signalInfo = getLeadSignalWindowCountdown(selectedLeadForCopy);
+                    const existingActiveContract = userCopyTrades.find(
+                      t => (t.leadId === selectedLeadForCopy.id || (t.leadName && t.leadName.toLowerCase() === selectedLeadForCopy.name.toLowerCase())) && t.status === 'ACTIVE'
+                    );
+                    const lockedPrincipal = existingActiveContract?.contractCapital || existingActiveContract?.amount || 0;
 
-                  {/* 3-Step Process Stepper Tabs */}
-                  <div className={`grid grid-cols-3 gap-1.5 p-1.5 rounded-2xl border text-xs font-mono ${
-                    isLightTheme ? 'bg-zinc-100 border-zinc-200' : 'bg-slate-950 border-slate-800'
-                  }`}>
+                    return (
+                      <div className="space-y-2.5 pb-2.5 border-b border-zinc-200 dark:border-slate-800">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                          <div className="flex items-center gap-3">
+                            <div className="relative">
+                              <ExpertAvatar 
+                                photoUrl={selectedLeadForCopy.photoUrl} 
+                                name={selectedLeadForCopy.name} 
+                                className="w-12 h-12" 
+                                size={140} 
+                                roundedClassName="rounded-xl" 
+                                borderClassName="border-2 border-amber-500/80" 
+                              />
+                              {signalInfo.isActive ? (
+                                <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                  <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500 border-2 border-white dark:border-slate-900"></span>
+                                </span>
+                              ) : (
+                                <span className="absolute -bottom-1 -right-1 p-0.5 rounded-full bg-slate-950 text-amber-400 border border-amber-500/30">
+                                  <Clock size={10} />
+                                </span>
+                              )}
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <h3 className={`font-black text-base sm:text-lg tracking-tight ${isLightTheme ? 'text-zinc-900' : 'text-white'}`}>
+                                  {selectedLeadForCopy.name}
+                                </h3>
+                                <span className={`px-2 py-0.5 rounded-full text-[9.5px] font-black uppercase font-mono ${
+                                  isLightTheme ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                }`}>
+                                  {selectedLeadForCopy.winRate}% Win
+                                </span>
+                                {existingActiveContract && (
+                                  <span className="px-2 py-0.5 rounded-full text-[9.5px] font-black uppercase font-mono bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 flex items-center gap-1">
+                                    <Lock size={9} /> Running (${lockedPrincipal.toFixed(2)})
+                                  </span>
+                                )}
+                              </div>
+                              <p className={`text-[11px] font-medium mt-0.5 ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                                Yield: <strong className="text-emerald-500 font-mono">+{selectedLeadForCopy.dayProfitRate ?? 2.0}%/d</strong> • Fee: <strong className="text-amber-500 font-mono">{selectedLeadForCopy.analysisCommission ?? 10}%</strong> • {selectedLeadForCopy.tradingPairs?.slice(0, 2).join(', ') || 'BTC/USDT'}
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Compact Live Signal Window Badge */}
+                          <div className={`px-3 py-1.5 rounded-xl border flex items-center gap-2.5 shrink-0 ${
+                            signalInfo.isActive
+                              ? isLightTheme ? 'bg-emerald-50 border-emerald-300 text-emerald-950 shadow-2xs' : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-200'
+                              : isLightTheme ? 'bg-zinc-50 border-zinc-200 text-zinc-800' : 'bg-slate-950 border-slate-800 text-zinc-300'
+                          }`}>
+                            <div className={`p-1 rounded-lg shrink-0 ${
+                              signalInfo.isActive ? 'bg-emerald-500 text-slate-950 animate-pulse' : 'bg-amber-500/10 text-amber-500'
+                            }`}>
+                              {signalInfo.isActive ? <Zap size={13} /> : <Clock size={13} />}
+                            </div>
+                            <div className="min-w-0 pr-0.5">
+                              <div className="flex items-center gap-1">
+                                <span className={`text-[9px] font-black uppercase tracking-wider ${
+                                  signalInfo.isActive ? 'text-emerald-600 dark:text-emerald-400' : 'text-zinc-400'
+                                }`}>
+                                  {signalInfo.isActive ? 'Signal Active' : 'Standby'}
+                                </span>
+                              </div>
+                              <div className="font-mono text-xs font-black tracking-tight flex items-center gap-1">
+                                <span>{signalInfo.countdownText}</span>
+                                <span className="text-[9.5px] font-medium opacity-75">({signalInfo.signalTime})</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Existing Contract Quick Step 3 Jump Pill */}
+                        {existingActiveContract && copyTradeStep !== 3 && (
+                          <div className={`px-3 py-1.5 rounded-xl border flex items-center justify-between gap-2 text-xs ${
+                            isLightTheme ? 'bg-blue-50/70 border-blue-200 text-blue-950' : 'bg-blue-950/30 border-blue-800/40 text-blue-200'
+                          }`}>
+                            <div className="flex items-center gap-1.5 min-w-0 text-[11px]">
+                              <ShieldCheck size={13} className="text-blue-500 shrink-0" />
+                              <span className="truncate">Active principal: <strong>${lockedPrincipal.toFixed(2)} USD</strong></span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setCopyTradeStep(3)}
+                              className="px-2 py-0.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-black text-[9.5px] uppercase tracking-wider shrink-0 transition-all cursor-pointer flex items-center gap-1"
+                            >
+                              <span>Enter Signal</span>
+                              <ArrowRight size={10} />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+
+                  {/* Compact Stepper Navigation Bar */}
+                  <div className="grid grid-cols-3 gap-1.5 p-1 rounded-xl bg-zinc-100 dark:bg-slate-950 border border-zinc-200/80 dark:border-slate-800">
                     <button
                       type="button"
                       onClick={() => setCopyTradeStep(1)}
-                      className={`py-2 px-2 sm:px-3 rounded-xl font-extrabold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                      className={`py-1.5 px-2 rounded-lg text-center transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
                         copyTradeStep === 1
-                          ? 'bg-amber-500 text-slate-950 shadow-xs'
+                          ? 'bg-amber-500 text-slate-950 font-black shadow-xs'
                           : copyTradeStep > 1
-                          ? isLightTheme ? 'text-zinc-800 bg-white/80' : 'text-zinc-200 bg-slate-900/80'
-                          : isLightTheme ? 'text-zinc-500 hover:text-zinc-800' : 'text-zinc-400 hover:text-zinc-200'
+                          ? isLightTheme ? 'bg-white text-emerald-700 font-bold border border-zinc-200' : 'bg-slate-900 text-emerald-400 font-bold'
+                          : isLightTheme ? 'text-zinc-500 hover:text-zinc-800' : 'text-zinc-400 hover:text-white'
                       }`}
                     >
-                      <span className="w-4 h-4 rounded-full bg-slate-950/20 flex items-center justify-center text-[10px] font-black shrink-0">1</span>
-                      <span className="truncate hidden xs:inline font-sans font-bold">1. Overview</span>
-                      <span className="truncate xs:hidden font-sans font-bold">Overview</span>
-                      {copyTradeStep > 1 && <CheckCircle size={13} className="shrink-0 text-emerald-600 dark:text-emerald-400" />}
+                      <span className="text-[10px] font-black uppercase tracking-wider">1. Schedule</span>
                     </button>
 
                     <button
                       type="button"
                       onClick={() => setCopyTradeStep(2)}
-                      className={`py-2 px-2 sm:px-3 rounded-xl font-extrabold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                      className={`py-1.5 px-2 rounded-lg text-center transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
                         copyTradeStep === 2
-                          ? 'bg-amber-500 text-slate-950 shadow-xs'
+                          ? 'bg-amber-500 text-slate-950 font-black shadow-xs'
                           : copyTradeStep > 2
-                          ? isLightTheme ? 'text-zinc-800 bg-white/80' : 'text-zinc-200 bg-slate-900/80'
-                          : isLightTheme ? 'text-zinc-500 hover:text-zinc-800' : 'text-zinc-400 hover:text-zinc-200'
+                          ? isLightTheme ? 'bg-white text-emerald-700 font-bold border border-zinc-200' : 'bg-slate-900 text-emerald-400 font-bold'
+                          : isLightTheme ? 'text-zinc-500 hover:text-zinc-800' : 'text-zinc-400 hover:text-white'
                       }`}
                     >
-                      <span className="w-4 h-4 rounded-full bg-slate-950/20 flex items-center justify-center text-[10px] font-black shrink-0">2</span>
-                      <span className="truncate hidden xs:inline font-sans font-bold">2. Capital & Pair</span>
-                      <span className="truncate xs:hidden font-sans font-bold">Capital</span>
-                      {copyTradeStep > 2 && <CheckCircle size={13} className="shrink-0 text-emerald-600 dark:text-emerald-400" />}
+                      <span className="text-[10px] font-black uppercase tracking-wider">2. Capital</span>
                     </button>
 
                     <button
                       type="button"
                       onClick={() => setCopyTradeStep(3)}
-                      className={`py-2 px-2 sm:px-3 rounded-xl font-extrabold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                      className={`py-1.5 px-2 rounded-lg text-center transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
                         copyTradeStep === 3
-                          ? 'bg-amber-500 text-slate-950 shadow-xs'
-                          : isLightTheme ? 'text-zinc-500 hover:text-zinc-800' : 'text-zinc-400 hover:text-zinc-200'
+                          ? 'bg-amber-500 text-slate-950 font-black shadow-xs animate-pulse'
+                          : isLightTheme ? 'text-zinc-500 hover:text-zinc-800' : 'text-zinc-400 hover:text-white'
                       }`}
                     >
-                      <span className="w-4 h-4 rounded-full bg-slate-950/20 flex items-center justify-center text-[10px] font-black shrink-0">3</span>
-                      <span className="truncate hidden xs:inline font-sans font-bold">3. Signal & Run</span>
-                      <span className="truncate xs:hidden font-sans font-bold">Signal</span>
+                      <span className="text-[10px] font-black uppercase tracking-wider">3. Execute</span>
                     </button>
                   </div>
 
-                  {/* STEP 1: Expert Overview & Schedule */}
+                  {/* STEP 1: Compact Parameters & Schedule */}
                   {copyTradeStep === 1 && (
-                    <div className="space-y-5 animate-fade-in">
-                      {/* Expert Description Section */}
-                      <div className={`p-4.5 rounded-2xl border space-y-2 text-xs ${
-                        isLightTheme ? 'bg-amber-50/80 border-amber-200/80 text-zinc-900' : 'bg-slate-950/80 border-slate-800 text-white'
-                      }`}>
-                        <span className={`text-[10px] font-black uppercase tracking-wider block ${
-                          isLightTheme ? 'text-amber-800' : 'text-amber-400'
-                        }`}>About Expert Trader</span>
-                        <p className={`leading-relaxed ${isLightTheme ? 'text-zinc-700' : 'text-zinc-300'}`}>
-                          {selectedLeadForCopy.description || 'Professional cryptocurrency lead trader with proven track record in high-frequency algorithmic signals and strict risk management protocols.'}
-                        </p>
-                      </div>
-
-                      {/* Key Trader Parameters */}
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-                        <div className={`p-3.5 rounded-2xl border ${isLightTheme ? 'bg-zinc-50 border-zinc-200' : 'bg-slate-950/80 border-slate-800'}`}>
-                          <span className={`text-[9px] font-black uppercase tracking-wider block ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>Min Trade Capital</span>
-                          <span className={`font-extrabold font-mono text-base mt-0.5 block ${isLightTheme ? 'text-zinc-900' : 'text-white'}`}>
-                            ${selectedLeadForCopy.minCapital ?? 50} USD
+                    <div className="space-y-3.5 animate-fade-in">
+                      {/* Compact Stats Row */}
+                      <div className="grid grid-cols-4 gap-2 text-center text-xs">
+                        <div className={`p-2.5 rounded-xl border ${isLightTheme ? 'bg-zinc-50 border-zinc-200' : 'bg-slate-950/80 border-slate-800'}`}>
+                          <span className={`text-[8.5px] font-black uppercase tracking-wider block ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>Min</span>
+                          <span className={`font-extrabold font-mono text-xs sm:text-sm mt-0.5 block ${isLightTheme ? 'text-zinc-900' : 'text-white'}`}>
+                            ${selectedLeadForCopy.minCapital ?? 50}
                           </span>
                         </div>
-                        <div className={`p-3.5 rounded-2xl border ${isLightTheme ? 'bg-zinc-50 border-zinc-200' : 'bg-slate-950/80 border-slate-800'}`}>
-                          <span className={`text-[9px] font-black uppercase tracking-wider block ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>Max Trade Capital</span>
-                          <span className={`font-extrabold font-mono text-base mt-0.5 block ${isLightTheme ? 'text-zinc-900' : 'text-white'}`}>
-                            ${selectedLeadForCopy.maxCapital ?? 10000} USD
+                        <div className={`p-2.5 rounded-xl border ${isLightTheme ? 'bg-zinc-50 border-zinc-200' : 'bg-slate-950/80 border-slate-800'}`}>
+                          <span className={`text-[8.5px] font-black uppercase tracking-wider block ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>Max</span>
+                          <span className={`font-extrabold font-mono text-xs sm:text-sm mt-0.5 block ${isLightTheme ? 'text-zinc-900' : 'text-white'}`}>
+                            ${selectedLeadForCopy.maxCapital ?? 10000}
                           </span>
                         </div>
-                        <div className={`p-3.5 rounded-2xl border ${isLightTheme ? 'bg-amber-50/80 border-amber-200' : 'bg-amber-500/10 border-amber-500/20'}`}>
-                          <span className={`text-[9px] font-black uppercase tracking-wider block ${isLightTheme ? 'text-amber-900' : 'text-amber-400'}`}>Analysis Commission</span>
-                          <span className={`font-extrabold font-mono text-base mt-0.5 block ${isLightTheme ? 'text-amber-700' : 'text-amber-300'}`}>
-                            {selectedLeadForCopy.analysisCommission ?? 10}% cut
+                        <div className={`p-2.5 rounded-xl border ${isLightTheme ? 'bg-amber-50/80 border-amber-200' : 'bg-amber-500/10 border-amber-500/20'}`}>
+                          <span className={`text-[8.5px] font-black uppercase tracking-wider block ${isLightTheme ? 'text-amber-900' : 'text-amber-400'}`}>Commission</span>
+                          <span className={`font-extrabold font-mono text-xs sm:text-sm mt-0.5 block ${isLightTheme ? 'text-amber-700' : 'text-amber-300'}`}>
+                            {selectedLeadForCopy.analysisCommission ?? 10}%
                           </span>
                         </div>
-                        <div className={`p-3.5 rounded-2xl border ${isLightTheme ? 'bg-emerald-50/80 border-emerald-200' : 'bg-emerald-500/10 border-emerald-500/20'}`}>
-                          <span className={`text-[9px] font-black uppercase tracking-wider block ${isLightTheme ? 'text-emerald-900' : 'text-emerald-400'}`}>1 Day Profit Rate</span>
-                          <span className={`font-extrabold font-mono text-base mt-0.5 block ${isLightTheme ? 'text-emerald-700' : 'text-emerald-300'}`}>
-                            {selectedLeadForCopy.dayProfitRate ?? 2.0}% / day
+                        <div className={`p-2.5 rounded-xl border ${isLightTheme ? 'bg-emerald-50/80 border-emerald-200' : 'bg-emerald-500/10 border-emerald-500/20'}`}>
+                          <span className={`text-[8.5px] font-black uppercase tracking-wider block ${isLightTheme ? 'text-emerald-900' : 'text-emerald-400'}`}>Daily Yield</span>
+                          <span className={`font-extrabold font-mono text-xs sm:text-sm mt-0.5 block ${isLightTheme ? 'text-emerald-700' : 'text-emerald-300'}`}>
+                            +{selectedLeadForCopy.dayProfitRate ?? 2.0}%
                           </span>
                         </div>
                       </div>
 
-                      {/* Trading Times & Signal Windows */}
-                      <div className={`p-4 sm:p-5 rounded-2xl border space-y-3 ${
+                      {/* Daily Signal Schedule List */}
+                      <div className={`p-3 sm:p-3.5 rounded-xl border space-y-2.5 ${
                         isLightTheme ? 'bg-zinc-50 border-zinc-200' : 'bg-slate-950 border-slate-800'
                       }`}>
                         {(() => {
@@ -5397,27 +5616,22 @@ export default function StandardUserDashboard({
                           const userTzInfo = getUserTimezoneInfo(userCountry);
 
                           return (
-                            <div className="flex items-center justify-between flex-wrap gap-2">
-                              <span className={`text-xs font-extrabold uppercase tracking-wider ${isLightTheme ? 'text-zinc-700' : 'text-zinc-300'}`}>
-                                Trading Times & Daily Signals
+                            <div className="flex items-center justify-between flex-wrap gap-1.5 text-xs">
+                              <span className={`text-[10.5px] font-black uppercase tracking-wider ${isLightTheme ? 'text-zinc-700' : 'text-zinc-300'}`}>
+                                Today's Signals
                               </span>
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold font-mono flex items-center gap-1.5 ${
-                                  isLightTheme ? 'bg-amber-100 text-amber-900 border border-amber-200' : 'bg-amber-500/10 text-amber-300 border border-amber-500/20'
-                                }`}>
-                                  <Globe size={11} className="shrink-0 text-amber-600 dark:text-amber-400" />
-                                  <span>{userTzInfo.flag} {userTzInfo.label} Time ({userTzInfo.code})</span>
-                                </span>
-                                <span className={`text-[10px] font-bold font-mono ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>
-                                  Contract: {selectedLeadForCopy.contractDurationDays ?? 30} Days (Excl. Sundays)
-                                </span>
-                              </div>
+                              <span className={`px-2 py-0.5 rounded-full text-[9.5px] font-bold font-mono flex items-center gap-1 ${
+                                isLightTheme ? 'bg-zinc-200/80 text-zinc-700' : 'bg-slate-800 text-zinc-300'
+                              }`}>
+                                <Globe size={10} className="shrink-0 text-amber-500" />
+                                <span>{userTzInfo.flag} {userTzInfo.code}</span>
+                              </span>
                             </div>
                           );
                         })()}
 
                         {selectedLeadForCopy.signals && selectedLeadForCopy.signals.length > 0 ? (
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                             {selectedLeadForCopy.signals.map((sig, idx) => {
                               const activeSig = getActiveSignalForLead(selectedLeadForCopy);
                               const isActive = activeSig && activeSig.time === sig.time && !activeSig.isExtra;
@@ -5427,57 +5641,35 @@ export default function StandardUserDashboard({
                               return (
                                 <div 
                                   key={idx}
-                                  className={`p-3.5 rounded-xl border transition-all flex items-center justify-between ${
+                                  className={`p-2.5 rounded-lg border transition-all flex items-center justify-between ${
                                     isExecuted
-                                      ? isLightTheme ? 'bg-zinc-100/80 border-zinc-200 text-zinc-500' : 'bg-slate-900/60 border-slate-800 text-zinc-500'
+                                      ? isLightTheme ? 'bg-zinc-100/80 border-zinc-200 text-zinc-400' : 'bg-slate-900/60 border-slate-800 text-zinc-500'
                                       : isActive
-                                      ? isLightTheme ? 'bg-emerald-100/90 border-emerald-400 text-emerald-950 shadow-xs' : 'bg-emerald-500/20 border-emerald-500 text-emerald-200 shadow-sm'
+                                      ? isLightTheme ? 'bg-emerald-100/90 border-emerald-400 text-emerald-950 shadow-2xs' : 'bg-emerald-500/20 border-emerald-500 text-emerald-200'
                                       : isLightTheme ? 'bg-white border-zinc-200 text-zinc-800' : 'bg-slate-900 border-slate-800 text-zinc-300'
                                   }`}
                                 >
-                                  <div className="min-w-0 flex-1 pr-2">
+                                  <div className="min-w-0 pr-2">
                                     <div className="flex items-center gap-1.5 flex-wrap">
-                                      {fmtSig.isDifferentCountry ? (
-                                        <>
-                                          <span className="text-xs sm:text-sm font-black font-mono tracking-tight text-amber-700 dark:text-amber-300">
-                                            {fmtSig.localTimeStr}
-                                          </span>
-                                          <span className={`text-[9px] font-extrabold font-mono px-1.5 py-0.5 rounded ${
-                                            isLightTheme ? 'bg-amber-100 text-amber-900 border border-amber-200' : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                                          }`}>
-                                            {fmtSig.userCountryInfo.flag} {fmtSig.userCountryInfo.code}
-                                          </span>
-                                        </>
-                                      ) : (
-                                        <span className="text-xs sm:text-sm font-black font-mono tracking-tight">
-                                          {sig.time || '12:00'} EAT
-                                        </span>
-                                      )}
-
+                                      <span className="text-xs font-black font-mono">
+                                        {fmtSig.localTimeStr}
+                                      </span>
                                       {isExecuted ? (
-                                        <span className="px-1.5 py-0.5 rounded-full bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 text-[9px] font-black uppercase tracking-wider flex items-center gap-1">
-                                          <CheckCircle size={10} className="text-emerald-500" /> Executed
+                                        <span className="px-1.5 py-0.2 rounded bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 text-[8.5px] font-black uppercase">
+                                          Done
                                         </span>
                                       ) : isActive ? (
-                                        <span className="px-1.5 py-0.5 rounded-full bg-emerald-500 text-slate-950 text-[9px] font-black uppercase tracking-wider animate-pulse">
-                                          Active Window (1h)
+                                        <span className="px-1.5 py-0.2 rounded bg-emerald-500 text-slate-950 text-[8.5px] font-black uppercase animate-pulse">
+                                          Active
                                         </span>
-                                      ) : (
-                                        <span className={`text-[10px] font-semibold ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>
-                                          (1h Window)
-                                        </span>
-                                      )}
+                                      ) : null}
                                     </div>
-
-                                    <div className="flex items-center gap-2 mt-1 flex-wrap">
-                                      <span className={`text-[10px] font-medium ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>
-                                        Regular Signal #{idx + 1}
-                                      </span>
-                                    </div>
+                                    <span className={`text-[9.5px] block ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                                      Signal #{idx + 1}
+                                    </span>
                                   </div>
 
                                   <div className="text-right shrink-0">
-                                    <span className={`text-[9px] font-extrabold block uppercase ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>Daily Share</span>
                                     <span className={`text-xs font-extrabold font-mono ${
                                       isExecuted ? 'text-zinc-400 line-through' : isLightTheme ? 'text-emerald-700' : 'text-emerald-400'
                                     }`}>
@@ -5489,75 +5681,59 @@ export default function StandardUserDashboard({
                             })}
                           </div>
                         ) : (
-                          <p className={`text-xs italic ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>No regular trading signals scheduled by expert.</p>
+                          <p className={`text-xs italic ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>No regular signals scheduled.</p>
                         )}
 
-                        {/* Extra Signals Section */}
+                        {/* Extra Signals (Streamlined) */}
                         {selectedLeadForCopy.extraSignals && selectedLeadForCopy.extraSignals.length > 0 && (() => {
                           const extraEligibility = getExtraSignalEligibility(selectedLeadForCopy);
 
                           return (
-                            <div className="space-y-2.5 pt-2.5 border-t border-dashed border-zinc-200 dark:border-zinc-800">
-                              <div className="flex items-center justify-between flex-wrap gap-2">
-                                <span className={`text-xs font-extrabold uppercase tracking-wider flex items-center gap-1.5 text-amber-500`}>
-                                  <span>⚡ Standalone Extra Signals</span>
+                            <div className="space-y-1.5 pt-1.5 border-t border-dashed border-zinc-200 dark:border-zinc-800">
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="text-[10px] font-black uppercase tracking-wider text-amber-500 flex items-center gap-1">
+                                  <span>⚡ Extra Signals (+3.5%)</span>
                                 </span>
-                                
                                 {extraEligibility.eligible ? (
-                                  <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider flex items-center gap-1 border shadow-2xs ${
-                                    extraEligibility.reason === 'new_user_boost'
-                                      ? isLightTheme ? 'bg-emerald-100 text-emerald-900 border-emerald-300' : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                                      : isLightTheme ? 'bg-amber-100 text-amber-900 border-amber-300' : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                                  }`}>
-                                    <Sparkles size={11} className="shrink-0 animate-pulse text-amber-500" />
-                                    <span>{extraEligibility.badgeText}</span>
+                                  <span className="text-[8.5px] font-black uppercase px-2 py-0.2 rounded-full border bg-emerald-100 dark:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-500/40">
+                                    Unlocked ({extraEligibility.badgeText})
                                   </span>
                                 ) : (
-                                  <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider flex items-center gap-1 border ${
-                                    isLightTheme ? 'bg-zinc-100 text-zinc-600 border-zinc-300' : 'bg-slate-800 text-zinc-400 border-slate-700'
-                                  }`}>
-                                    <Lock size={10} className="shrink-0 text-amber-500" />
-                                    <span>Extra Signals Locked</span>
-                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={handleCopyReferralLink}
+                                    className="px-2 py-0.5 rounded-full text-[8.5px] font-black uppercase tracking-wider flex items-center gap-1 bg-amber-500/15 hover:bg-amber-500/25 text-amber-800 dark:text-amber-300 border border-amber-500/30 transition-all cursor-pointer shadow-2xs active:scale-95"
+                                    title="Copy referral link to unlock"
+                                  >
+                                    <UserPlus size={9} className="text-amber-500 shrink-0" />
+                                    <span>Refer to Unlock</span>
+                                  </button>
                                 )}
                               </div>
 
-                              {/* Eligibility Status Banner */}
-                              {!extraEligibility.eligible ? (
-                                <div className={`p-3 rounded-xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 text-xs ${
-                                  isLightTheme ? 'bg-amber-50/90 border-amber-200 text-amber-950' : 'bg-amber-950/20 border-amber-900/40 text-amber-200'
+                              {/* Slim Refer to Unlock Notice Banner when locked */}
+                              {!extraEligibility.eligible && (
+                                <div className={`px-2.5 py-1.5 rounded-lg border text-xs flex items-center justify-between gap-2 ${
+                                  isLightTheme ? 'bg-amber-50/80 border-amber-300/80 text-amber-950' : 'bg-amber-950/20 border-amber-900/40 text-amber-200'
                                 }`}>
-                                  <div className="flex items-start gap-2 min-w-0">
-                                    <Lock size={15} className="text-amber-500 shrink-0 mt-0.5" />
-                                    <div className="space-y-0.5">
-                                      <p className="font-extrabold text-[11px] uppercase tracking-wide">How to Unlock Extra Signals</p>
-                                      <p className="text-[11px] leading-relaxed opacity-90">
-                                        Extra Signals unlock for the <strong className="underline">first 3 days</strong> of an active contract, or for <strong className="underline">24 hours</strong> whenever a friend you referred completes their first deposit.
-                                      </p>
-                                    </div>
+                                  <div className="flex items-center gap-1.5 min-w-0 text-[10.5px]">
+                                    <Sparkles size={12} className="text-amber-500 shrink-0 animate-pulse" />
+                                    <span className="truncate">
+                                      Unlock <strong>24h</strong> of +3.5% signals when a friend makes their 1st deposit!
+                                    </span>
                                   </div>
                                   <button
                                     type="button"
-                                    onClick={() => {
-                                      setSelectedLeadForCopy(null);
-                                      setActiveTab('earn');
-                                    }}
-                                    className="shrink-0 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-[10px] uppercase tracking-wider transition-all flex items-center gap-1 shadow-xs active:scale-95 cursor-pointer whitespace-nowrap"
+                                    onClick={handleCopyReferralLink}
+                                    className="px-2 py-0.5 rounded bg-slate-950 dark:bg-amber-400 text-amber-400 dark:text-slate-950 font-black text-[9px] uppercase tracking-wider shrink-0 transition-all flex items-center gap-1 cursor-pointer shadow-2xs"
                                   >
-                                    <Share2 size={12} />
-                                    <span>Invite & Unlock (+24h)</span>
+                                    <Copy size={9} />
+                                    <span>Copy Link</span>
                                   </button>
-                                </div>
-                              ) : (
-                                <div className={`px-3 py-2 rounded-xl border text-[11px] flex items-center gap-2 font-medium ${
-                                  isLightTheme ? 'bg-emerald-50 border-emerald-200 text-emerald-900' : 'bg-emerald-950/20 border-emerald-900/40 text-emerald-200'
-                                }`}>
-                                  <Sparkles size={13} className="text-emerald-500 shrink-0" />
-                                  <span>{extraEligibility.description}</span>
                                 </div>
                               )}
 
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                 {selectedLeadForCopy.extraSignals.map((es, idx) => {
                                   const activeSig = getActiveSignalForLead(selectedLeadForCopy);
                                   const isActive = activeSig && activeSig.time === es.time && activeSig.isExtra;
@@ -5567,64 +5743,39 @@ export default function StandardUserDashboard({
                                   return (
                                     <div
                                       key={`extra-${idx}`}
-                                      className={`p-3.5 rounded-xl border transition-all flex items-center justify-between ${
+                                      className={`p-2.5 rounded-lg border flex items-center justify-between ${
                                         isExecuted
-                                          ? isLightTheme ? 'bg-zinc-100/80 border-zinc-200 text-zinc-500' : 'bg-slate-900/60 border-slate-800 text-zinc-500'
+                                          ? isLightTheme ? 'bg-zinc-100/80 border-zinc-200 text-zinc-400' : 'bg-slate-900/60 border-slate-800 text-zinc-500'
                                           : !extraEligibility.eligible
-                                          ? isLightTheme ? 'bg-zinc-50 border-zinc-200 text-zinc-500 opacity-75' : 'bg-slate-900/40 border-slate-800 text-zinc-500 opacity-75'
+                                          ? isLightTheme ? 'bg-zinc-50 border-zinc-200 text-zinc-400 opacity-80' : 'bg-slate-900/40 border-slate-800 text-zinc-500 opacity-80'
                                           : isActive
-                                          ? isLightTheme ? 'bg-amber-100/90 border-amber-400 text-amber-950 shadow-xs' : 'bg-amber-500/20 border-amber-500 text-amber-200 shadow-sm'
+                                          ? isLightTheme ? 'bg-amber-100/90 border-amber-400 text-amber-950' : 'bg-amber-500/20 border-amber-500 text-amber-200'
                                           : isLightTheme ? 'bg-amber-50/40 border-amber-200/80 text-zinc-800' : 'bg-amber-950/20 border-amber-900/40 text-zinc-300'
                                       }`}
                                     >
-                                      <div className="min-w-0 flex-1 pr-2">
+                                      <div className="min-w-0 pr-2">
                                         <div className="flex items-center gap-1.5 flex-wrap">
-                                          {fmtSig.isDifferentCountry ? (
-                                            <>
-                                              <span className="text-xs sm:text-sm font-black font-mono tracking-tight text-amber-700 dark:text-amber-300">
-                                                {fmtSig.localTimeStr}
-                                              </span>
-                                              <span className={`text-[9px] font-extrabold font-mono px-1.5 py-0.5 rounded ${
-                                                isLightTheme ? 'bg-amber-100 text-amber-900 border border-amber-200' : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                                              }`}>
-                                                {fmtSig.userCountryInfo.flag} {fmtSig.userCountryInfo.code}
-                                              </span>
-                                            </>
-                                          ) : (
-                                            <span className="text-xs sm:text-sm font-black font-mono tracking-tight">
-                                              {es.time || '18:00'} EAT
-                                            </span>
-                                          )}
-
-                                          {isExecuted ? (
-                                            <span className="px-1.5 py-0.5 rounded-full bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 text-[9px] font-black uppercase tracking-wider flex items-center gap-1">
-                                              <CheckCircle size={10} className="text-emerald-500" /> Executed
-                                            </span>
-                                          ) : !extraEligibility.eligible ? (
-                                            <span className="px-1.5 py-0.5 rounded bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 text-[9px] font-extrabold uppercase flex items-center gap-1">
-                                              <Lock size={9} /> Locked
-                                            </span>
-                                          ) : isActive ? (
-                                            <span className="px-1.5 py-0.5 rounded-full bg-amber-500 text-slate-950 text-[9px] font-black uppercase tracking-wider animate-pulse">
-                                              Active Extra (1h)
-                                            </span>
-                                          ) : (
-                                            <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[9px] font-extrabold uppercase">
-                                              Extra
-                                            </span>
-                                          )}
-                                        </div>
-
-                                        <div className="flex items-center gap-2 mt-1 flex-wrap">
-                                          <span className={`text-[10px] font-medium ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>
-                                            {es.label || `Extra Signal #${idx + 1}`}
+                                          <span className="text-xs font-black font-mono">
+                                            {fmtSig.localTimeStr}
                                           </span>
+                                          {!extraEligibility.eligible ? (
+                                            <button
+                                              type="button"
+                                              onClick={handleCopyReferralLink}
+                                              className="text-[8.5px] font-black text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-0.5 cursor-pointer"
+                                              title="Refer friend to unlock"
+                                            >
+                                              <Lock size={8} /> Refer to Unlock
+                                            </button>
+                                          ) : null}
                                         </div>
+                                        <span className={`text-[9.5px] block ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                                          {es.label || `Extra Signal #${idx + 1}`}
+                                        </span>
                                       </div>
 
                                       <div className="text-right shrink-0">
-                                        <span className={`text-[9px] font-extrabold block uppercase text-amber-500`}>Extra Rate</span>
-                                        <span className={`text-xs font-extrabold font-mono text-amber-400 ${isExecuted || !extraEligibility.eligible ? 'opacity-60' : ''}`}>
+                                        <span className="text-xs font-black font-mono text-amber-500">
                                           +{(es.profitRate ?? 3.5).toFixed(2)}%
                                         </span>
                                       </div>
@@ -5638,24 +5789,24 @@ export default function StandardUserDashboard({
                       </div>
 
                       {/* Step 1 Actions */}
-                      <div className="pt-3 flex flex-col sm:flex-row gap-2.5 sm:gap-3">
+                      <div className="pt-2 flex gap-2">
                         <button
                           type="button"
                           onClick={() => setSelectedLeadForCopy(null)}
-                          className={`w-full sm:flex-1 py-3 px-4 rounded-xl border text-xs sm:text-sm font-bold cursor-pointer transition-all flex items-center justify-center gap-2 active:scale-[0.98] whitespace-nowrap ${
+                          className={`flex-1 py-2.5 px-3 rounded-xl border text-xs font-bold cursor-pointer transition-all flex items-center justify-center gap-1.5 active:scale-[0.98] ${
                             isLightTheme ? 'bg-zinc-100 hover:bg-zinc-200 border-zinc-200 text-zinc-700' : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-zinc-200'
                           }`}
                         >
-                          <ArrowLeft size={16} className="shrink-0" />
-                          <span>Back to Experts</span>
+                          <ArrowLeft size={14} className="shrink-0" />
+                          <span>Back</span>
                         </button>
                         <button
                           type="button"
                           onClick={() => setCopyTradeStep(2)}
-                          className="w-full sm:flex-1 py-3 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs sm:text-sm shadow-md shadow-amber-500/20 border border-amber-400 cursor-pointer transition-all flex items-center justify-center gap-2 active:scale-[0.98] whitespace-nowrap"
+                          className="flex-1 py-2.5 px-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs shadow-xs border border-amber-400 cursor-pointer transition-all flex items-center justify-center gap-1.5 active:scale-[0.98]"
                         >
-                          <span>Next</span>
-                          <ArrowRight size={16} className="shrink-0" />
+                          <span>Next: Configure Capital</span>
+                          <ArrowRight size={14} className="shrink-0" />
                         </button>
                       </div>
                     </div>
@@ -5663,27 +5814,20 @@ export default function StandardUserDashboard({
 
                   {/* STEP 2: Configure Capital & Pair */}
                   {copyTradeStep === 2 && (
-                    <div className="space-y-5 animate-fade-in">
-                      <div className="flex items-center justify-between pb-2 border-b border-zinc-200/80 dark:border-slate-800">
-                        <h4 className={`text-xs font-extrabold uppercase tracking-wider ${isLightTheme ? 'text-amber-800' : 'text-amber-400'}`}>
-                          Step 2: Configure Trading Pair & Capital Amount
-                        </h4>
-                      </div>
-
+                    <div className="space-y-3.5 animate-fade-in">
                       {/* Trading Pair Selection */}
-                      <div className="space-y-2.5">
-                        <div className="flex items-center justify-between">
-                          <label className={`text-xs font-black uppercase tracking-wider block ${isLightTheme ? 'text-zinc-700' : 'text-zinc-300'}`}>
-                            Select Trading Pair
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between text-xs">
+                          <label className={`font-black uppercase tracking-wider text-[10.5px] block ${isLightTheme ? 'text-zinc-700' : 'text-zinc-300'}`}>
+                            Trading Pair
                           </label>
-                          <span className={`text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full ${
-                            isLightTheme ? 'bg-amber-100 text-amber-900 border border-amber-200' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                          <span className={`text-[9.5px] font-mono font-bold px-2 py-0.5 rounded-full ${
+                            isLightTheme ? 'bg-amber-100 text-amber-900' : 'bg-amber-500/10 text-amber-400'
                           }`}>
-                            Active: {copyTradePair}
+                            {copyTradePair}
                           </span>
                         </div>
 
-                        {/* Custom Modern Dropdown Selector (No native OS select wheel) */}
                         <TradingPairSelector
                           value={copyTradePair}
                           onChange={(val) => setCopyTradePair(val)}
@@ -5694,11 +5838,9 @@ export default function StandardUserDashboard({
                           }
                           isLightTheme={isLightTheme}
                         />
-
-
                       </div>
 
-                      {/* Capital Breakdown & Quick Amount Selection */}
+                      {/* Capital Amount Configuration */}
                       {(() => {
                         const { rawLockedCapital, activeContractCapitalByLead } = getCopyTradeLockedAndFree();
                         const totalBal = profile?.tradeBalance ?? 0;
@@ -5706,229 +5848,151 @@ export default function StandardUserDashboard({
                         const currentLeadLockedCap = activeContractCapitalByLead[currentLeadKey] || 0;
                         const lockedInOtherExperts = Math.max(0, rawLockedCapital - currentLeadLockedCap);
                         const availableForThisLead = Math.max(0, totalBal - lockedInOtherExperts);
-                        const freeProfits = Math.max(0, totalBal - rawLockedCapital);
-                        const inputAmt = parseFloat(copyTradeAmountInput) || 0;
-                        
-                        const isHigherThanLocked = currentLeadLockedCap > 0 && inputAmt > (currentLeadLockedCap + 0.001);
-                        const isEqualToLocked = currentLeadLockedCap > 0 && Math.abs(inputAmt - currentLeadLockedCap) < 0.01;
-                        const isFullBalance = availableForThisLead > 0 && Math.abs(inputAmt - availableForThisLead) < 0.01;
-                        const extraIncludedProfit = inputAmt > currentLeadLockedCap ? Math.min(inputAmt - currentLeadLockedCap, freeProfits) : 0;
 
                         return (
-                          <div className="space-y-3">
-                            {/* Quick Amount Selection Block */}
-                            {currentLeadLockedCap > 0 && freeProfits > 0 && (
-                              <div className={`p-3.5 sm:p-4 rounded-2xl border space-y-2.5 ${
-                                isLightTheme ? 'bg-zinc-100/80 border-zinc-200/90' : 'bg-slate-950 border-slate-800'
-                              }`}>
-                                <div className="flex items-center justify-between">
-                                  <span className={`text-[10px] font-black uppercase tracking-wider block ${isLightTheme ? 'text-zinc-600' : 'text-zinc-400'}`}>
-                                    Quick Allocation Strategy:
-                                  </span>
-                                  <span className={`text-[10px] font-extrabold font-mono ${isLightTheme ? 'text-amber-800' : 'text-amber-400'}`}>
-                                    Free Profit: +${freeProfits.toFixed(2)}
-                                  </span>
-                                </div>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                                  {/* Principal Only Button (Blue / Protection Theme) */}
-                                  <button
-                                    type="button"
-                                    onClick={() => setCopyTradeAmountInput(currentLeadLockedCap.toFixed(2))}
-                                    className={`py-3 px-3.5 rounded-xl text-xs font-extrabold transition-all border-2 cursor-pointer flex items-center justify-between gap-2 active:scale-[0.98] ${
-                                      isEqualToLocked
-                                        ? 'bg-blue-600 text-white border-blue-500 shadow-md ring-2 ring-blue-400/40'
-                                        : isLightTheme 
-                                          ? 'bg-blue-50/90 hover:bg-blue-100/90 border-blue-200 text-blue-950' 
-                                          : 'bg-blue-950/40 hover:bg-blue-900/60 border-blue-800/80 text-blue-100'
-                                    }`}
-                                  >
-                                    <div className="flex items-center gap-2 truncate">
-                                      <div className={`p-1.5 rounded-lg shrink-0 ${
-                                        isEqualToLocked ? 'bg-white/20 text-white' : 'bg-blue-500/20 text-blue-600 dark:text-blue-400'
-                                      }`}>
-                                        <Lock size={15} />
-                                      </div>
-                                      <div className="text-left truncate">
-                                        <div className="flex items-center gap-1.5">
-                                          <span className="font-extrabold text-xs truncate">Principal Only</span>
-                                        </div>
-                                        <span className={`text-[9px] font-semibold block leading-none mt-0.5 ${
-                                          isEqualToLocked ? 'text-blue-100' : isLightTheme ? 'text-blue-700' : 'text-blue-300'
-                                        }`}>
-                                          Original Capital
-                                        </span>
-                                      </div>
-                                    </div>
-                                    <span className="font-mono text-xs sm:text-sm font-black shrink-0 ml-1">
-                                      ${currentLeadLockedCap.toFixed(2)}
-                                    </span>
-                                  </button>
-
-                                  {/* Re-invest Profits Button (Emerald / Growth Theme) */}
-                                  <button
-                                    type="button"
-                                    onClick={() => setCopyTradeAmountInput(availableForThisLead.toFixed(2))}
-                                    className={`py-3 px-3.5 rounded-xl text-xs font-extrabold transition-all border-2 cursor-pointer flex items-center justify-between gap-2 active:scale-[0.98] ${
-                                      isFullBalance
-                                        ? 'bg-emerald-600 text-white border-emerald-500 shadow-md ring-2 ring-emerald-400/40'
-                                        : isLightTheme 
-                                          ? 'bg-emerald-50/90 hover:bg-emerald-100/90 border-emerald-200 text-emerald-950' 
-                                          : 'bg-emerald-950/40 hover:bg-emerald-900/60 border-emerald-800/80 text-emerald-100'
-                                    }`}
-                                  >
-                                    <div className="flex items-center gap-2 truncate">
-                                      <div className={`p-1.5 rounded-lg shrink-0 ${
-                                        isFullBalance ? 'bg-white/20 text-white' : 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400'
-                                      }`}>
-                                        <Zap size={15} />
-                                      </div>
-                                      <div className="text-left truncate">
-                                        <div className="flex items-center gap-1.5">
-                                          <span className="font-extrabold text-xs truncate">Re-invest Profits</span>
-                                        </div>
-                                        <span className={`text-[9px] font-semibold block leading-none mt-0.5 ${
-                                          isFullBalance ? 'text-emerald-100' : isLightTheme ? 'text-emerald-700' : 'text-emerald-300'
-                                        }`}>
-                                          Capital + Profit
-                                        </span>
-                                      </div>
-                                    </div>
-                                    <span className="font-mono text-xs sm:text-sm font-black shrink-0 ml-1">
-                                      ${availableForThisLead.toFixed(2)}
-                                    </span>
-                                  </button>
-                                </div>
+                          <div className="space-y-2">
+                            <div className="flex justify-between items-center text-xs">
+                              <label className={`font-black uppercase tracking-wider text-[10.5px] ${isLightTheme ? 'text-zinc-700' : 'text-zinc-300'}`}>
+                                Trade Capital Amount (USD)
+                              </label>
+                              <div className="flex items-center gap-1.5">
+                                <span className={`text-[10.5px] font-mono ${isLightTheme ? 'text-zinc-600' : 'text-zinc-400'}`}>
+                                  Available: <strong className={isLightTheme ? 'text-amber-700' : 'text-amber-400'}>${availableForThisLead.toFixed(2)}</strong>
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setTransferModalType('IN');
+                                    setTransferAmountInput('');
+                                  }}
+                                  className="text-[10px] font-extrabold text-amber-600 hover:underline cursor-pointer ml-1"
+                                >
+                                  + Top up
+                                </button>
                               </div>
-                            )}
+                            </div>
 
-                            {/* Trade Amount Input */}
-                            <div className="space-y-1.5">
-                              <div className="flex justify-between items-center text-xs">
-                                <label className={`font-bold ${isLightTheme ? 'text-zinc-700' : 'text-zinc-300'}`}>
-                                  Trade Amount (USD)
-                                </label>
-                                <div className="flex items-center gap-2">
-                                  <span className={`text-[11px] font-mono ${isLightTheme ? 'text-zinc-600' : 'text-zinc-400'}`}>
-                                    Available: <strong className={isLightTheme ? 'text-amber-700' : 'text-amber-400'}>${availableForThisLead.toFixed(2)}</strong>
-                                    {lockedInOtherExperts > 0 && (
-                                      <span className="text-[10px] opacity-75 ml-1">($${lockedInOtherExperts.toFixed(2)} locked elsewhere)</span>
-                                    )}
-                                  </span>
+                            <div className={`relative flex items-center border rounded-xl px-3.5 py-2.5 ${
+                              isLightTheme 
+                                ? 'bg-zinc-50 border-zinc-300 focus-within:bg-white focus-within:border-amber-500' 
+                                : 'bg-slate-950 border-slate-800 focus-within:border-amber-500'
+                            }`}>
+                              <span className={`text-sm font-black font-mono mr-1.5 ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>$</span>
+                              <input
+                                type="number"
+                                step="any"
+                                placeholder={`Min $${selectedLeadForCopy.minCapital ?? 50}`}
+                                value={copyTradeAmountInput}
+                                onChange={(e) => setCopyTradeAmountInput(e.target.value)}
+                                className={`w-full bg-transparent font-mono text-sm font-black outline-none ${
+                                  isLightTheme ? 'text-zinc-900 placeholder:text-zinc-400' : 'text-white placeholder:text-zinc-600'
+                                }`}
+                              />
+                              <span className={`text-[10px] font-black font-mono uppercase ml-2 ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>USD</span>
+                            </div>
+
+                            {/* Preset Quick Chips */}
+                            <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                              {currentLeadLockedCap > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => setCopyTradeAmountInput(currentLeadLockedCap.toFixed(2))}
+                                  className="px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 transition-all cursor-pointer"
+                                >
+                                  Principal (${currentLeadLockedCap.toFixed(0)})
+                                </button>
+                              )}
+                              {[50, 100, 250, 500].map((presetVal) => (
+                                <button
+                                  key={presetVal}
+                                  type="button"
+                                  onClick={() => setCopyTradeAmountInput(presetVal.toString())}
+                                  className={`px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold transition-all cursor-pointer border ${
+                                    parseFloat(copyTradeAmountInput) === presetVal
+                                      ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-2xs'
+                                      : isLightTheme
+                                      ? 'bg-zinc-100 hover:bg-zinc-200 border-zinc-200 text-zinc-700'
+                                      : 'bg-slate-900 hover:bg-slate-800 border-slate-800 text-zinc-300'
+                                  }`}
+                                >
+                                  ${presetVal}
+                                </button>
+                              ))}
+                              {availableForThisLead > 0 && (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => setCopyTradeAmountInput((Math.floor(availableForThisLead * 0.5 * 100) / 100).toString())}
+                                    className="px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/20 transition-all cursor-pointer"
+                                  >
+                                    50%
+                                  </button>
                                   <button
                                     type="button"
                                     onClick={() => {
                                       const maxAvail = Math.min(availableForThisLead, selectedLeadForCopy.maxCapital ?? 10000);
                                       setCopyTradeAmountInput(maxAvail.toString());
                                     }}
-                                    className="px-2 py-0.5 rounded-md bg-amber-500 text-slate-950 text-[10px] font-black uppercase font-mono cursor-pointer hover:bg-amber-400"
+                                    className="px-2 py-0.5 rounded-lg text-[10px] font-mono font-black bg-amber-500 text-slate-950 hover:bg-amber-400 transition-all cursor-pointer uppercase shadow-2xs"
                                   >
                                     MAX
                                   </button>
-                                </div>
-                              </div>
-
-                              <div className={`relative flex items-center border rounded-2xl px-4 py-3 ${
-                                isLightTheme 
-                                  ? 'bg-zinc-50 border-zinc-300 focus-within:bg-white focus-within:border-amber-500' 
-                                  : 'bg-slate-950 border-slate-800 focus-within:border-amber-500'
-                              }`}>
-                                <span className={`text-base font-black font-mono mr-2 ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>$</span>
-                                <input
-                                  type="number"
-                                  step="any"
-                                  placeholder={`Min $${selectedLeadForCopy.minCapital ?? 50}`}
-                                  value={copyTradeAmountInput}
-                                  onChange={(e) => setCopyTradeAmountInput(e.target.value)}
-                                  className={`w-full bg-transparent font-mono text-base font-black outline-none ${
-                                    isLightTheme ? 'text-zinc-900 placeholder:text-zinc-400' : 'text-white placeholder:text-zinc-600'
-                                  }`}
-                                />
-                                <span className={`text-xs font-black font-mono uppercase ml-2 ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>USD</span>
-                              </div>
+                                </>
+                              )}
                             </div>
-
-                            {/* Dynamic Smart Guidance Banner */}
-                            {currentLeadLockedCap > 0 && freeProfits > 0 && inputAmt > 0 && (
-                              <>
-                                {isHigherThanLocked ? (
-                                  <div className={`p-3 rounded-xl border text-xs flex items-center gap-2.5 ${
-                                    isLightTheme ? 'bg-amber-50/90 border-amber-300 text-amber-950' : 'bg-amber-500/10 border-amber-500/30 text-amber-200'
-                                  }`}>
-                                    <HelpCircle size={16} className="shrink-0 text-amber-600 dark:text-amber-400" />
-                                    <p className="text-[11px] leading-relaxed">
-                                      Trading this amount will re-invest <strong>${extraIncludedProfit.toFixed(2)}</strong> of your free profit into contract principal. The remaining <strong>${Math.max(0, freeProfits - extraIncludedProfit).toFixed(2)} profit</strong> will stay free to withdraw.
-                                    </p>
-                                  </div>
-                                ) : isEqualToLocked ? (
-                                  <div className={`p-3 rounded-xl border text-xs flex items-center gap-2 font-medium ${
-                                    isLightTheme ? 'bg-emerald-50 border-emerald-300 text-emerald-950' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
-                                  }`}>
-                                    <CheckCircle size={15} className="shrink-0 text-emerald-600 dark:text-emerald-400" />
-                                    <span className="text-[11px] leading-tight">
-                                      Trading <strong>${currentLeadLockedCap.toFixed(2)} USD</strong> uses your existing active principal. Your <strong>${freeProfits.toFixed(2)} USD profit</strong> remains 100% free for instant withdrawal anytime!
-                                    </span>
-                                  </div>
-                                ) : null}
-                              </>
-                            )}
                           </div>
                         );
                       })()}
 
-                      {/* Live Profit Preview */}
-                      {parseFloat(copyTradeAmountInput) > 0 && (
-                        <div className={`p-3.5 rounded-2xl border text-xs space-y-1.5 font-mono ${
-                          isLightTheme ? 'bg-emerald-50/90 border-emerald-300/80 text-emerald-950' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-200'
-                        }`}>
-                          {(() => {
-                            const amt = parseFloat(copyTradeAmountInput) || 0;
-                            const numSigs = selectedLeadForCopy.signals?.length || 2;
-                            const dayRate = selectedLeadForCopy.dayProfitRate ?? 2.0;
-                            const sigRate = dayRate / numSigs;
-                            const gross = amt * (sigRate / 100);
-                            const commPct = selectedLeadForCopy.analysisCommission ?? 10;
-                            const comm = gross * (commPct / 100);
-                            const net = gross - comm;
-                            return (
-                              <>
-                                <div className="flex justify-between">
-                                  <span className={`font-sans font-medium ${isLightTheme ? 'text-zinc-700' : 'text-zinc-300'}`}>Signal Gross Profit (+{sigRate.toFixed(2)}%):</span>
-                                  <strong className={`font-extrabold ${isLightTheme ? 'text-emerald-700' : 'text-emerald-400'}`}>+${gross.toFixed(2)} USD</strong>
-                                </div>
-                                <div className="flex justify-between">
-                                  <span className={`font-sans font-medium ${isLightTheme ? 'text-zinc-700' : 'text-zinc-300'}`}>Analysis Commission ({commPct}%):</span>
-                                  <strong className={`font-extrabold ${isLightTheme ? 'text-amber-700' : 'text-amber-400'}`}>-${comm.toFixed(2)} USD</strong>
-                                </div>
-                                <div className={`flex justify-between border-t pt-1.5 ${isLightTheme ? 'border-emerald-300/80' : 'border-emerald-500/20'}`}>
-                                  <span className={`font-sans font-extrabold ${isLightTheme ? 'text-emerald-950' : 'text-emerald-100'}`}>Estimated Net Profit Credited:</span>
-                                  <strong className={`font-black text-sm ${isLightTheme ? 'text-emerald-800' : 'text-emerald-300'}`}>+${net.toFixed(2)} USD</strong>
-                                </div>
-                              </>
-                            );
-                          })()}
-                        </div>
-                      )}
+                      {/* Compact Return Forecast Card */}
+                      {parseFloat(copyTradeAmountInput) > 0 && (() => {
+                        const amt = parseFloat(copyTradeAmountInput) || 0;
+                        const numSigs = selectedLeadForCopy.signals?.length || 2;
+                        const dayRate = selectedLeadForCopy.dayProfitRate ?? 2.0;
+                        const sigRate = dayRate / numSigs;
+                        const gross = amt * (sigRate / 100);
+                        const commPct = selectedLeadForCopy.analysisCommission ?? 10;
+                        const comm = gross * (commPct / 100);
+                        const netPerSig = gross - comm;
+                        const contractDays = selectedLeadForCopy.contractDurationDays ?? 30;
+                        const totalEstNetProfit = netPerSig * numSigs * contractDays;
+
+                        return (
+                          <div className={`p-3 rounded-xl border space-y-1.5 font-mono text-xs ${
+                            isLightTheme ? 'bg-emerald-50/70 border-emerald-200 text-emerald-950' : 'bg-emerald-950/20 border-emerald-500/30 text-emerald-200'
+                          }`}>
+                            <div className="flex justify-between items-center text-[11px]">
+                              <span className="font-sans text-zinc-600 dark:text-zinc-400">Single Signal Net (+{sigRate.toFixed(2)}%):</span>
+                              <strong className="text-emerald-600 dark:text-emerald-400 font-black">+${netPerSig.toFixed(2)} USD</strong>
+                            </div>
+                            <div className="flex justify-between items-center text-xs border-t border-emerald-200/60 dark:border-emerald-500/20 pt-1">
+                              <span className="font-sans font-bold text-zinc-700 dark:text-zinc-300">Est. {contractDays}-Day Full Return:</span>
+                              <strong className="text-emerald-700 dark:text-emerald-300 font-black">+${totalEstNetProfit.toFixed(2)} USD</strong>
+                            </div>
+                          </div>
+                        );
+                      })()}
 
                       {/* Step 2 Actions */}
-                      <div className="pt-3 flex flex-col sm:flex-row gap-2.5 sm:gap-3">
+                      <div className="pt-2 flex gap-2">
                         <button
                           type="button"
                           onClick={() => setCopyTradeStep(1)}
-                          className={`w-full sm:flex-1 py-3 px-4 rounded-xl border text-xs sm:text-sm font-bold cursor-pointer transition-all flex items-center justify-center gap-2 active:scale-[0.98] whitespace-nowrap ${
+                          className={`flex-1 py-2.5 px-3 rounded-xl border text-xs font-bold cursor-pointer transition-all flex items-center justify-center gap-1.5 active:scale-[0.98] ${
                             isLightTheme ? 'bg-zinc-100 hover:bg-zinc-200 border-zinc-200 text-zinc-700' : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-zinc-200'
                           }`}
                         >
-                          <ArrowLeft size={16} className="shrink-0" />
+                          <ArrowLeft size={14} className="shrink-0" />
                           <span>Previous</span>
                         </button>
                         <button
                           type="button"
                           disabled={!copyTradeAmountInput || parseFloat(copyTradeAmountInput) < (selectedLeadForCopy.minCapital ?? 50)}
                           onClick={() => setCopyTradeStep(3)}
-                          className="w-full sm:flex-1 py-3 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs sm:text-sm shadow-md shadow-amber-500/20 border border-amber-400 cursor-pointer transition-all flex items-center justify-center gap-2 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                          className="flex-1 py-2.5 px-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs shadow-xs border border-amber-400 cursor-pointer transition-all flex items-center justify-center gap-1.5 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          <span>Next</span>
-                          <ArrowRight size={16} className="shrink-0" />
+                          <span>Next: Signal Code</span>
+                          <ArrowRight size={14} className="shrink-0" />
                         </button>
                       </div>
                     </div>
@@ -5936,14 +6000,8 @@ export default function StandardUserDashboard({
 
                   {/* STEP 3: Signal Code & Execute */}
                   {copyTradeStep === 3 && (
-                    <div className="space-y-5 animate-fade-in">
-                      <div className="flex items-center justify-between pb-2 border-b border-zinc-200/80 dark:border-slate-800">
-                        <h4 className={`text-xs font-extrabold uppercase tracking-wider ${isLightTheme ? 'text-amber-800' : 'text-amber-400'}`}>
-                          Step 3: Enter Unique Signal Code & Confirm Execution
-                        </h4>
-                      </div>
-
-                      {/* Trade Summary Review Box */}
+                    <div className="space-y-3.5 animate-fade-in">
+                      {/* Compact Trade Summary Review */}
                       {(() => {
                         const activeSig = getActiveSignalForLead(selectedLeadForCopy);
                         const isExtra = Boolean(activeSig?.isExtra) || (selectedLeadForCopy.extraSignals || []).some(es => (es.code || '').toUpperCase() === copySignalCodeInput.trim().toUpperCase());
@@ -5953,7 +6011,6 @@ export default function StandardUserDashboard({
                           t => (t.leadId === selectedLeadForCopy.id || t.leadName === selectedLeadForCopy.name) && t.status === 'ACTIVE'
                         );
                         const lockedPrincipalCapital = existingActiveContract?.contractCapital || existingActiveContract?.amount || parseFloat(copyTradeAmountInput) || (selectedLeadForCopy.minCapital ?? 50);
-
                         const tradeCap = isExtra ? lockedPrincipalCapital : (parseFloat(copyTradeAmountInput) || 0);
 
                         let rate = 0;
@@ -5971,132 +6028,103 @@ export default function StandardUserDashboard({
                         const net = gross - comm;
 
                         return (
-                          <div className="space-y-3">
-                            {/* Extra Signal Eligibility Banner in Step 3 */}
-                            {isExtra && (
-                              extraEligibility?.eligible ? (
-                                <div className={`p-3 rounded-2xl border flex items-center justify-between gap-2 text-xs ${
-                                  extraEligibility.reason === 'new_user_boost'
-                                    ? isLightTheme ? 'bg-emerald-50 border-emerald-300 text-emerald-950' : 'bg-emerald-950/20 border-emerald-500/40 text-emerald-300'
-                                    : isLightTheme ? 'bg-amber-50 border-amber-300 text-amber-950' : 'bg-amber-950/20 border-amber-500/40 text-amber-300'
-                                }`}>
-                                  <div className="flex items-center gap-2">
-                                    <Sparkles size={16} className="text-amber-500 shrink-0 animate-pulse" />
-                                    <span className="font-extrabold">{extraEligibility.badgeText}</span>
-                                  </div>
-                                  <span className="text-[10px] uppercase tracking-wider font-bold opacity-80">Extra Unlocked</span>
-                                </div>
-                              ) : (
-                                <div className={`p-3.5 rounded-2xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs ${
-                                  isLightTheme ? 'bg-amber-50/90 border-amber-300 text-amber-950' : 'bg-amber-950/30 border-amber-800 text-amber-200'
-                                }`}>
-                                  <div className="flex items-start gap-2.5">
-                                    <Lock size={16} className="text-amber-500 shrink-0 mt-0.5" />
-                                    <div>
-                                      <p className="font-black text-xs uppercase tracking-wide">Extra Signal Is Locked</p>
-                                      <p className="text-[11px] opacity-90 mt-0.5">
-                                        Extra Signals unlock for the <strong>first 3 days</strong> of a contract or for <strong>24h</strong> when a referral completes their first deposit.
-                                      </p>
-                                    </div>
-                                  </div>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setSelectedLeadForCopy(null);
-                                      setActiveTab('earn');
-                                    }}
-                                    className="shrink-0 px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-[11px] uppercase tracking-wider transition-all flex items-center gap-1 shadow-xs active:scale-95 cursor-pointer whitespace-nowrap"
-                                  >
-                                    <Share2 size={13} />
-                                    <span>Invite & Unlock (+24h)</span>
-                                  </button>
-                                </div>
-                              )
-                            )}
-
-                            <div className={`p-4 rounded-2xl border space-y-2.5 text-xs ${
-                              isLightTheme ? 'bg-zinc-50 border-zinc-200' : 'bg-slate-950 border-slate-800'
-                            }`}>
-                              <div className="flex justify-between items-center pb-2 border-b border-zinc-200/60 dark:border-slate-800">
-                                <span className={`font-bold ${isLightTheme ? 'text-zinc-600' : 'text-zinc-400'}`}>Expert Trader</span>
-                                <span className="font-extrabold">{selectedLeadForCopy.name}</span>
-                              </div>
-                              <div className="flex justify-between items-center">
-                                <span className={`font-bold ${isLightTheme ? 'text-zinc-600' : 'text-zinc-400'}`}>Selected Trading Pair</span>
-                                <span className="font-black font-mono text-amber-600 dark:text-amber-400">{copyTradePair}</span>
-                              </div>
-                              <div className="flex justify-between items-center">
-                                <span className={`font-bold ${isLightTheme ? 'text-zinc-600' : 'text-zinc-400'}`}>
-                                  {isExtra ? 'Traded Principal (Locked Capital)' : 'Trade Capital'}
-                                </span>
-                                <span className="font-black font-mono text-sm">${tradeCap.toFixed(2)} USD</span>
-                              </div>
-                              <div className="flex justify-between items-center">
-                                <span className={`font-bold ${isLightTheme ? 'text-zinc-600' : 'text-zinc-400'}`}>
-                                  {isExtra ? 'Extra Signal Profit Rate' : 'Signal Profit Rate'}
-                                </span>
-                                <span className={`font-black font-mono ${isExtra ? 'text-amber-500' : 'text-emerald-500'}`}>
-                                  +{rate.toFixed(2)}% {isExtra ? '(Standalone)' : ''}
-                                </span>
-                              </div>
-                              <div className="flex justify-between items-center pt-1 border-t border-zinc-200/60 dark:border-slate-800">
-                                <span className={`font-bold ${isLightTheme ? 'text-zinc-600' : 'text-zinc-400'}`}>Est. Net Profit</span>
-                                <span className="font-black font-mono text-emerald-600 dark:text-emerald-400">
-                                  +${net.toFixed(2)} USD
-                                </span>
-                              </div>
+                          <div className={`p-3 rounded-xl border space-y-1.5 text-xs ${
+                            isLightTheme ? 'bg-zinc-50 border-zinc-200' : 'bg-slate-950 border-slate-800'
+                          }`}>
+                            <div className="flex justify-between items-center text-[11px]">
+                              <span className={`font-medium ${isLightTheme ? 'text-zinc-600' : 'text-zinc-400'}`}>Pair & Trader:</span>
+                              <span className="font-extrabold">{copyTradePair} • {selectedLeadForCopy.name}</span>
+                            </div>
+                            <div className="flex justify-between items-center text-[11px]">
+                              <span className={`font-medium ${isLightTheme ? 'text-zinc-600' : 'text-zinc-400'}`}>Trade Capital:</span>
+                              <span className="font-black font-mono">${tradeCap.toFixed(2)} USD</span>
+                            </div>
+                            <div className="flex justify-between items-center text-xs border-t border-zinc-200/80 dark:border-slate-800 pt-1">
+                              <span className={`font-bold ${isLightTheme ? 'text-zinc-700' : 'text-zinc-300'}`}>Est. Net Profit:</span>
+                              <span className="font-black font-mono text-emerald-600 dark:text-emerald-400">
+                                +${net.toFixed(2)} USD (+{rate.toFixed(2)}%)
+                              </span>
                             </div>
                           </div>
                         );
                       })()}
 
-                      {/* Executed Warning if applicable */}
+                      {/* Signal Executed Status notice */}
                       {(() => {
                         const activeSig = getActiveSignalForLead(selectedLeadForCopy);
                         if (activeSig && isSignalExecutedToday(selectedLeadForCopy, activeSig)) {
                           return (
-                            <div className={`p-3.5 rounded-2xl border text-xs flex items-center gap-2.5 font-bold ${
+                            <div className={`p-2.5 rounded-xl border text-xs flex items-center gap-2 font-bold ${
                               isLightTheme ? 'bg-amber-50 border-amber-300 text-amber-900' : 'bg-amber-500/10 border-amber-500/30 text-amber-300'
                             }`}>
-                              <AlertCircle size={16} className="shrink-0 text-amber-600 dark:text-amber-400" />
-                              <span>You have already executed current active signal code ({activeSig.code}) today. Please wait for the next signal window.</span>
+                              <AlertCircle size={14} className="shrink-0 text-amber-600 dark:text-amber-400" />
+                              <span>Signal code ({activeSig.code}) was already executed today.</span>
                             </div>
                           );
                         }
                         return null;
                       })()}
 
-                      {/* Unique Signal Code Input */}
-                      <div className="space-y-1.5">
-                        <label className={`text-xs font-bold block ${isLightTheme ? 'text-zinc-700' : 'text-zinc-300'}`}>
-                          Unique Signal Code
+                      {/* Extra Signal Locked Referral Banner */}
+                      {(() => {
+                        const activeSig = getActiveSignalForLead(selectedLeadForCopy);
+                        const isExtra = Boolean(activeSig?.isExtra) || (selectedLeadForCopy.extraSignals || []).some(es => (es.code || '').toUpperCase() === copySignalCodeInput.trim().toUpperCase());
+                        const extraEligibility = isExtra ? getExtraSignalEligibility(selectedLeadForCopy) : null;
+                        const isBlockedByLock = isExtra && extraEligibility && !extraEligibility.eligible;
+
+                        if (isBlockedByLock) {
+                          return (
+                            <div className={`p-2.5 px-3 rounded-xl border text-xs flex items-center justify-between gap-2 font-medium ${
+                              isLightTheme ? 'bg-amber-50 border-amber-300 text-amber-950 shadow-2xs' : 'bg-amber-950/20 border-amber-900/50 text-amber-200'
+                            }`}>
+                              <div className="flex items-center gap-2 min-w-0">
+                                <Lock size={13} className="text-amber-500 shrink-0" />
+                                <span className="text-[11px] truncate">
+                                  Extra signal locked. <strong>Refer a friend</strong> to unlock for 24h!
+                                </span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={handleCopyReferralLink}
+                                className="px-2 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-[10px] font-black uppercase tracking-wider shrink-0 transition-all flex items-center gap-1 cursor-pointer shadow-2xs active:scale-95"
+                              >
+                                <UserPlus size={11} />
+                                <span>Refer Friend</span>
+                              </button>
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
+
+                      {/* Signal Code Input */}
+                      <div className="space-y-1">
+                        <label className={`text-[10.5px] font-black uppercase tracking-wider block ${isLightTheme ? 'text-zinc-700' : 'text-zinc-300'}`}>
+                          Signal Code
                         </label>
                         <input
                           type="text"
                           placeholder="Enter Signal Code (e.g. SIG1300)"
                           value={copySignalCodeInput}
                           onChange={(e) => setCopySignalCodeInput(e.target.value)}
-                          className={`w-full px-4 py-3.5 rounded-2xl border text-sm font-mono font-black tracking-wider uppercase outline-none ${
+                          className={`w-full px-3.5 py-2.5 rounded-xl border text-xs sm:text-sm font-mono font-black tracking-wider uppercase outline-none ${
                             isLightTheme 
                               ? 'bg-zinc-50 border-zinc-300 focus:bg-white focus:border-amber-500 text-zinc-900 placeholder:text-zinc-400' 
                               : 'bg-slate-950 border-slate-800 focus:border-amber-500 text-white placeholder:text-zinc-600'
                           }`}
                         />
-                        <p className={`text-[10px] italic ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>
-                          Note: The signal code is provided by the expert during the 1-hour active signal window.
-                        </p>
                       </div>
 
                       {/* Step 3 Actions */}
-                      <div className="pt-3 flex flex-col sm:flex-row gap-2.5 sm:gap-3">
+                      <div className="pt-2 flex gap-2">
                         <button
                           type="button"
                           onClick={() => setCopyTradeStep(2)}
-                          className={`w-full sm:flex-1 py-3 px-4 rounded-xl border text-xs sm:text-sm font-bold cursor-pointer transition-all flex items-center justify-center gap-2 active:scale-[0.98] whitespace-nowrap ${
+                          className={`flex-1 py-2.5 px-3 rounded-xl border text-xs font-bold cursor-pointer transition-all flex items-center justify-center gap-1.5 active:scale-[0.98] ${
                             isLightTheme ? 'bg-zinc-100 hover:bg-zinc-200 border-zinc-200 text-zinc-700' : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-zinc-200'
                           }`}
                         >
-                          <ArrowLeft size={16} className="shrink-0" />
+                          <ArrowLeft size={14} className="shrink-0" />
                           <span>Previous</span>
                         </button>
                         {(() => {
@@ -6111,28 +6139,28 @@ export default function StandardUserDashboard({
                               type="button"
                               disabled={isSubmittingCopy || isDone || Boolean(isBlockedByLock)}
                               onClick={handleExecuteCopyTrade}
-                              className={`w-full sm:flex-1 py-3 px-4 rounded-xl font-extrabold text-xs sm:text-sm shadow-md border cursor-pointer transition-all flex items-center justify-center gap-2 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap ${
+                              className={`flex-1 py-2.5 px-3 rounded-xl font-black text-xs shadow-xs border cursor-pointer transition-all flex items-center justify-center gap-1.5 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap ${
                                 isBlockedByLock
                                   ? 'bg-zinc-300 dark:bg-slate-800 border-zinc-400 dark:border-slate-700 text-zinc-600 dark:text-zinc-400'
                                   : 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-amber-500/20 border-amber-400'
                               }`}
                             >
                               {isSubmittingCopy ? (
-                                <RefreshCw size={16} className="animate-spin" />
+                                <RefreshCw size={14} className="animate-spin" />
                               ) : isDone ? (
-                                <span className="flex items-center gap-1.5">
-                                  <CheckCircle size={15} className="shrink-0 text-slate-900" />
-                                  <span>Signal Executed Today</span>
+                                <span className="flex items-center gap-1">
+                                  <CheckCircle size={13} className="shrink-0 text-slate-900" />
+                                  <span>Executed Today</span>
                                 </span>
                               ) : isBlockedByLock ? (
-                                <span className="flex items-center gap-1.5">
-                                  <Lock size={15} className="shrink-0" />
-                                  <span>Extra Signal Locked</span>
+                                <span className="flex items-center gap-1">
+                                  <Lock size={13} className="shrink-0" />
+                                  <span>Signal Locked</span>
                                 </span>
                               ) : (
-                                <span className="flex items-center gap-1.5">
-                                  <Zap size={15} className="shrink-0 text-slate-950" />
-                                  <span>Execute Copy Trade</span>
+                                <span className="flex items-center gap-1">
+                                  <Zap size={13} className="shrink-0 text-slate-950" />
+                                  <span>Execute Trade</span>
                                 </span>
                               )}
                             </button>

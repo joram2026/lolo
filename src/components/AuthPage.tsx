@@ -401,6 +401,20 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
         }
       }
 
+      // Prompt browser / PWA password manager to save credentials under current origin
+      if (typeof window !== 'undefined' && 'PasswordCredential' in window && navigator.credentials?.store) {
+        try {
+          const cred = new (window as any).PasswordCredential({
+            id: formattedEmail,
+            password: password,
+            name: displayName || formattedEmail.split('@')[0],
+          });
+          await navigator.credentials.store(cred);
+        } catch {
+          // Non-blocking credential store fallback
+        }
+      }
+
       localStorage.removeItem('pending_referral_code');
       onSuccess();
     } catch (err: any) {
@@ -562,6 +576,20 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
         if (has2fa) {
           setShow2faPrompt(true);
         } else {
+          // Prompt browser / PWA password manager to save/update credentials under current origin
+          if (typeof window !== 'undefined' && 'PasswordCredential' in window && navigator.credentials?.store) {
+            try {
+              const cred = new (window as any).PasswordCredential({
+                id: formattedEmail,
+                password: password,
+                name: formattedEmail.split('@')[0],
+              });
+              await navigator.credentials.store(cred);
+            } catch {
+              // Non-blocking credential store fallback
+            }
+          }
+
           localStorage.removeItem('pending_referral_code');
           onSuccess();
         }
@@ -1040,7 +1068,7 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
                           name="email"
                           type="email"
                           required
-                          autoComplete="email"
+                          autoComplete="username email"
                           autoCapitalize="none"
                           autoCorrect="off"
                           spellCheck={false}

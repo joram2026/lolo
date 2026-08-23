@@ -971,32 +971,32 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
               return (
                 <div className="grid grid-cols-2 gap-2.5 sm:gap-3 items-start">
                   <div 
-                    className="bg-[#FFF8E1] border border-zinc-200/80 shadow-sm rounded-2xl p-3.5 sm:p-4 flex flex-col justify-between transition-all duration-300 relative select-none cursor-pointer hover:bg-[#FFF5D1]"
+                    className="bg-white border border-zinc-200 shadow-xs rounded-2xl p-3.5 sm:p-4 flex flex-col justify-between transition-all duration-300 relative select-none cursor-pointer hover:border-amber-400 hover:shadow-sm"
                     onClick={() => setShowEarningsBreakdown(!showEarningsBreakdown)}
                   >
                     <div>
                       <div className="flex justify-between items-center">
-                        <span className="text-[9px] sm:text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Total Earned</span>
-                        <div className="text-amber-600">
+                        <span className="text-[9px] sm:text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider block">Total Earned</span>
+                        <div className="text-amber-500">
                           {showEarningsBreakdown ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                         </div>
                       </div>
                       <div className="mt-1 flex items-baseline gap-1">
-                        <span className="text-xl sm:text-2xl font-bold text-amber-600 font-mono">
+                        <span className="text-xl sm:text-2xl font-black text-amber-500 font-mono">
                           {grandTotal.toFixed(2)}
                         </span>
-                        <span className="text-[10px] sm:text-xs text-zinc-500 font-bold">USDT</span>
+                        <span className="text-[10px] sm:text-xs text-zinc-400 font-bold uppercase font-mono">USDT</span>
                       </div>
                     </div>
 
                     {!showEarningsBreakdown && (
-                      <p className="text-[8px] sm:text-[9px] text-zinc-500 font-bold mt-2 flex items-center gap-0.5 animate-fadeIn">
-                        <span>Tap to view breakdown</span>
+                      <p className="text-[8.5px] sm:text-[9.5px] text-zinc-400 font-semibold mt-2 flex items-center gap-0.5">
+                        <span>Tap for breakdown</span>
                       </p>
                     )}
 
                     {showEarningsBreakdown && (
-                      <div className="mt-2.5 pt-2.5 border-t border-zinc-200/50 space-y-1.5 text-left text-[9px] sm:text-[10px] text-zinc-600 animate-fadeIn" onClick={(e) => e.stopPropagation()}>
+                      <div className="mt-2.5 pt-2.5 border-t border-zinc-100 space-y-1.5 text-left text-[9px] sm:text-[10px] text-zinc-600 animate-fade-in" onClick={(e) => e.stopPropagation()}>
                         <div className="flex justify-between items-center">
                           <span className="flex items-center gap-1 font-medium">
                             <span className="text-amber-500">👥</span> Sign-ups:
@@ -1011,14 +1011,14 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                         </div>
 
                         {firstDepositCommissions.length > 0 && (
-                          <div className="mt-2 pt-2 border-t border-zinc-200/30 max-h-24 overflow-y-auto pr-1 space-y-1 text-[8px] sm:text-[9px]">
+                          <div className="mt-2 pt-2 border-t border-zinc-100 max-h-24 overflow-y-auto pr-1 space-y-1 text-[8px] sm:text-[9px]">
                             <div className="text-[8px] font-bold text-zinc-400 uppercase tracking-wider mb-1">Commission Logs</div>
                             {firstDepositCommissions.map((tx) => (
-                              <div key={tx.id} className="flex justify-between items-center bg-amber-500/5 px-1.5 py-1 rounded border border-amber-500/10 text-zinc-700">
+                              <div key={tx.id} className="flex justify-between items-center bg-zinc-50 px-2 py-1 rounded-lg border border-zinc-100 text-zinc-700">
                                 <span className="truncate max-w-[95px] sm:max-w-[120px]" title={tx.paymentMessage}>
                                   {tx.paymentMessage?.replace("Referral First Deposit Bonus", "Bonus") || "Deposit Bonus"}
                                 </span>
-                                <span className="font-bold font-mono text-amber-700 flex-shrink-0 font-mono">+${tx.amount?.toFixed(2)}</span>
+                                <span className="font-bold font-mono text-emerald-600 shrink-0">+${tx.amount?.toFixed(2)}</span>
                               </div>
                             ))}
                           </div>
@@ -1027,15 +1027,15 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                     )}
                   </div>
 
-                  <div className="bg-[#FFF8E1] border border-zinc-200/80 shadow-sm rounded-2xl p-3.5 sm:p-4 flex flex-col justify-between min-h-[92px]">
+                  <div className="bg-white border border-zinc-200 shadow-xs rounded-2xl p-3.5 sm:p-4 flex flex-col justify-between min-h-[92px]">
                     <div>
-                      <span className="text-[9px] sm:text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Successful Invites</span>
+                      <span className="text-[9px] sm:text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider block">Successful Invites</span>
                       <div className="mt-1 flex items-baseline gap-1">
-                        <span className="text-xl sm:text-2xl font-bold text-zinc-800 font-mono">{referredUsers.length}</span>
-                        <span className="text-[10px] sm:text-xs text-zinc-500 font-bold ml-1">friends</span>
+                        <span className="text-xl sm:text-2xl font-black text-zinc-900 font-mono">{referredUsers.length}</span>
+                        <span className="text-[10px] sm:text-xs text-zinc-400 font-bold ml-1">friends</span>
                       </div>
                     </div>
-                    <p className="text-[9px] sm:text-[10px] text-zinc-500 mt-2">Keep growing your circle!</p>
+                    <p className="text-[9px] sm:text-[10px] text-zinc-400 mt-2 font-medium">Keep growing your network!</p>
                   </div>
                 </div>
               );
@@ -1065,11 +1065,11 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
               ];
 
               return (
-                <div className="bg-[#FFF8E1] border border-zinc-200/80 shadow-sm rounded-2xl p-4 sm:p-5 space-y-4 text-left">
+                <div className="bg-white border border-zinc-200 shadow-xs rounded-2xl p-4 sm:p-5 space-y-4 text-left">
                   {/* Top Header Row */}
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-amber-200/60 pb-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-zinc-100 pb-3">
                     <div className="space-y-0.5">
-                      <span className="text-[9px] sm:text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Your Referral Tier</span>
+                      <span className="text-[9px] sm:text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider block">Your Referral Tier</span>
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className={`text-xs sm:text-sm font-bold px-2.5 py-0.5 rounded-full ${
                           count >= 40 ? 'bg-amber-500/10 text-amber-600 border border-amber-500/20' :
@@ -1088,8 +1088,8 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                       </div>
                     </div>
                     <div className="text-left sm:text-right">
-                      <span className="text-[9px] sm:text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Current Commission</span>
-                      <span className="text-xs sm:text-sm font-bold text-emerald-600 font-mono">
+                      <span className="text-[9px] sm:text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider block">Current Commission</span>
+                      <span className="text-xs sm:text-sm font-black text-emerald-600 font-mono">
                         {count >= 40 ? '0.40 USDT' : count >= 20 ? '0.30 USDT' : count >= 7 ? '0.20 USDT' : '0.10 USDT'} / ref
                       </span>
                     </div>
@@ -1098,10 +1098,10 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                   {/* Progress Track Section */}
                   <div className="pt-2 pb-1 px-1">
                     <div className="relative">
-                      {/* Background Connecting Line (Inset from edges so end nodes align cleanly) */}
-                      <div className="absolute top-2.5 left-[12.5%] right-[12.5%] h-1.5 bg-zinc-200/80 rounded-full overflow-hidden">
+                      {/* Background Connecting Line */}
+                      <div className="absolute top-2.5 left-[12.5%] right-[12.5%] h-1.5 bg-zinc-100 rounded-full overflow-hidden">
                         <div 
-                          className="h-full bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-400 transition-all duration-500"
+                          className="h-full bg-gradient-to-r from-amber-500 to-amber-400 rounded-full transition-all duration-500"
                           style={{ width: `${progressPercent}%` }}
                         />
                       </div>
@@ -1117,18 +1117,18 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                             <div className={`w-5 sm:w-6 h-5 sm:h-6 rounded-full border-2 flex items-center justify-center text-[9px] sm:text-[10px] font-bold shadow-xs transition-all ${
                               m.achieved 
                                 ? 'border-amber-500 bg-amber-500 text-white' 
-                                : 'border-zinc-300 bg-white text-zinc-400'
+                                : 'border-zinc-200 bg-white text-zinc-400'
                             }`}>
                               {m.badge}
                             </div>
                             
                             {/* Labels */}
-                            <span className={`text-[9px] sm:text-[10px] font-bold mt-1.5 whitespace-nowrap ${
+                            <span className={`text-[9px] sm:text-[10px] font-extrabold mt-1.5 whitespace-nowrap ${
                               m.achieved ? 'text-zinc-800' : 'text-zinc-400'
                             }`}>
                               {m.label}
                             </span>
-                            <span className="text-[8px] sm:text-[9px] text-zinc-500 font-mono font-medium whitespace-nowrap">
+                            <span className="text-[8px] sm:text-[9px] text-zinc-400 font-mono font-bold whitespace-nowrap">
                               {m.amount}
                             </span>
                           </div>
@@ -1141,23 +1141,23 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
             })()}
 
             {/* 4. LINK COPIER AND REFERRED FRIENDS LIST */}
-            <div className="bg-[#FFF8E1] border border-zinc-200 shadow-sm rounded-2xl p-3.5 sm:p-4 space-y-4">
+            <div className="bg-white border border-zinc-200 shadow-xs rounded-2xl p-3.5 sm:p-4 space-y-4">
               {/* Referral Link Box with Prominent Copy Button */}
               <div className="space-y-1.5">
-                <label className="text-[9px] sm:text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">
+                <label className="text-[9px] sm:text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider block">
                   Your Shareable Referral Link
                 </label>
-                <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center bg-white/80 border border-zinc-200 p-2 sm:p-2.5 rounded-xl font-mono text-xs">
+                <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center bg-zinc-50 border border-zinc-200 p-2 sm:p-2.5 rounded-xl font-mono text-xs">
                   <span className="text-zinc-700 font-medium select-all truncate flex-1 px-1 py-1 sm:py-0 text-[11px] sm:text-xs">
                     https://www.morex.site/#/signup?ref={(profile as any)?.uniqueCode || ''}
                   </span>
                   <button
                     type="button"
                     onClick={handleCopyReferral}
-                    className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-all cursor-pointer shrink-0 ${
+                    className={`px-3.5 py-2 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 shadow-xs active:scale-95 transition-all cursor-pointer shrink-0 uppercase tracking-wider ${
                       copiedReferral 
                         ? 'bg-emerald-600 hover:bg-emerald-700 text-white' 
-                        : 'bg-amber-500 hover:bg-amber-600 text-white'
+                        : 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-amber-500/20'
                     }`}
                   >
                     {copiedReferral ? (
@@ -1174,15 +1174,15 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                   </button>
                 </div>
                 {copiedReferral && (
-                  <span className="text-[10px] text-emerald-650 flex items-center gap-1.5 mt-1 font-semibold">
+                  <span className="text-[10px] text-emerald-600 flex items-center gap-1.5 mt-1 font-bold">
                     <Check size={10} /> Copied to clipboard! Share it with your friends.
                   </span>
                 )}
               </div>
 
               {/* Referred Users List */}
-              <div className="space-y-2 border-t border-zinc-200/80 pt-3">
-                <div className="flex justify-between items-center text-[9px] sm:text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+              <div className="space-y-2 border-t border-zinc-100 pt-3">
+                <div className="flex justify-between items-center text-[9px] sm:text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider">
                   <span>Your Referred Friends ({referredUsers.length})</span>
                   {loadingReferred && <span className="text-zinc-400 animate-pulse font-normal lowercase">fetching...</span>}
                 </div>
@@ -1192,7 +1192,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                     Loading referred users...
                   </div>
                 ) : referredUsers.length === 0 ? (
-                  <div className="text-center py-6 bg-white/50 border border-dashed border-zinc-200 rounded-xl text-xs text-zinc-400">
+                  <div className="text-center py-6 bg-zinc-50/70 border border-dashed border-zinc-200 rounded-xl text-xs text-zinc-400">
                     No friends have joined using your code yet.
                   </div>
                 ) : (
@@ -1201,13 +1201,13 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                       return (
                         <div 
                           key={refUser.uid} 
-                          className="flex flex-col sm:flex-row sm:items-center justify-between bg-white/60 border border-zinc-200/80 p-2.5 rounded-xl text-xs gap-1.5 hover:border-zinc-300 transition-colors"
+                          className="flex flex-col sm:flex-row sm:items-center justify-between bg-zinc-50/80 border border-zinc-200/90 p-2.5 rounded-xl text-xs gap-1.5 hover:border-zinc-300 transition-colors"
                         >
                           <div className="space-y-0.5 text-left">
-                            <p className="font-bold text-zinc-800 truncate max-w-[180px]">
+                            <p className="font-extrabold text-zinc-800 truncate max-w-[180px]">
                               {refUser.displayName}
                             </p>
-                            <p className="text-[11px] text-zinc-700 font-mono font-medium">
+                            <p className="text-[11px] text-zinc-600 font-mono font-medium">
                               {refUser.phone ? refUser.phone : 'No phone provided'}
                             </p>
                           </div>
@@ -1216,11 +1216,11 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                               Joined {refUser.createdAt.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
                             </p>
                             {refUser.hasMadeFirstDeposit ? (
-                              <span className="text-[9px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                              <span className="text-[9px] bg-emerald-100 text-emerald-800 font-extrabold px-2 py-0.5 rounded-full flex items-center gap-1">
                                 ✓ First Deposit Done
                               </span>
                             ) : (
-                              <span className="text-[9px] bg-amber-100/80 text-amber-800 font-semibold px-2 py-0.5 rounded-full">
+                              <span className="text-[9px] bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-full">
                                 Pending 1st Deposit
                               </span>
                             )}

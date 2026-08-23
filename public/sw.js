@@ -1,5 +1,5 @@
 // Service Worker for MOREX PWA
-const CACHE_NAME = 'morex-v1';
+const CACHE_NAME = 'morex-v2';
 const ASSETS = [
   '/',
   '/index.html',
