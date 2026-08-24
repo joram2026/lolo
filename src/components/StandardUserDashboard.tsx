@@ -727,7 +727,7 @@ export default function StandardUserDashboard({
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(link);
     }
-    toast.success('Referral link copied to clipboard! Share with friends to unlock 24h of +3.5% Extra Signal access on their first deposit.', 'Referral Link Copied');
+    toast.success('Referral link copied to clipboard! Share with friends to unlock 24h of Extra Signal access on their first deposit.', 'Referral Link Copied');
   };
 
   // Helper to check if a specific signal code or signal time has already been executed today by the user
@@ -5557,46 +5557,50 @@ export default function StandardUserDashboard({
                     );
                   })()}
 
-                  {/* Compact Stepper Navigation Bar */}
-                  <div className="grid grid-cols-3 gap-1.5 p-1 rounded-xl bg-zinc-100 dark:bg-slate-950 border border-zinc-200/80 dark:border-slate-800">
+                  {/* Stepper Navigation Bar */}
+                  <div className={`grid grid-cols-3 gap-1.5 p-1 rounded-xl border ${
+                    isLightTheme 
+                      ? 'bg-zinc-100/90 border-zinc-200' 
+                      : 'bg-slate-950 border-slate-800'
+                  }`}>
                     <button
                       type="button"
                       onClick={() => setCopyTradeStep(1)}
-                      className={`py-1.5 px-2 rounded-lg text-center transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                      className={`py-2 px-2.5 rounded-lg text-center transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
                         copyTradeStep === 1
                           ? 'bg-amber-500 text-slate-950 font-black shadow-xs'
                           : copyTradeStep > 1
-                          ? isLightTheme ? 'bg-white text-emerald-700 font-bold border border-zinc-200' : 'bg-slate-900 text-emerald-400 font-bold'
-                          : isLightTheme ? 'text-zinc-500 hover:text-zinc-800' : 'text-zinc-400 hover:text-white'
+                          ? isLightTheme ? 'bg-white text-emerald-800 font-bold border border-zinc-200 shadow-2xs' : 'bg-slate-900 text-emerald-400 font-bold'
+                          : isLightTheme ? 'text-zinc-600 hover:text-zinc-900 font-bold' : 'text-zinc-400 hover:text-white'
                       }`}
                     >
-                      <span className="text-[10px] font-black uppercase tracking-wider">1. Schedule</span>
+                      <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider">1. Schedule</span>
                     </button>
 
                     <button
                       type="button"
                       onClick={() => setCopyTradeStep(2)}
-                      className={`py-1.5 px-2 rounded-lg text-center transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                      className={`py-2 px-2.5 rounded-lg text-center transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
                         copyTradeStep === 2
                           ? 'bg-amber-500 text-slate-950 font-black shadow-xs'
                           : copyTradeStep > 2
-                          ? isLightTheme ? 'bg-white text-emerald-700 font-bold border border-zinc-200' : 'bg-slate-900 text-emerald-400 font-bold'
-                          : isLightTheme ? 'text-zinc-500 hover:text-zinc-800' : 'text-zinc-400 hover:text-white'
+                          ? isLightTheme ? 'bg-white text-emerald-800 font-bold border border-zinc-200 shadow-2xs' : 'bg-slate-900 text-emerald-400 font-bold'
+                          : isLightTheme ? 'text-zinc-600 hover:text-zinc-900 font-bold' : 'text-zinc-400 hover:text-white'
                       }`}
                     >
-                      <span className="text-[10px] font-black uppercase tracking-wider">2. Capital</span>
+                      <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider">2. Capital</span>
                     </button>
 
                     <button
                       type="button"
                       onClick={() => setCopyTradeStep(3)}
-                      className={`py-1.5 px-2 rounded-lg text-center transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                      className={`py-2 px-2.5 rounded-lg text-center transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
                         copyTradeStep === 3
                           ? 'bg-amber-500 text-slate-950 font-black shadow-xs animate-pulse'
-                          : isLightTheme ? 'text-zinc-500 hover:text-zinc-800' : 'text-zinc-400 hover:text-white'
+                          : isLightTheme ? 'text-zinc-600 hover:text-zinc-900 font-bold' : 'text-zinc-400 hover:text-white'
                       }`}
                     >
-                      <span className="text-[10px] font-black uppercase tracking-wider">3. Execute</span>
+                      <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider">3. Execute</span>
                     </button>
                   </div>
 
@@ -5605,35 +5609,35 @@ export default function StandardUserDashboard({
                     <div className="space-y-3.5 animate-fade-in">
                       {/* Compact Stats Row */}
                       <div className="grid grid-cols-4 gap-2 text-center text-xs">
-                        <div className={`p-2.5 rounded-xl border ${isLightTheme ? 'bg-zinc-50 border-zinc-200' : 'bg-slate-950/80 border-slate-800'}`}>
+                        <div className={`p-2.5 rounded-xl border ${isLightTheme ? 'bg-zinc-50/90 border-zinc-200' : 'bg-slate-950/80 border-slate-800'}`}>
                           <span className={`text-[8.5px] font-black uppercase tracking-wider block ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>Min</span>
-                          <span className={`font-extrabold font-mono text-xs sm:text-sm mt-0.5 block ${isLightTheme ? 'text-zinc-900' : 'text-white'}`}>
+                          <span className={`font-black font-mono text-xs sm:text-sm mt-0.5 block ${isLightTheme ? 'text-zinc-900' : 'text-white'}`}>
                             ${selectedLeadForCopy.minCapital ?? 50}
                           </span>
                         </div>
-                        <div className={`p-2.5 rounded-xl border ${isLightTheme ? 'bg-zinc-50 border-zinc-200' : 'bg-slate-950/80 border-slate-800'}`}>
+                        <div className={`p-2.5 rounded-xl border ${isLightTheme ? 'bg-zinc-50/90 border-zinc-200' : 'bg-slate-950/80 border-slate-800'}`}>
                           <span className={`text-[8.5px] font-black uppercase tracking-wider block ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>Max</span>
-                          <span className={`font-extrabold font-mono text-xs sm:text-sm mt-0.5 block ${isLightTheme ? 'text-zinc-900' : 'text-white'}`}>
+                          <span className={`font-black font-mono text-xs sm:text-sm mt-0.5 block ${isLightTheme ? 'text-zinc-900' : 'text-white'}`}>
                             ${selectedLeadForCopy.maxCapital ?? 10000}
                           </span>
                         </div>
-                        <div className={`p-2.5 rounded-xl border ${isLightTheme ? 'bg-amber-50/80 border-amber-200' : 'bg-amber-500/10 border-amber-500/20'}`}>
+                        <div className={`p-2.5 rounded-xl border ${isLightTheme ? 'bg-amber-50/90 border-amber-200' : 'bg-amber-500/10 border-amber-500/20'}`}>
                           <span className={`text-[8.5px] font-black uppercase tracking-wider block ${isLightTheme ? 'text-amber-900' : 'text-amber-400'}`}>Commission</span>
-                          <span className={`font-extrabold font-mono text-xs sm:text-sm mt-0.5 block ${isLightTheme ? 'text-amber-700' : 'text-amber-300'}`}>
+                          <span className={`font-black font-mono text-xs sm:text-sm mt-0.5 block ${isLightTheme ? 'text-amber-800' : 'text-amber-300'}`}>
                             {selectedLeadForCopy.analysisCommission ?? 10}%
                           </span>
                         </div>
-                        <div className={`p-2.5 rounded-xl border ${isLightTheme ? 'bg-emerald-50/80 border-emerald-200' : 'bg-emerald-500/10 border-emerald-500/20'}`}>
+                        <div className={`p-2.5 rounded-xl border ${isLightTheme ? 'bg-emerald-50/90 border-emerald-200' : 'bg-emerald-500/10 border-emerald-500/20'}`}>
                           <span className={`text-[8.5px] font-black uppercase tracking-wider block ${isLightTheme ? 'text-emerald-900' : 'text-emerald-400'}`}>Daily Yield</span>
-                          <span className={`font-extrabold font-mono text-xs sm:text-sm mt-0.5 block ${isLightTheme ? 'text-emerald-700' : 'text-emerald-300'}`}>
+                          <span className={`font-black font-mono text-xs sm:text-sm mt-0.5 block ${isLightTheme ? 'text-emerald-700' : 'text-emerald-300'}`}>
                             +{selectedLeadForCopy.dayProfitRate ?? 2.0}%
                           </span>
                         </div>
                       </div>
 
                       {/* Daily Signal Schedule List */}
-                      <div className={`p-3 sm:p-3.5 rounded-xl border space-y-2.5 ${
-                        isLightTheme ? 'bg-zinc-50 border-zinc-200' : 'bg-slate-950 border-slate-800'
+                      <div className={`p-3.5 sm:p-4 rounded-xl border space-y-2.5 ${
+                        isLightTheme ? 'bg-zinc-50/80 border-zinc-200' : 'bg-slate-950 border-slate-800'
                       }`}>
                         {(() => {
                           const userCountry = profile?.country || 'Kenya';
@@ -5641,11 +5645,11 @@ export default function StandardUserDashboard({
 
                           return (
                             <div className="flex items-center justify-between flex-wrap gap-1.5 text-xs">
-                              <span className={`text-[10.5px] font-black uppercase tracking-wider ${isLightTheme ? 'text-zinc-700' : 'text-zinc-300'}`}>
+                              <span className={`text-[10.5px] font-black uppercase tracking-wider ${isLightTheme ? 'text-zinc-800' : 'text-zinc-300'}`}>
                                 Today's Signals
                               </span>
-                              <span className={`px-2 py-0.5 rounded-full text-[9.5px] font-bold font-mono flex items-center gap-1 ${
-                                isLightTheme ? 'bg-zinc-200/80 text-zinc-700' : 'bg-slate-800 text-zinc-300'
+                              <span className={`px-2.5 py-0.5 rounded-full text-[9.5px] font-bold font-mono flex items-center gap-1 ${
+                                isLightTheme ? 'bg-zinc-200/90 text-zinc-800' : 'bg-slate-800 text-zinc-300'
                               }`}>
                                 <Globe size={10} className="shrink-0 text-amber-500" />
                                 <span>{userTzInfo.flag} {userTzInfo.code}</span>
@@ -5665,12 +5669,12 @@ export default function StandardUserDashboard({
                               return (
                                 <div 
                                   key={idx}
-                                  className={`p-2.5 rounded-lg border transition-all flex items-center justify-between ${
+                                  className={`p-2.5 sm:p-3 rounded-xl border transition-all flex items-center justify-between ${
                                     isExecuted
                                       ? isLightTheme ? 'bg-zinc-100/80 border-zinc-200 text-zinc-400' : 'bg-slate-900/60 border-slate-800 text-zinc-500'
                                       : isActive
-                                      ? isLightTheme ? 'bg-emerald-100/90 border-emerald-400 text-emerald-950 shadow-2xs' : 'bg-emerald-500/20 border-emerald-500 text-emerald-200'
-                                      : isLightTheme ? 'bg-white border-zinc-200 text-zinc-800' : 'bg-slate-900 border-slate-800 text-zinc-300'
+                                      ? isLightTheme ? 'bg-emerald-50 border-emerald-400 text-emerald-950 shadow-xs' : 'bg-emerald-500/20 border-emerald-500 text-emerald-200'
+                                      : isLightTheme ? 'bg-white border-zinc-200/90 text-zinc-800 shadow-2xs' : 'bg-slate-900 border-slate-800 text-zinc-300'
                                   }`}
                                 >
                                   <div className="min-w-0 pr-2">
@@ -5679,22 +5683,22 @@ export default function StandardUserDashboard({
                                         {fmtSig.localTimeStr}
                                       </span>
                                       {isExecuted ? (
-                                        <span className="px-1.5 py-0.2 rounded bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 text-[8.5px] font-black uppercase">
+                                        <span className="px-1.5 py-0.2 rounded bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-400 text-[8.5px] font-black uppercase">
                                           Done
                                         </span>
                                       ) : isActive ? (
-                                        <span className="px-1.5 py-0.2 rounded bg-emerald-500 text-slate-950 text-[8.5px] font-black uppercase animate-pulse">
+                                        <span className="px-1.5 py-0.2 rounded bg-emerald-600 text-white text-[8.5px] font-black uppercase">
                                           Active
                                         </span>
                                       ) : null}
                                     </div>
-                                    <span className={`text-[9.5px] block ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                                    <span className={`text-[9.5px] font-medium block mt-0.5 ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>
                                       Signal #{idx + 1}
                                     </span>
                                   </div>
 
                                   <div className="text-right shrink-0">
-                                    <span className={`text-xs font-extrabold font-mono ${
+                                    <span className={`text-xs font-black font-mono ${
                                       isExecuted ? 'text-zinc-400 line-through' : isLightTheme ? 'text-emerald-700' : 'text-emerald-400'
                                     }`}>
                                       +{((selectedLeadForCopy.dayProfitRate ?? 2.0) / (selectedLeadForCopy.signals.length || 1)).toFixed(2)}%
@@ -5713,51 +5717,60 @@ export default function StandardUserDashboard({
                           const extraEligibility = getExtraSignalEligibility(selectedLeadForCopy);
 
                           return (
-                            <div className="space-y-1.5 pt-1.5 border-t border-dashed border-zinc-200 dark:border-zinc-800">
+                            <div className="space-y-2.5 pt-3 border-t border-dashed border-zinc-200 dark:border-zinc-800">
                               <div className="flex items-center justify-between text-xs">
-                                <span className="text-[10px] font-black uppercase tracking-wider text-amber-500 flex items-center gap-1">
-                                  <span>⚡ Extra Signals (+3.5%)</span>
-                                </span>
+                                <div className="flex items-center gap-1.5">
+                                  <Zap size={13} className="text-amber-500 fill-amber-500 shrink-0" />
+                                  <span className={`text-[11px] font-black uppercase tracking-wider ${isLightTheme ? 'text-zinc-950' : 'text-white'}`}>
+                                    Extra Signals
+                                  </span>
+                                </div>
                                 {extraEligibility.eligible ? (
-                                  <span className="text-[8.5px] font-black uppercase px-2 py-0.2 rounded-full border bg-emerald-100 dark:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-500/40">
+                                  <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-lg border ${
+                                    isLightTheme 
+                                      ? 'bg-emerald-100 text-emerald-950 border-emerald-300' 
+                                      : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                                  }`}>
                                     Unlocked ({extraEligibility.badgeText})
                                   </span>
                                 ) : (
                                   <button
                                     type="button"
                                     onClick={handleCopyReferralLink}
-                                    className="px-2 py-0.5 rounded-full text-[8.5px] font-black uppercase tracking-wider flex items-center gap-1 bg-amber-500/15 hover:bg-amber-500/25 text-amber-800 dark:text-amber-300 border border-amber-500/30 transition-all cursor-pointer shadow-2xs active:scale-95"
+                                    className="px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider flex items-center gap-1 bg-amber-500 hover:bg-amber-400 text-slate-950 border border-amber-400 transition-all cursor-pointer shadow-2xs active:scale-95"
                                     title="Copy referral link to unlock"
                                   >
-                                    <UserPlus size={9} className="text-amber-500 shrink-0" />
+                                    <UserPlus size={10} className="shrink-0" />
                                     <span>Refer to Unlock</span>
                                   </button>
                                 )}
                               </div>
 
-                              {/* Slim Refer to Unlock Notice Banner when locked */}
+                              {/* Refer to Unlock Notice Banner */}
                               {!extraEligibility.eligible && (
-                                <div className={`px-2.5 py-1.5 rounded-lg border text-xs flex items-center justify-between gap-2 ${
-                                  isLightTheme ? 'bg-amber-50/80 border-amber-300/80 text-amber-950' : 'bg-amber-950/20 border-amber-900/40 text-amber-200'
+                                <div className={`px-3 py-2.5 rounded-2xl border text-xs flex items-center justify-between gap-2.5 shadow-2xs ${
+                                  isLightTheme 
+                                    ? 'bg-[#FFF8EC] border-amber-300/80 text-zinc-900' 
+                                    : 'bg-amber-950/30 border-amber-800/40 text-amber-100'
                                 }`}>
-                                  <div className="flex items-center gap-1.5 min-w-0 text-[10.5px]">
-                                    <Sparkles size={12} className="text-amber-500 shrink-0 animate-pulse" />
-                                    <span className="truncate">
-                                      Unlock <strong>24h</strong> of +3.5% signals when a friend makes their 1st deposit!
+                                  <div className="flex items-center gap-2 min-w-0 text-[11px]">
+                                    <Sparkles size={14} className="text-amber-600 shrink-0" />
+                                    <span className={`truncate ${isLightTheme ? 'text-zinc-800' : 'text-zinc-200'}`}>
+                                      Unlock <strong className={isLightTheme ? 'text-zinc-950 font-black' : 'text-white font-black'}>24h</strong> of extra signals when a friend deposits!
                                     </span>
                                   </div>
                                   <button
                                     type="button"
                                     onClick={handleCopyReferralLink}
-                                    className="px-2 py-0.5 rounded bg-slate-950 dark:bg-amber-400 text-amber-400 dark:text-slate-950 font-black text-[9px] uppercase tracking-wider shrink-0 transition-all flex items-center gap-1 cursor-pointer shadow-2xs"
+                                    className="px-2.5 py-1 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-[9.5px] uppercase tracking-wider shrink-0 transition-all flex items-center gap-1 cursor-pointer shadow-2xs border border-amber-400 active:scale-95"
                                   >
-                                    <Copy size={9} />
+                                    <Copy size={10} />
                                     <span>Copy Link</span>
                                   </button>
                                 </div>
                               )}
 
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                                 {selectedLeadForCopy.extraSignals.map((es, idx) => {
                                   const activeSig = getActiveSignalForLead(selectedLeadForCopy);
                                   const isActive = activeSig && activeSig.time === es.time && activeSig.isExtra;
@@ -5767,39 +5780,50 @@ export default function StandardUserDashboard({
                                   return (
                                     <div
                                       key={`extra-${idx}`}
-                                      className={`p-2.5 rounded-lg border flex items-center justify-between ${
+                                      className={`p-3 rounded-2xl border flex items-center justify-between transition-all shadow-2xs ${
                                         isExecuted
                                           ? isLightTheme ? 'bg-zinc-100/80 border-zinc-200 text-zinc-400' : 'bg-slate-900/60 border-slate-800 text-zinc-500'
                                           : !extraEligibility.eligible
-                                          ? isLightTheme ? 'bg-zinc-50 border-zinc-200 text-zinc-400 opacity-80' : 'bg-slate-900/40 border-slate-800 text-zinc-500 opacity-80'
+                                          ? isLightTheme ? 'bg-[#FFFDF8] border-amber-200/80 text-zinc-800' : 'bg-slate-900/60 border-slate-800 text-zinc-300'
                                           : isActive
-                                          ? isLightTheme ? 'bg-amber-100/90 border-amber-400 text-amber-950' : 'bg-amber-500/20 border-amber-500 text-amber-200'
-                                          : isLightTheme ? 'bg-amber-50/40 border-amber-200/80 text-zinc-800' : 'bg-amber-950/20 border-amber-900/40 text-zinc-300'
+                                          ? isLightTheme ? 'bg-amber-100 border-amber-400 text-amber-950 shadow-xs' : 'bg-amber-500/20 border-amber-500 text-amber-200'
+                                          : isLightTheme ? 'bg-[#FFF8EC] border-amber-200 text-zinc-900' : 'bg-amber-950/20 border-amber-900/40 text-zinc-300'
                                       }`}
                                     >
                                       <div className="min-w-0 pr-2">
                                         <div className="flex items-center gap-1.5 flex-wrap">
-                                          <span className="text-xs font-black font-mono">
+                                          <span className={`text-xs font-black font-mono ${
+                                            isExecuted ? 'text-zinc-400 line-through' : isLightTheme ? 'text-zinc-950' : 'text-white'
+                                          }`}>
                                             {fmtSig.localTimeStr}
                                           </span>
                                           {!extraEligibility.eligible ? (
                                             <button
                                               type="button"
                                               onClick={handleCopyReferralLink}
-                                              className="text-[8.5px] font-black text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-0.5 cursor-pointer"
+                                              className={`text-[9px] font-black px-1.5 py-0.5 rounded-md border flex items-center gap-1 cursor-pointer transition-all ${
+                                                isLightTheme 
+                                                  ? 'bg-amber-100 text-amber-950 border-amber-300 hover:bg-amber-200' 
+                                                  : 'bg-amber-500/15 text-amber-300 border-amber-500/30 hover:bg-amber-500/25'
+                                              }`}
                                               title="Refer friend to unlock"
                                             >
-                                              <Lock size={8} /> Refer to Unlock
+                                              <Lock size={8} className="text-amber-700 dark:text-amber-400 shrink-0" />
+                                              <span>Locked</span>
                                             </button>
                                           ) : null}
                                         </div>
-                                        <span className={`text-[9.5px] block ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                                        <span className={`text-[10px] font-semibold block mt-0.5 ${isLightTheme ? 'text-zinc-600' : 'text-zinc-400'}`}>
                                           {es.label || `Extra Signal #${idx + 1}`}
                                         </span>
                                       </div>
 
                                       <div className="text-right shrink-0">
-                                        <span className="text-xs font-black font-mono text-amber-500">
+                                        <span className={`text-xs font-black font-mono ${
+                                          isExecuted 
+                                            ? 'text-zinc-400 line-through' 
+                                            : isLightTheme ? 'text-amber-700' : 'text-amber-400'
+                                        }`}>
                                           +{(es.profitRate ?? 3.5).toFixed(2)}%
                                         </span>
                                       </div>
@@ -5827,10 +5851,9 @@ export default function StandardUserDashboard({
                         <button
                           type="button"
                           onClick={() => setCopyTradeStep(2)}
-                          className="flex-1 py-2.5 px-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs shadow-xs border border-amber-400 cursor-pointer transition-all flex items-center justify-center gap-1.5 active:scale-[0.98]"
+                          className="flex-1 py-2.5 px-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs shadow-xs border border-amber-400 cursor-pointer transition-all flex items-center justify-center active:scale-[0.98]"
                         >
-                          <span>Next: Configure Capital</span>
-                          <ArrowRight size={14} className="shrink-0" />
+                          Next
                         </button>
                       </div>
                     </div>
@@ -5876,12 +5899,12 @@ export default function StandardUserDashboard({
                         return (
                           <div className="space-y-2">
                             <div className="flex justify-between items-center text-xs">
-                              <label className={`font-black uppercase tracking-wider text-[10.5px] ${isLightTheme ? 'text-zinc-700' : 'text-zinc-300'}`}>
-                                Trade Capital Amount (USD)
+                              <label className={`font-black uppercase tracking-wider text-[10.5px] ${isLightTheme ? 'text-zinc-800' : 'text-zinc-300'}`}>
+                                Amount
                               </label>
                               <div className="flex items-center gap-1.5">
                                 <span className={`text-[10.5px] font-mono ${isLightTheme ? 'text-zinc-600' : 'text-zinc-400'}`}>
-                                  Available: <strong className={isLightTheme ? 'text-amber-700' : 'text-amber-400'}>${availableForThisLead.toFixed(2)}</strong>
+                                  Available: <strong className={isLightTheme ? 'text-amber-800 font-bold' : 'text-amber-400'}>${availableForThisLead.toFixed(2)}</strong>
                                 </span>
                                 <button
                                   type="button"
@@ -5889,110 +5912,56 @@ export default function StandardUserDashboard({
                                     setTransferModalType('IN');
                                     setTransferAmountInput('');
                                   }}
-                                  className="text-[10px] font-extrabold text-amber-600 hover:underline cursor-pointer ml-1"
+                                  className="text-[10.5px] font-black text-amber-800 dark:text-amber-400 hover:underline cursor-pointer ml-1"
                                 >
                                   + Top up
                                 </button>
                               </div>
                             </div>
 
-                            <div className={`relative flex items-center border rounded-xl px-3.5 py-2.5 ${
+                            <div className={`relative flex items-center border rounded-xl px-3.5 py-2 transition-all gap-1.5 ${
                               isLightTheme 
-                                ? 'bg-zinc-50 border-zinc-300 focus-within:bg-white focus-within:border-amber-500' 
+                                ? 'bg-zinc-50/90 border-zinc-300 focus-within:bg-white focus-within:border-amber-500 shadow-2xs' 
                                 : 'bg-slate-950 border-slate-800 focus-within:border-amber-500'
                             }`}>
-                              <span className={`text-sm font-black font-mono mr-1.5 ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>$</span>
+                              <span className={`text-base font-black font-mono mr-1 ${isLightTheme ? 'text-zinc-600' : 'text-zinc-400'}`}>$</span>
                               <input
                                 type="number"
                                 step="any"
                                 placeholder={`Min $${selectedLeadForCopy.minCapital ?? 50}`}
                                 value={copyTradeAmountInput}
                                 onChange={(e) => setCopyTradeAmountInput(e.target.value)}
-                                className={`w-full bg-transparent font-mono text-sm font-black outline-none ${
-                                  isLightTheme ? 'text-zinc-900 placeholder:text-zinc-400' : 'text-white placeholder:text-zinc-600'
+                                className={`w-full bg-transparent font-mono text-base font-black outline-none ${
+                                  isLightTheme ? 'text-zinc-950 placeholder:text-zinc-400' : 'text-white placeholder:text-zinc-600'
                                 }`}
                               />
-                              <span className={`text-[10px] font-black font-mono uppercase ml-2 ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>USD</span>
+                              <span className={`text-[11px] font-black font-mono uppercase ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>USD</span>
+                              {availableForThisLead > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const maxAvail = Math.min(availableForThisLead, selectedLeadForCopy.maxCapital ?? 10000);
+                                    setCopyTradeAmountInput(maxAvail.toString());
+                                  }}
+                                  className="px-2.5 py-1 rounded-lg text-[10px] font-mono font-black bg-amber-500 hover:bg-amber-400 text-slate-950 transition-all cursor-pointer uppercase shadow-2xs shrink-0 border border-amber-400 active:scale-95"
+                                >
+                                  MAX
+                                </button>
+                              )}
                             </div>
 
-                            {/* Preset Quick Chips */}
-                            <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
-                              {currentLeadLockedCap > 0 && (
+                            {/* Principal Quick Chip Only */}
+                            {currentLeadLockedCap > 0 && (
+                              <div className="flex items-center gap-1.5 pt-0.5">
                                 <button
                                   type="button"
                                   onClick={() => setCopyTradeAmountInput(currentLeadLockedCap.toFixed(2))}
-                                  className="px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 transition-all cursor-pointer"
+                                  className="px-3 py-1 rounded-lg text-[10.5px] font-mono font-black bg-amber-100/90 text-amber-950 dark:bg-amber-500/15 dark:text-amber-300 border border-amber-300 dark:border-amber-500/30 hover:bg-amber-200 transition-all cursor-pointer shadow-2xs"
                                 >
                                   Principal (${currentLeadLockedCap.toFixed(0)})
                                 </button>
-                              )}
-                              {[50, 100, 250, 500].map((presetVal) => (
-                                <button
-                                  key={presetVal}
-                                  type="button"
-                                  onClick={() => setCopyTradeAmountInput(presetVal.toString())}
-                                  className={`px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold transition-all cursor-pointer border ${
-                                    parseFloat(copyTradeAmountInput) === presetVal
-                                      ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-2xs'
-                                      : isLightTheme
-                                      ? 'bg-zinc-100 hover:bg-zinc-200 border-zinc-200 text-zinc-700'
-                                      : 'bg-slate-900 hover:bg-slate-800 border-slate-800 text-zinc-300'
-                                  }`}
-                                >
-                                  ${presetVal}
-                                </button>
-                              ))}
-                              {availableForThisLead > 0 && (
-                                <>
-                                  <button
-                                    type="button"
-                                    onClick={() => setCopyTradeAmountInput((Math.floor(availableForThisLead * 0.5 * 100) / 100).toString())}
-                                    className="px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/20 transition-all cursor-pointer"
-                                  >
-                                    50%
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      const maxAvail = Math.min(availableForThisLead, selectedLeadForCopy.maxCapital ?? 10000);
-                                      setCopyTradeAmountInput(maxAvail.toString());
-                                    }}
-                                    className="px-2 py-0.5 rounded-lg text-[10px] font-mono font-black bg-amber-500 text-slate-950 hover:bg-amber-400 transition-all cursor-pointer uppercase shadow-2xs"
-                                  >
-                                    MAX
-                                  </button>
-                                </>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })()}
-
-                      {/* Compact Return Forecast Card */}
-                      {parseFloat(copyTradeAmountInput) > 0 && (() => {
-                        const amt = parseFloat(copyTradeAmountInput) || 0;
-                        const numSigs = selectedLeadForCopy.signals?.length || 2;
-                        const dayRate = selectedLeadForCopy.dayProfitRate ?? 2.0;
-                        const sigRate = dayRate / numSigs;
-                        const gross = amt * (sigRate / 100);
-                        const commPct = selectedLeadForCopy.analysisCommission ?? 10;
-                        const comm = gross * (commPct / 100);
-                        const netPerSig = gross - comm;
-                        const contractDays = selectedLeadForCopy.contractDurationDays ?? 30;
-                        const totalEstNetProfit = netPerSig * numSigs * contractDays;
-
-                        return (
-                          <div className={`p-3 rounded-xl border space-y-1.5 font-mono text-xs ${
-                            isLightTheme ? 'bg-emerald-50/70 border-emerald-200 text-emerald-950' : 'bg-emerald-950/20 border-emerald-500/30 text-emerald-200'
-                          }`}>
-                            <div className="flex justify-between items-center text-[11px]">
-                              <span className="font-sans text-zinc-600 dark:text-zinc-400">Single Signal Net (+{sigRate.toFixed(2)}%):</span>
-                              <strong className="text-emerald-600 dark:text-emerald-400 font-black">+${netPerSig.toFixed(2)} USD</strong>
-                            </div>
-                            <div className="flex justify-between items-center text-xs border-t border-emerald-200/60 dark:border-emerald-500/20 pt-1">
-                              <span className="font-sans font-bold text-zinc-700 dark:text-zinc-300">Est. {contractDays}-Day Full Return:</span>
-                              <strong className="text-emerald-700 dark:text-emerald-300 font-black">+${totalEstNetProfit.toFixed(2)} USD</strong>
-                            </div>
+                              </div>
+                            )}
                           </div>
                         );
                       })()}
@@ -6013,10 +5982,9 @@ export default function StandardUserDashboard({
                           type="button"
                           disabled={!copyTradeAmountInput || parseFloat(copyTradeAmountInput) < (selectedLeadForCopy.minCapital ?? 50)}
                           onClick={() => setCopyTradeStep(3)}
-                          className="flex-1 py-2.5 px-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs shadow-xs border border-amber-400 cursor-pointer transition-all flex items-center justify-center gap-1.5 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="flex-1 py-2.5 px-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs shadow-xs border border-amber-400 cursor-pointer transition-all flex items-center justify-center active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          <span>Next: Signal Code</span>
-                          <ArrowRight size={14} className="shrink-0" />
+                          Next
                         </button>
                       </div>
                     </div>
@@ -6052,20 +6020,20 @@ export default function StandardUserDashboard({
                         const net = gross - comm;
 
                         return (
-                          <div className={`p-3 rounded-xl border space-y-1.5 text-xs ${
-                            isLightTheme ? 'bg-zinc-50 border-zinc-200' : 'bg-slate-950 border-slate-800'
+                          <div className={`p-3.5 rounded-xl border space-y-1.5 text-xs ${
+                            isLightTheme ? 'bg-zinc-50/90 border-zinc-200' : 'bg-slate-950 border-slate-800'
                           }`}>
-                            <div className="flex justify-between items-center text-[11px]">
+                            <div className="flex justify-between items-center text-[11.5px]">
                               <span className={`font-medium ${isLightTheme ? 'text-zinc-600' : 'text-zinc-400'}`}>Pair & Trader:</span>
                               <span className="font-extrabold">{copyTradePair} • {selectedLeadForCopy.name}</span>
                             </div>
-                            <div className="flex justify-between items-center text-[11px]">
+                            <div className="flex justify-between items-center text-[11.5px]">
                               <span className={`font-medium ${isLightTheme ? 'text-zinc-600' : 'text-zinc-400'}`}>Trade Capital:</span>
                               <span className="font-black font-mono">${tradeCap.toFixed(2)} USD</span>
                             </div>
-                            <div className="flex justify-between items-center text-xs border-t border-zinc-200/80 dark:border-slate-800 pt-1">
-                              <span className={`font-bold ${isLightTheme ? 'text-zinc-700' : 'text-zinc-300'}`}>Est. Net Profit:</span>
-                              <span className="font-black font-mono text-emerald-600 dark:text-emerald-400">
+                            <div className="flex justify-between items-center text-xs border-t border-zinc-200/80 dark:border-slate-800 pt-1.5">
+                              <span className={`font-bold ${isLightTheme ? 'text-zinc-800' : 'text-zinc-300'}`}>Est. Net Profit:</span>
+                              <span className="font-black font-mono text-emerald-700 dark:text-emerald-400">
                                 +${net.toFixed(2)} USD (+{rate.toFixed(2)}%)
                               </span>
                             </div>
@@ -6098,11 +6066,11 @@ export default function StandardUserDashboard({
 
                         if (isBlockedByLock) {
                           return (
-                            <div className={`p-2.5 px-3 rounded-xl border text-xs flex items-center justify-between gap-2 font-medium ${
+                            <div className={`p-3 rounded-xl border text-xs flex items-center justify-between gap-2 font-medium ${
                               isLightTheme ? 'bg-amber-50 border-amber-300 text-amber-950 shadow-2xs' : 'bg-amber-950/20 border-amber-900/50 text-amber-200'
                             }`}>
                               <div className="flex items-center gap-2 min-w-0">
-                                <Lock size={13} className="text-amber-500 shrink-0" />
+                                <Lock size={13} className="text-amber-600 shrink-0" />
                                 <span className="text-[11px] truncate">
                                   Extra signal locked. <strong>Refer a friend</strong> to unlock for 24h!
                                 </span>
@@ -6110,7 +6078,7 @@ export default function StandardUserDashboard({
                               <button
                                 type="button"
                                 onClick={handleCopyReferralLink}
-                                className="px-2 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-[10px] font-black uppercase tracking-wider shrink-0 transition-all flex items-center gap-1 cursor-pointer shadow-2xs active:scale-95"
+                                className="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-[10px] font-black uppercase tracking-wider shrink-0 transition-all flex items-center gap-1 cursor-pointer shadow-2xs active:scale-95"
                               >
                                 <UserPlus size={11} />
                                 <span>Refer Friend</span>
@@ -6123,7 +6091,7 @@ export default function StandardUserDashboard({
 
                       {/* Signal Code Input */}
                       <div className="space-y-1">
-                        <label className={`text-[10.5px] font-black uppercase tracking-wider block ${isLightTheme ? 'text-zinc-700' : 'text-zinc-300'}`}>
+                        <label className={`text-[10.5px] font-black uppercase tracking-wider block ${isLightTheme ? 'text-zinc-800' : 'text-zinc-300'}`}>
                           Signal Code
                         </label>
                         <input
@@ -6133,7 +6101,7 @@ export default function StandardUserDashboard({
                           onChange={(e) => setCopySignalCodeInput(e.target.value)}
                           className={`w-full px-3.5 py-2.5 rounded-xl border text-xs sm:text-sm font-mono font-black tracking-wider uppercase outline-none ${
                             isLightTheme 
-                              ? 'bg-zinc-50 border-zinc-300 focus:bg-white focus:border-amber-500 text-zinc-900 placeholder:text-zinc-400' 
+                              ? 'bg-zinc-50/90 border-zinc-300 focus:bg-white focus:border-amber-500 text-zinc-950 placeholder:text-zinc-400 shadow-2xs' 
                               : 'bg-slate-950 border-slate-800 focus:border-amber-500 text-white placeholder:text-zinc-600'
                           }`}
                         />
@@ -6306,17 +6274,14 @@ export default function StandardUserDashboard({
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <h4 className={`text-xs font-black uppercase tracking-wider flex items-center gap-1.5 ${
-                        isLightTheme ? 'text-zinc-800' : 'text-zinc-300'
+                        isLightTheme ? 'text-zinc-900' : 'text-zinc-200'
                       }`}>
                         <Sparkles size={14} className="text-amber-500" />
                         Active Contracts ({activeContracts.length})
                       </h4>
-                      <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 font-mono">
-                        Click any contract to view full progress & details
-                      </span>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
                       {activeContracts.map(trade => {
                         const contract = getContractProgressDetails(trade);
                         const tradeCapital = trade.contractCapital || trade.amount || 0;
@@ -6326,92 +6291,53 @@ export default function StandardUserDashboard({
                           <div 
                             key={trade.id} 
                             onClick={() => setSelectedContractForDetail(trade)}
-                            className={`p-4 sm:p-5 rounded-2xl border relative overflow-hidden flex flex-col justify-between space-y-3.5 cursor-pointer transition-all hover:scale-[1.01] hover:shadow-md active:scale-[0.99] group ${
+                            className={`p-3 sm:p-3.5 rounded-2xl border relative overflow-hidden flex items-center justify-between gap-3 cursor-pointer transition-all hover:scale-[1.01] hover:shadow-md active:scale-[0.99] group ${
                               isLightTheme 
-                                ? 'bg-white hover:bg-amber-50/30 border-amber-300/80 shadow-xs' 
-                                : 'bg-slate-900 hover:bg-slate-850 border-emerald-500/30'
+                                ? 'bg-white hover:bg-amber-50/20 border-amber-200/80 hover:border-amber-400 shadow-xs' 
+                                : 'bg-slate-900 hover:bg-slate-850 border-slate-800 hover:border-amber-500/40'
                             }`}
                           >
-                            {/* Top Header: Lead Expert Profile & Lock Status Badge */}
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="flex items-center gap-3 min-w-0">
-                                <ExpertAvatar 
-                                  photoUrl={trade.leadPhotoUrl} 
-                                  name={trade.leadName} 
-                                  className="w-11 h-11" 
-                                  size={140} 
-                                  roundedClassName="rounded-full" 
-                                  borderClassName="border-2 border-emerald-500" 
-                                />
-                                <div className="min-w-0 flex-1">
-                                  <h5 className={`font-black text-sm truncate flex items-center gap-1.5 ${isLightTheme ? 'text-zinc-900' : 'text-white'}`}>
-                                    <span>{trade.leadName}</span>
-                                    <ChevronRight size={14} className="text-amber-500 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
+                            {/* Left: Avatar & Contract Summary */}
+                            <div className="flex items-center gap-3 min-w-0 flex-1">
+                              <ExpertAvatar 
+                                photoUrl={trade.leadPhotoUrl} 
+                                name={trade.leadName} 
+                                className="w-10 h-10 shrink-0" 
+                                size={120} 
+                                roundedClassName="rounded-full" 
+                                borderClassName="border-2 border-amber-400/90" 
+                              />
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <h5 className={`font-black text-sm truncate ${isLightTheme ? 'text-zinc-950' : 'text-white'}`}>
+                                    {trade.leadName}
                                   </h5>
-                                  <div className="flex items-center gap-2 text-[11px] font-mono text-zinc-500 mt-0.5">
-                                    <span>Pair: <strong className="text-amber-500 font-bold">{trade.tradingPair || 'BTC/USDT'}</strong></span>
-                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2 text-xs font-mono mt-0.5 flex-wrap">
+                                  <span className={`font-bold ${isLightTheme ? 'text-zinc-800' : 'text-zinc-300'}`}>
+                                    ${tradeCapital.toFixed(2)}
+                                  </span>
+                                  <span className="text-zinc-400">•</span>
+                                  <span className="font-black text-emerald-700 dark:text-emerald-400">
+                                    +${netProfit.toFixed(2)}
+                                  </span>
+                                  <span className="text-zinc-400">•</span>
+                                  <span className="text-zinc-500 font-medium text-[10.5px] font-sans">
+                                    {trade.tradingPair || 'BTC/USDT'}
+                                  </span>
                                 </div>
                               </div>
-
-                              {/* Lock Status Badge */}
-                              {contract.isUnlocked ? (
-                                <span className="px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-mono text-[9px] font-black uppercase border border-emerald-500/30 flex items-center gap-1 shrink-0">
-                                  <Unlock size={11} className="shrink-0" />
-                                  UNLOCKED (100%)
-                                </span>
-                              ) : (
-                                <span className="px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 font-mono text-[9px] font-black uppercase border border-amber-500/30 flex items-center gap-1 shrink-0">
-                                  <Lock size={11} className="shrink-0 text-amber-500" />
-                                  LOCKED ({contract.progressPct}%)
-                                </span>
-                              )}
                             </div>
 
-                            {/* Quick Stats Grid */}
-                            <div className="grid grid-cols-2 gap-2 text-[11px] font-mono">
-                              <div className={`p-2.5 rounded-xl border ${isLightTheme ? 'bg-zinc-50 border-zinc-200/80' : 'bg-slate-950/70 border-slate-800'}`}>
-                                <span className="text-[9px] text-zinc-400 uppercase font-bold block">Locked Principal</span>
-                                <span className={`font-extrabold text-xs sm:text-sm ${isLightTheme ? 'text-zinc-900' : 'text-white'}`}>
-                                  ${tradeCapital.toFixed(2)} USD
-                                </span>
+                            {/* Right: Quick Action Chevron */}
+                            <div className="flex items-center gap-1 shrink-0">
+                              <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-xl flex items-center justify-center transition-all ${
+                                isLightTheme 
+                                  ? 'bg-amber-50 group-hover:bg-amber-100 text-amber-900' 
+                                  : 'bg-slate-800 group-hover:bg-amber-500/20 text-amber-400'
+                              }`}>
+                                <ChevronRight size={15} className="group-hover:translate-x-0.5 transition-transform" />
                               </div>
-                              <div className={`p-2.5 rounded-xl border ${isLightTheme ? 'bg-zinc-50 border-zinc-200/80' : 'bg-slate-950/70 border-slate-800'}`}>
-                                <span className="text-[9px] text-zinc-400 uppercase font-bold block">Accrued Profit</span>
-                                <span className="font-extrabold text-xs sm:text-sm text-emerald-600 dark:text-emerald-400">
-                                  +${netProfit.toFixed(2)} USD
-                                </span>
-                              </div>
-                            </div>
-
-                            {/* Contract Progress Bar Summary */}
-                            <div className="space-y-1.5 pt-0.5">
-                              <div className="flex justify-between items-center text-[10.5px] font-mono font-bold">
-                                <span className={`flex items-center gap-1 ${isLightTheme ? 'text-zinc-700' : 'text-zinc-300'}`}>
-                                  <Clock size={12} className="text-amber-500 shrink-0" />
-                                  Progress: {contract.workdaysElapsed}/{contract.durationDays} Workdays
-                                </span>
-                                <span className="text-amber-600 dark:text-amber-400 font-extrabold">
-                                  {contract.progressPct}%
-                                </span>
-                              </div>
-                              <div className="w-full h-2 rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden">
-                                <div 
-                                  className="h-full bg-gradient-to-r from-amber-500 to-emerald-500 rounded-full transition-all duration-500"
-                                  style={{ width: `${contract.progressPct}%` }}
-                                />
-                              </div>
-                            </div>
-
-                            {/* Action Footer: View Details CTA */}
-                            <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800 flex items-center justify-between text-xs font-extrabold text-amber-600 dark:text-amber-400">
-                              <span className="text-[11px] font-semibold text-zinc-400">
-                                {contract.isUnlocked ? 'Contract Complete' : `${contract.workdaysRemaining} workdays remaining`}
-                              </span>
-                              <span className="flex items-center gap-1 group-hover:translate-x-1 transition-transform">
-                                <span>View Contract Details</span>
-                                <ArrowRight size={13} className="shrink-0" />
-                              </span>
                             </div>
                           </div>
                         );
@@ -6426,7 +6352,7 @@ export default function StandardUserDashboard({
                 <div className="flex items-center justify-between">
                   <div>
                     <h4 className={`text-xs font-black uppercase tracking-wider ${
-                      isLightTheme ? 'text-zinc-800' : 'text-zinc-300'
+                      isLightTheme ? 'text-zinc-900' : 'text-zinc-200'
                     }`}>
                       Copy Trading Experts ({copyLeads.length})
                     </h4>
@@ -6440,44 +6366,45 @@ export default function StandardUserDashboard({
                     return (
                       <div 
                         key={lead.id}
-                        className={`p-5 rounded-3xl border transition-all duration-300 flex flex-col justify-between space-y-4 relative overflow-hidden group hover:shadow-lg ${
+                        className={`p-4 sm:p-5 rounded-2xl border transition-all duration-300 flex flex-col justify-between space-y-3.5 relative overflow-hidden group hover:shadow-md ${
                           isLightTheme 
-                            ? 'bg-white border-amber-200/90 hover:border-amber-400' 
-                            : 'bg-slate-900 border-slate-800 hover:border-emerald-500/40'
+                            ? 'bg-white border-amber-200/80 hover:border-amber-400' 
+                            : 'bg-slate-900 border-slate-800 hover:border-amber-500/40'
                         }`}
                       >
-                        {/* Top Accent Stripe */}
-                        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-amber-500 via-emerald-400 to-teal-500 opacity-80" />
-
                         <div className="space-y-3">
                           <div className="flex items-start gap-3">
                             <ExpertAvatar 
                               photoUrl={lead.photoUrl} 
                               name={lead.name} 
-                              className="w-14 h-14" 
+                              className="w-13 h-13" 
                               size={160} 
                               roundedClassName="rounded-full" 
-                              borderClassName="border-2 border-emerald-500/50" 
+                              borderClassName="border-2 border-amber-400/80" 
                             />
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center justify-between gap-1">
                                 <h5 className={`font-black text-sm truncate ${isLightTheme ? 'text-zinc-900' : 'text-white'}`}>
                                   {lead.name}
                                 </h5>
-                                <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-mono text-[9px] font-black uppercase border border-emerald-500/20 shrink-0">
+                                <span className={`px-2 py-0.5 rounded-md font-mono text-[9px] font-black uppercase shrink-0 ${
+                                  isLightTheme 
+                                    ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' 
+                                    : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                }`}>
                                   {lead.winRate || '98.5%'} Win
                                 </span>
                               </div>
                               <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
-                                <span className={`text-[10px] font-bold font-mono ${
-                                  isLightTheme ? 'text-amber-700' : 'text-amber-400'
+                                <span className={`text-[10.5px] font-bold font-mono ${
+                                  isLightTheme ? 'text-amber-800' : 'text-amber-400'
                                 }`}>
                                   ⚡ {lead.signals?.length || 2} Signals/day
                                 </span>
                                 {lead.extraSignals && lead.extraSignals.length > 0 && (
-                                  <span className={`px-2 py-0.5 rounded-full font-black text-[9px] font-mono uppercase tracking-wide border shadow-2xs ${
+                                  <span className={`px-2 py-0.5 rounded-full font-black text-[9px] font-mono uppercase tracking-wide border ${
                                     isLightTheme
-                                      ? 'bg-amber-100/90 text-amber-900 border-amber-300'
+                                      ? 'bg-amber-100 text-amber-950 border-amber-300'
                                       : 'bg-amber-500/15 text-amber-300 border-amber-500/30'
                                   }`}>
                                     +{lead.extraSignals.length} Extra
@@ -6485,12 +6412,12 @@ export default function StandardUserDashboard({
                                 )}
                               </div>
                               <div className="flex items-center gap-2 mt-1">
-                                <span className={`text-[9px] font-semibold px-2 py-0.5 rounded-md inline-block ${
-                                  isLightTheme ? 'bg-amber-100 text-amber-900' : 'bg-slate-800 text-zinc-300'
+                                <span className={`text-[9px] font-bold px-2 py-0.5 rounded-md inline-block ${
+                                  isLightTheme ? 'bg-zinc-100 text-zinc-800 border border-zinc-200' : 'bg-slate-800 text-zinc-300'
                                 }`}>
                                   {lead.riskLevel || 'Low Risk'}
                                 </span>
-                                <span className="text-[10px] font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                                <span className="text-[10.5px] font-mono font-black text-emerald-700 dark:text-emerald-400">
                                   1-Day: {lead.dayProfitRate ?? 2.0}%
                                 </span>
                               </div>
@@ -6503,11 +6430,11 @@ export default function StandardUserDashboard({
                             {lead.description}
                           </p>
 
-                          <div className={`p-2.5 rounded-xl border flex items-center justify-between text-[10px] font-mono ${
-                            isLightTheme ? 'bg-amber-50/70 border-amber-200/60' : 'bg-slate-950/60 border-slate-850'
+                          <div className={`p-2.5 rounded-xl border flex items-center justify-between text-[10.5px] font-mono ${
+                            isLightTheme ? 'bg-amber-50/60 border-amber-200/60' : 'bg-slate-950/60 border-slate-850'
                           }`}>
-                            <span className="text-zinc-500 font-bold">Minimum Capital:</span>
-                            <span className={`font-black text-xs ${isLightTheme ? 'text-zinc-900' : 'text-white'}`}>
+                            <span className="text-zinc-600 font-bold">Minimum Capital:</span>
+                            <span className={`font-black text-xs ${isLightTheme ? 'text-zinc-950' : 'text-white'}`}>
                               ${lead.minCapital ?? 100}
                             </span>
                           </div>
@@ -6516,19 +6443,19 @@ export default function StandardUserDashboard({
                         <button
                           type="button"
                           onClick={() => handleOpenCopyModal(lead)}
-                          className={`w-full py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-md active:scale-[0.98] ${
+                          className={`w-full py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-sm active:scale-[0.98] ${
                             isAlreadyCopying
                               ? isLightTheme
-                                ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20'
-                                : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-emerald-500/20'
+                                ? 'bg-slate-950 hover:bg-slate-900 text-amber-300 border border-slate-800 shadow-slate-950/15'
+                                : 'bg-slate-950 hover:bg-slate-900 text-amber-400 border border-slate-800 shadow-emerald-500/10'
                               : isLightTheme
-                                ? 'bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-white shadow-amber-500/20'
-                                : 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 shadow-emerald-500/20'
+                                ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-amber-500/20'
+                                : 'bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 shadow-amber-500/20'
                           }`}
                         >
                           {isAlreadyCopying ? (
                             <>
-                              <Zap size={14} className="animate-pulse text-amber-300 dark:text-slate-900" />
+                              <Zap size={14} className="animate-pulse text-amber-300" />
                               <span>Execute Signal Code</span>
                             </>
                           ) : (
@@ -7494,16 +7421,16 @@ export default function StandardUserDashboard({
             isLightTheme ? 'bg-[#FFF3D6] text-zinc-900' : 'bg-slate-900 text-white'
           }`}>
             {/* Top Navigation Header Bar */}
-            <div className={`sticky top-0 z-30 border-b backdrop-blur-md px-4 sm:px-6 py-2.5 sm:py-3 flex items-center justify-between gap-4 ${
-              isLightTheme ? 'bg-[#FFF3D6]/95 border-zinc-200/80 shadow-xs' : 'bg-slate-900/95 border-slate-800 shadow-sm'
+            <div className={`sticky top-0 z-30 border-b backdrop-blur-md px-4 sm:px-6 py-2.5 sm:py-3.5 flex items-center justify-between gap-3 ${
+              isLightTheme ? 'bg-[#FFF3D6]/95 border-amber-200/80 shadow-xs' : 'bg-slate-900/95 border-slate-800 shadow-sm'
             }`}>
               <div className="flex items-center gap-3 min-w-0">
                 <button
                   type="button"
                   onClick={() => setSelectedContractForDetail(null)}
-                  className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all cursor-pointer border shrink-0 ${
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer border shrink-0 shadow-2xs ${
                     isLightTheme
-                      ? 'bg-zinc-100 hover:bg-zinc-200 text-zinc-700 border-zinc-200'
+                      ? 'bg-amber-100/90 hover:bg-amber-200 text-amber-950 border-amber-300'
                       : 'bg-slate-800 hover:bg-slate-700 text-zinc-200 border-slate-700'
                   }`}
                 >
@@ -7511,7 +7438,7 @@ export default function StandardUserDashboard({
                   <span>Back</span>
                 </button>
                 <div className="min-w-0">
-                  <h2 className="text-xs sm:text-sm font-black truncate">
+                  <h2 className={`text-sm sm:text-base font-black truncate ${isLightTheme ? 'text-zinc-950' : 'text-white'}`}>
                     Contract Details
                   </h2>
                 </div>
@@ -7520,21 +7447,29 @@ export default function StandardUserDashboard({
               {/* Status Badge & Close */}
               <div className="flex items-center gap-2 shrink-0">
                 {contract.isUnlocked ? (
-                  <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider px-2 py-1 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
-                    <Unlock size={11} /> Unlocked
+                  <span className={`text-[10px] sm:text-xs font-black uppercase tracking-wider px-2.5 py-1 rounded-xl border flex items-center gap-1 shadow-2xs ${
+                    isLightTheme 
+                      ? 'bg-emerald-100 text-emerald-950 border-emerald-300' 
+                      : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                  }`}>
+                    <Unlock size={12} className="shrink-0" /> Unlocked
                   </span>
                 ) : (
-                  <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider px-2 py-1 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 flex items-center gap-1">
-                    <Lock size={11} /> Active ({contract.progressPct}%)
+                  <span className={`text-[10px] sm:text-xs font-black uppercase tracking-wider px-2.5 py-1 rounded-xl border flex items-center gap-1 shadow-2xs ${
+                    isLightTheme 
+                      ? 'bg-amber-100 text-amber-950 border-amber-300' 
+                      : 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                  }`}>
+                    <Lock size={12} className="shrink-0 text-amber-700 dark:text-amber-400" /> Active ({contract.progressPct}%)
                   </span>
                 )}
 
                 <button
                   type="button"
                   onClick={() => setSelectedContractForDetail(null)}
-                  className={`p-1.5 rounded-lg border transition-all cursor-pointer ${
+                  className={`p-1.5 sm:p-2 rounded-xl border transition-all cursor-pointer shadow-2xs ${
                     isLightTheme 
-                      ? 'bg-zinc-100 hover:bg-zinc-200 text-zinc-600 border-zinc-200' 
+                      ? 'bg-amber-100/90 hover:bg-amber-200 text-amber-950 border-amber-300' 
                       : 'bg-slate-800 hover:bg-slate-700 text-zinc-300 border-slate-700'
                   }`}
                   title="Close Page"
@@ -7545,105 +7480,152 @@ export default function StandardUserDashboard({
             </div>
 
             {/* Main Content Container */}
-            <div className="max-w-2xl mx-auto px-4 py-4 sm:py-6 space-y-4 pb-20">
+            <div className="max-w-2xl mx-auto px-4 py-4 sm:py-6 space-y-4 pb-24">
               
               {/* Unified Contract Overview Card */}
-              <div className={`p-4 rounded-2xl border shadow-xs space-y-3.5 ${
-                isLightTheme ? 'bg-white border-zinc-200' : 'bg-slate-900 border-slate-800'
+              <div className={`p-4 sm:p-5 rounded-3xl border shadow-sm space-y-4 ${
+                isLightTheme ? 'bg-[#FFFDF8] border-amber-200/90' : 'bg-slate-900 border-slate-800'
               }`}>
-                {/* Expert Name */}
-                <div className="flex items-center gap-3">
-                  <ExpertAvatar 
-                    photoUrl={trade.leadPhotoUrl} 
-                    name={trade.leadName} 
-                    className="w-10 h-10" 
-                    size={120} 
-                    roundedClassName="rounded-full" 
-                    borderClassName="border-2 border-emerald-500" 
-                  />
-                  <div>
-                    <span className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/15">
-                      {trade.tradingPair || 'BTC/USDT'}
+                {/* Expert Info & Pair */}
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <ExpertAvatar 
+                      photoUrl={trade.leadPhotoUrl} 
+                      name={trade.leadName} 
+                      className="w-12 h-12 shrink-0" 
+                      size={140} 
+                      roundedClassName="rounded-full" 
+                      borderClassName="border-2 border-amber-400" 
+                    />
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[9.5px] font-black uppercase tracking-wider px-2 py-0.5 rounded-lg border ${
+                          isLightTheme 
+                            ? 'bg-amber-100 text-amber-950 border-amber-300' 
+                            : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                        }`}>
+                          {trade.tradingPair || 'BTC/USDT'}
+                        </span>
+                        <span className={`text-[9.5px] font-bold font-mono ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                          Standard Lead
+                        </span>
+                      </div>
+                      <h1 className={`text-lg font-black tracking-tight mt-0.5 truncate ${isLightTheme ? 'text-zinc-950' : 'text-white'}`}>
+                        {trade.leadName}
+                      </h1>
+                    </div>
+                  </div>
+
+                  <div className="text-right shrink-0">
+                    <span className={`text-[9.5px] uppercase font-black tracking-wider block ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                      Yield / Day
                     </span>
-                    <h1 className={`text-base font-black tracking-tight mt-0.5 ${isLightTheme ? 'text-zinc-900' : 'text-white'}`}>
-                      {trade.leadName}
-                    </h1>
+                    <span className="text-sm font-black font-mono text-emerald-700 dark:text-emerald-400">
+                      +{lead?.dayProfitRate ?? 2.0}%
+                    </span>
                   </div>
                 </div>
 
                 {/* Grid of Key Info: Traded Capital, Accrued Profit, Duration, Target Date */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 font-mono text-xs pt-1">
-                  <div className={`p-2.5 rounded-xl border ${
-                    isLightTheme ? 'bg-zinc-50 border-zinc-200' : 'bg-slate-950/70 border-slate-800'
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 font-mono text-xs pt-1">
+                  <div className={`p-3 rounded-2xl border shadow-2xs ${
+                    isLightTheme ? 'bg-[#FFF8EC] border-amber-200/80' : 'bg-slate-950/80 border-slate-800'
                   }`}>
-                    <span className="text-[9px] text-zinc-400 uppercase font-bold tracking-wider block">Traded Capital</span>
-                    <span className={`text-sm font-black block mt-0.5 ${isLightTheme ? 'text-zinc-900' : 'text-white'}`}>
+                    <span className={`text-[9px] uppercase font-black tracking-wider block ${isLightTheme ? 'text-amber-900' : 'text-zinc-400'}`}>
+                      Traded Capital
+                    </span>
+                    <span className={`text-base font-black block mt-1 ${isLightTheme ? 'text-zinc-950' : 'text-white'}`}>
                       ${tradeCapital.toFixed(2)}
                     </span>
                   </div>
 
-                  <div className={`p-2.5 rounded-xl border ${
-                    isLightTheme ? 'bg-zinc-50 border-zinc-200' : 'bg-slate-950/70 border-slate-800'
+                  <div className={`p-3 rounded-2xl border shadow-2xs ${
+                    isLightTheme ? 'bg-emerald-50/90 border-emerald-300' : 'bg-emerald-950/30 border-emerald-800/40'
                   }`}>
-                    <span className="text-[9px] text-zinc-400 uppercase font-bold tracking-wider block">Accrued Profit</span>
-                    <span className="text-sm font-black block mt-0.5 text-emerald-600 dark:text-emerald-400">
+                    <span className={`text-[9px] uppercase font-black tracking-wider block ${isLightTheme ? 'text-emerald-900' : 'text-emerald-400'}`}>
+                      Accrued Profit
+                    </span>
+                    <span className={`text-base font-black block mt-1 ${isLightTheme ? 'text-emerald-700' : 'text-emerald-400'}`}>
                       +${netProfit.toFixed(2)}
                     </span>
                   </div>
 
-                  <div className={`p-2.5 rounded-xl border ${
-                    isLightTheme ? 'bg-zinc-50 border-zinc-200' : 'bg-slate-950/70 border-slate-800'
+                  <div className={`p-3 rounded-2xl border shadow-2xs ${
+                    isLightTheme ? 'bg-[#FFF8EC] border-amber-200/80' : 'bg-slate-950/80 border-slate-800'
                   }`}>
-                    <span className="text-[9px] text-zinc-400 uppercase font-bold tracking-wider block">Duration</span>
-                    <span className={`text-sm font-black block mt-0.5 ${isLightTheme ? 'text-zinc-900' : 'text-white'}`}>
+                    <span className={`text-[9px] uppercase font-black tracking-wider block ${isLightTheme ? 'text-amber-900' : 'text-zinc-400'}`}>
+                      Duration
+                    </span>
+                    <span className={`text-base font-black block mt-1 ${isLightTheme ? 'text-zinc-950' : 'text-white'}`}>
                       {contract.durationDays} Days
                     </span>
                   </div>
 
-                  <div className={`p-2.5 rounded-xl border ${
-                    isLightTheme ? 'bg-zinc-50 border-zinc-200' : 'bg-slate-950/70 border-slate-800'
+                  <div className={`p-3 rounded-2xl border shadow-2xs ${
+                    isLightTheme ? 'bg-[#FFF8EC] border-amber-200/80' : 'bg-slate-950/80 border-slate-800'
                   }`}>
-                    <span className="text-[9px] text-zinc-400 uppercase font-bold tracking-wider block">Target Date</span>
-                    <span className={`text-sm font-black block mt-0.5 truncate ${isLightTheme ? 'text-zinc-900' : 'text-white'}`}>
+                    <span className={`text-[9px] uppercase font-black tracking-wider block ${isLightTheme ? 'text-amber-900' : 'text-zinc-400'}`}>
+                      Target Date
+                    </span>
+                    <span className={`text-xs sm:text-[13px] font-black block mt-1.5 truncate ${isLightTheme ? 'text-zinc-950' : 'text-white'}`}>
                       {contract.targetEndDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
                     </span>
                   </div>
                 </div>
 
-                {/* Progress */}
-                <div className="pt-2.5 border-t border-zinc-200/50 dark:border-slate-800/60 space-y-1.5">
+                {/* Progress Bar & Countdown */}
+                <div className={`p-3 sm:p-3.5 rounded-2xl border space-y-2 ${
+                  isLightTheme ? 'bg-[#FFF8EC]/70 border-amber-200/70' : 'bg-slate-950/50 border-slate-800'
+                }`}>
                   <div className="flex justify-between items-center text-xs font-mono">
-                    <span className={`font-bold ${isLightTheme ? 'text-zinc-600' : 'text-zinc-400'}`}>
-                      Progress Period:
+                    <span className={`font-bold flex items-center gap-1.5 ${isLightTheme ? 'text-zinc-800' : 'text-zinc-300'}`}>
+                      <Clock size={13} className="text-amber-600 shrink-0" />
+                      <span>Progress: <strong>{contract.workdaysElapsed} of {contract.durationDays} Days</strong></span>
                     </span>
-                    <span className="font-black text-amber-500">
-                      {contract.workdaysElapsed} of {contract.durationDays} Days ({contract.progressPct}%)
+                    <span className="font-black text-amber-700 dark:text-amber-400">
+                      {contract.progressPct}%
                     </span>
                   </div>
-                  <div className="w-full h-2 rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden relative shadow-inner">
+
+                  <div className="w-full h-2.5 rounded-full bg-amber-200/50 dark:bg-zinc-800 overflow-hidden relative shadow-inner">
                     <div 
-                      className="h-full bg-gradient-to-r from-amber-500 to-emerald-500 rounded-full transition-all duration-700"
-                      style={{ width: `${contract.progressPct}%` }}
+                      className="h-full bg-gradient-to-r from-amber-500 via-amber-400 to-emerald-500 rounded-full transition-all duration-700"
+                      style={{ width: `${Math.max(contract.progressPct, 1)}%` }}
                     />
+                  </div>
+
+                  <div className="flex items-center justify-between text-[11px] font-mono">
+                    <span className={isLightTheme ? 'text-zinc-600' : 'text-zinc-400'}>
+                      {contract.isUnlocked ? 'Contract Complete' : `${contract.workdaysRemaining} workdays remaining`}
+                    </span>
+                    <span className={`font-bold ${isLightTheme ? 'text-amber-900' : 'text-amber-300'}`}>
+                      Release: 100% Principal
+                    </span>
                   </div>
                 </div>
               </div>
 
               {/* Executed Signals Log */}
-              <div className={`p-4 rounded-2xl border space-y-3 shadow-xs ${
-                isLightTheme ? 'bg-white border-zinc-200' : 'bg-slate-900 border-slate-800'
+              <div className={`p-4 sm:p-5 rounded-3xl border space-y-3.5 shadow-sm ${
+                isLightTheme ? 'bg-[#FFFDF8] border-amber-200/90' : 'bg-slate-900 border-slate-800'
               }`}>
                 <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <h3 className="text-xs sm:text-sm font-black uppercase tracking-wider flex items-center gap-1.5 text-zinc-900 dark:text-white">
-                    <History size={15} className="text-emerald-500 shrink-0" />
+                  <h3 className={`text-xs sm:text-sm font-black uppercase tracking-wider flex items-center gap-2 ${
+                    isLightTheme ? 'text-zinc-950' : 'text-white'
+                  }`}>
+                    <History size={16} className="text-amber-600 shrink-0" />
                     <span>Execution Logs ({Array.isArray(trade.executedSignals) ? trade.executedSignals.length : 0})</span>
                   </h3>
-                  <span className="text-[10px] font-mono text-emerald-500 font-bold px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20">
+                  <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-lg border ${
+                    isLightTheme 
+                      ? 'bg-emerald-100 text-emerald-950 border-emerald-300' 
+                      : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                  }`}>
                     Settle Ledger
                   </span>
                 </div>
 
-                <div className="space-y-2 max-h-[300px] overflow-y-auto pr-0.5">
+                <div className="space-y-2.5 max-h-[340px] overflow-y-auto pr-0.5">
                   {Array.isArray(trade.executedSignals) && trade.executedSignals.length > 0 ? (
                     [...trade.executedSignals].reverse().map((sig: any, idx: number) => {
                       const execTimeFormatted = sig.executedAt 
@@ -7658,58 +7640,68 @@ export default function StandardUserDashboard({
                       return (
                         <div 
                           key={idx} 
-                          className={`p-3 rounded-xl border space-y-2 text-xs font-mono transition-all ${
-                            isLightTheme ? 'bg-zinc-50 border-zinc-200' : 'bg-slate-950/80 border-slate-800'
+                          className={`p-3.5 rounded-2xl border space-y-2.5 text-xs font-mono transition-all shadow-2xs ${
+                            isLightTheme ? 'bg-[#FFF8EC] border-amber-200/80' : 'bg-slate-950/80 border-slate-800'
                           }`}
                         >
                           <div className="flex items-center justify-between gap-2 flex-wrap">
                             <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="font-black text-amber-500 text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/15">
+                              <span className={`font-black text-[10px] px-2 py-0.5 rounded-md border ${
+                                isLightTheme ? 'bg-amber-100 text-amber-950 border-amber-300' : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                              }`}>
                                 {sig.code}
                               </span>
-                              <span className="font-black text-emerald-600 dark:text-emerald-400 text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/15">
+                              <span className={`font-black text-[10px] px-2 py-0.5 rounded-md border ${
+                                isLightTheme ? 'bg-emerald-100 text-emerald-950 border-emerald-300' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                              }`}>
                                 {pair}
                               </span>
-                              <span className="text-[10px] text-zinc-400">{sig.time || 'Settled'}</span>
+                              <span className={`text-[10.5px] font-medium ${isLightTheme ? 'text-zinc-600' : 'text-zinc-400'}`}>
+                                {sig.time || 'Settled'}
+                              </span>
                             </div>
-                            <span className="text-[10px] font-bold text-emerald-500 uppercase flex items-center gap-1">
-                              <CheckCircle2 size={11} /> Settled
+                            <span className="text-[10px] font-black text-emerald-700 dark:text-emerald-400 uppercase flex items-center gap-1">
+                              <CheckCircle2 size={12} /> Settled
                             </span>
                           </div>
 
-                          {/* Simplified clean grid for space-saving */}
-                          <div className={`p-2 rounded-lg border grid grid-cols-3 gap-2 text-[10.5px] ${
-                            isLightTheme ? 'bg-white border-zinc-150' : 'bg-slate-900 border-slate-800'
+                          {/* Metric breakdown */}
+                          <div className={`p-2.5 rounded-xl border grid grid-cols-3 gap-2 text-[10.5px] ${
+                            isLightTheme ? 'bg-white/90 border-amber-200/70 shadow-2xs' : 'bg-slate-900 border-slate-800'
                           }`}>
                             <div>
-                              <span className="text-[9px] uppercase font-bold text-zinc-400 block">Capital</span>
-                              <span className={`font-bold ${isLightTheme ? 'text-zinc-900' : 'text-zinc-200'}`}>
+                              <span className={`text-[9px] uppercase font-black block ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>Capital</span>
+                              <span className={`font-black ${isLightTheme ? 'text-zinc-950' : 'text-zinc-200'}`}>
                                 ${tradedAmount.toFixed(2)}
                               </span>
                             </div>
                             <div>
-                              <span className="text-[9px] uppercase font-bold text-zinc-400 block">Entry &rarr; Exit</span>
+                              <span className={`text-[9px] uppercase font-black block ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>Entry &rarr; Exit</span>
                               <span className="font-bold text-zinc-400">
-                                <span className="text-amber-500">${entryP}</span> &rarr; <span className="text-emerald-500">${exitP}</span>
+                                <span className={isLightTheme ? 'text-amber-800' : 'text-amber-400'}>${entryP}</span> &rarr; <span className={isLightTheme ? 'text-emerald-700 font-black' : 'text-emerald-400 font-bold'}>${exitP}</span>
                               </span>
                             </div>
                             <div className="text-right">
-                              <span className="text-[9px] uppercase font-bold text-emerald-500 block">Net Profit</span>
-                              <span className="font-black text-emerald-600 dark:text-emerald-400">
+                              <span className={`text-[9px] uppercase font-black block ${isLightTheme ? 'text-emerald-800' : 'text-emerald-400'}`}>Net Profit</span>
+                              <span className="font-black text-emerald-700 dark:text-emerald-400">
                                 +${netP.toFixed(2)}
                               </span>
                             </div>
                           </div>
 
-                          <div className="flex items-center justify-between text-[9px] text-zinc-400 border-t border-zinc-200/45 dark:border-slate-800/45 pt-1">
+                          <div className={`flex items-center justify-between text-[9.5px] border-t pt-1.5 ${
+                            isLightTheme ? 'border-amber-200/60 text-zinc-600' : 'border-slate-800/60 text-zinc-400'
+                          }`}>
                             <span>Settle Timestamp</span>
-                            <span>{execTimeFormatted}</span>
+                            <span className="font-medium">{execTimeFormatted}</span>
                           </div>
                         </div>
                       );
                     })
                   ) : (
-                    <div className="p-4 text-center text-xs font-mono text-zinc-500 rounded-xl border border-dashed border-zinc-300 dark:border-slate-800">
+                    <div className={`p-4 text-center text-xs font-mono rounded-2xl border border-dashed ${
+                      isLightTheme ? 'bg-[#FFF8EC]/60 border-amber-300/60 text-zinc-600' : 'border-slate-800 text-zinc-500'
+                    }`}>
                       No executed signal records found yet.
                     </div>
                   )}
@@ -7717,13 +7709,19 @@ export default function StandardUserDashboard({
               </div>
 
               {/* Contract Capital Security Badge Banner */}
-              <div className={`p-4 rounded-2xl border text-xs flex items-start gap-3 ${
-                isLightTheme ? 'bg-blue-50 border-blue-200/80 text-blue-950' : 'bg-blue-950/40 border-blue-800/50 text-blue-200'
+              <div className={`p-4 sm:p-4.5 rounded-3xl border text-xs flex items-start gap-3.5 shadow-sm ${
+                isLightTheme 
+                  ? 'bg-amber-50/90 border-amber-300/80 text-amber-950' 
+                  : 'bg-blue-950/40 border-blue-800/50 text-blue-200'
               }`}>
-                <ShieldCheck size={20} className="text-blue-500 shrink-0 mt-0.5" />
-                <div className="space-y-0.5 leading-relaxed text-xs">
+                <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${
+                  isLightTheme ? 'bg-amber-500 text-slate-950 shadow-2xs' : 'bg-blue-500 text-white'
+                }`}>
+                  <ShieldCheck size={18} strokeWidth={2.5} />
+                </div>
+                <div className="space-y-1 leading-relaxed text-xs">
                   <p className="font-black text-sm">Contract Capital Security Verified</p>
-                  <p className="opacity-90">
+                  <p className={isLightTheme ? 'text-amber-900 font-medium' : 'opacity-90'}>
                     Your traded principal of <strong>${tradeCapital.toFixed(2)} USD</strong> is securely backed under capital assurance protocols for the full <strong>{contract.durationDays} workday</strong> duration. Accumulated accrued profits of <strong>${netProfit.toFixed(2)} USD</strong> remain unlocked and ready for transfer.
                   </p>
                 </div>

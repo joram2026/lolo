@@ -53,7 +53,7 @@ export async function seedDefaultPromoCodesIfEmpty(): Promise<void> {
         {
           code: 'EXTRAVIP',
           title: '48h VIP Extra Signal Pass',
-          description: 'Unlocks 48 continuous hours of high-yield (+3.5%) Extra Signals on all expert copy traders.',
+          description: 'Unlocks 48 continuous hours of high-yield Extra Signals on all expert copy traders.',
           type: 'EXTRA_SIGNAL_PASS',
           rewardValue: 48,
           minDepositRequirement: 0,
@@ -233,7 +233,7 @@ export async function redeemPromoCode(
       const newExpiry = new Date(baseDate.getTime() + hours * 60 * 60 * 1000);
       newExtraPassUntil = newExpiry.toISOString();
       userUpdates.extraSignalPassUntil = newExtraPassUntil;
-      rewardText = `Unlocked ${hours}h of +3.5% Extra Signals (Valid until ${newExpiry.toLocaleDateString()} ${newExpiry.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`;
+      rewardText = `Unlocked ${hours}h of Extra Signals (Valid until ${newExpiry.toLocaleDateString()} ${newExpiry.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`;
     } else {
       // General or percent deposit boost
       rewardText = `${promo.title} activated successfully`;
