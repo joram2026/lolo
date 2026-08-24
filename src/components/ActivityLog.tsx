@@ -53,6 +53,7 @@ interface ActivityLogProps {
 
 const FILTER_OPTIONS = [
   { value: 'all', label: 'All Transactions' },
+  { value: 'vouchers', label: 'Vouchers & Promos' },
   { value: 'bot', label: 'Auto Bot Trade' },
   { value: 'deposits', label: 'Deposits' },
   { value: 'withdrawals', label: 'Withdrawals' },
@@ -67,7 +68,7 @@ export default function ActivityLog({ userId, isLightTheme = false }: ActivityLo
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<'all' | 'deposits' | 'withdrawals' | 'buy' | 'sell' | 'swap' | 'referral' | 'investments' | 'bot'>('all');
+  const [filter, setFilter] = useState<'all' | 'vouchers' | 'deposits' | 'withdrawals' | 'buy' | 'sell' | 'swap' | 'referral' | 'investments' | 'bot'>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState(false);
 
@@ -119,6 +120,7 @@ export default function ActivityLog({ userId, isLightTheme = false }: ActivityLo
 
   // Filter transactions based on selection
   const filteredTransactions = transactions.filter(tx => {
+    const isVoucher = tx.type === 'voucher_reward' || tx.type === 'voucher' || tx.type === 'promo_voucher' || tx.type?.toLowerCase?.().includes('voucher') || (tx.title && tx.title.toLowerCase().includes('voucher'));
     const isDeposit = tx.type.startsWith('deposit');
     const isWithdrawal = tx.type.startsWith('withdraw');
     const isBuy = tx.type === 'buy_crypto';
@@ -128,9 +130,10 @@ export default function ActivityLog({ userId, isLightTheme = false }: ActivityLo
     const isInvestment = tx.type === 'invested' || tx.type === 'investment_earning';
     const isBot = tx.type === 'Auto Bot trade' || tx.type === 'bot_harvest' || tx.type === 'bot_trade' || tx.type === 'bot' || tx.type?.toLowerCase?.().includes('bot') || (tx.title && tx.title.toLowerCase().includes('bot'));
 
+    if (filter === 'vouchers') return isVoucher;
     if (filter === 'bot') return isBot;
     if (filter === 'deposits') return isDeposit;
-    if (filter === 'withdrawals') return isWithdrawal && !isBot;
+    if (filter === 'withdrawals') return isWithdrawal && !isBot && !isVoucher;
     if (filter === 'buy') return isBuy;
     if (filter === 'sell') return isSell;
     if (filter === 'swap') return isSwap;
@@ -204,6 +207,16 @@ export default function ActivityLog({ userId, isLightTheme = false }: ActivityLo
           isCredit: true,
           colorClass: isLightTheme ? 'text-emerald-700 font-extrabold' : 'text-emerald-400',
           bgClass: isLightTheme ? 'bg-emerald-50 border border-emerald-200 text-emerald-700' : 'bg-emerald-500/10 border-emerald-500/15 text-emerald-400',
+          icon: <Gift size={16} />
+        };
+      case 'voucher_reward':
+      case 'voucher':
+      case 'promo_voucher':
+        return {
+          label: tx?.title || 'Voucher Reward',
+          isCredit: true,
+          colorClass: isLightTheme ? 'text-emerald-700 font-extrabold' : 'text-emerald-400',
+          bgClass: isLightTheme ? 'bg-amber-50 border border-amber-200 text-amber-700' : 'bg-amber-500/10 border-amber-500/15 text-amber-400',
           icon: <Gift size={16} />
         };
       case 'first_deposit_commission':
@@ -337,6 +350,18 @@ export default function ActivityLog({ userId, isLightTheme = false }: ActivityLo
           icon: <Send size={16} />
         };
       default: {
+        const isVoucherType = (type && (type.toLowerCase().includes('voucher') || type.toLowerCase().includes('promo'))) || 
+                              (tx?.title && (tx.title.toLowerCase().includes('voucher') || tx.title.toLowerCase().includes('promo')));
+        if (isVoucherType) {
+          return {
+            label: tx?.title || 'Voucher Reward',
+            isCredit: true,
+            colorClass: isLightTheme ? 'text-emerald-700 font-extrabold' : 'text-emerald-400',
+            bgClass: isLightTheme ? 'bg-amber-50 border border-amber-200 text-amber-700' : 'bg-amber-500/10 border-amber-500/15 text-amber-400',
+            icon: <Gift size={16} />
+          };
+        }
+
         const isBotType = (type && type.toLowerCase().includes('bot')) || (tx?.title && tx.title.toLowerCase().includes('bot'));
         if (isBotType) {
           const isBotCredit = tx?.isCredit !== undefined 
@@ -347,7 +372,7 @@ export default function ActivityLog({ userId, isLightTheme = false }: ActivityLo
                   (tx?.paymentMessage && (
                     tx.paymentMessage.toLowerCase().includes('stopped') || 
                     tx.paymentMessage.toLowerCase().includes('returned') || 
-                    tx.paymentMessage.toLowerCase().includes('profit') ||
+                    tx.paymentMessage.toLowerCase().includes('profit') || 
                     tx.paymentMessage.toLowerCase().includes('harvest')
                   )));
           return {
@@ -362,17 +387,19 @@ export default function ActivityLog({ userId, isLightTheme = false }: ActivityLo
             icon: <Bot size={16} />
           };
         }
+
+        const isCredit = tx?.isCredit === true || type.startsWith('deposit') || type.includes('reward') || type.includes('bonus');
         const isDeposit = type.startsWith('deposit');
         return {
-          label: isDeposit ? 'Deposit' : 'Withdrawal',
-          isCredit: isDeposit,
-          colorClass: isDeposit 
+          label: isDeposit ? 'Deposit' : (isCredit ? 'Credit' : 'Withdrawal'),
+          isCredit: isCredit,
+          colorClass: isCredit 
             ? (isLightTheme ? 'text-emerald-700 font-extrabold' : 'text-emerald-400') 
             : (isLightTheme ? 'text-red-700 font-extrabold' : 'text-red-400'),
-          bgClass: isDeposit 
+          bgClass: isCredit 
             ? (isLightTheme ? 'bg-emerald-50 border border-emerald-200 text-emerald-700' : 'bg-emerald-500/10 border-emerald-500/15 text-emerald-400') 
             : (isLightTheme ? 'bg-red-50 border-red-200 text-red-700' : 'bg-red-500/10 border-red-500/15 text-red-400'),
-          icon: isDeposit ? <ArrowDownLeft size={16} /> : <ArrowUpRight size={16} />
+          icon: isCredit ? <ArrowDownLeft size={16} /> : <ArrowUpRight size={16} />
         };
       }
     }

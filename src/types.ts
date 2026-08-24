@@ -31,6 +31,7 @@ export type TransactionType =
   | 'referral_reward' 
   | 'first_deposit_commission'
   | 'welcome_bonus'
+  | 'voucher_reward'
   | 'invested' 
   | 'investment_earning' 
   | 'internal_send' 
@@ -236,4 +237,37 @@ export interface UserCopyTrade {
   }[];
   createdAt: any;
   updatedAt?: any;
+}
+
+export type PromoCodeRewardType = 'CASH_BONUS' | 'TRADE_CAPITAL' | 'EXTRA_SIGNAL_PASS' | 'PERCENT_DEPOSIT_BOOST';
+
+export interface PromoCode {
+  id: string;
+  code: string; // e.g. "WELCOME20", uppercase
+  title: string; // e.g. "Welcome $20 Cash Voucher"
+  description?: string;
+  type: PromoCodeRewardType;
+  rewardValue: number; // USD amount for CASH_BONUS/TRADE_CAPITAL, or Hours for EXTRA_SIGNAL_PASS (e.g. 24, 48)
+  minDepositRequirement?: number; // USD requirement before claiming, e.g. 0 or 10
+  maxRedemptions?: number; // total max global claims (0 or undefined = unlimited)
+  redemptionCount: number; // total times redeemed so far
+  currentRedemptions?: number;
+  claimedBy?: string[]; // array of user uids who have claimed this voucher
+  expiresAt?: any; // Firestore Timestamp or ISO string
+  isActive: boolean;
+  createdAt: any;
+  updatedAt?: any;
+}
+
+export interface VoucherClaim {
+  id: string;
+  userId: string;
+  userEmail: string;
+  promoCodeId: string;
+  code: string;
+  title: string;
+  type: PromoCodeRewardType;
+  rewardValue: number;
+  rewardText: string;
+  claimedAt: any;
 }

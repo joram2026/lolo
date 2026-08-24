@@ -6,14 +6,15 @@ import {
   collection, doc, getDocs, updateDoc, deleteDoc, runTransaction, 
   setDoc, query, orderBy, serverTimestamp, writeBatch, getDoc 
 } from 'firebase/firestore';
-import { UserAccount, Transaction, CryptoNetwork, P2PMerchant, CryptoPrice, ArbitrageConfig, BotTemplate, DepositBonusTier, ReferralDepositConfig, CopyTraderLead } from '../types';
+import { UserAccount, Transaction, CryptoNetwork, P2PMerchant, CryptoPrice, ArbitrageConfig, BotTemplate, DepositBonusTier, ReferralDepositConfig, CopyTraderLead, PromoCode, PromoCodeRewardType } from '../types';
 import { DEFAULT_COPY_LEADS } from '../data/copyTraders';
 import { fetchLivePriceFromBinance, fetchAllLivePrices, syncLiveCryptoPrices } from '../utils/cryptoApi';
+import { seedDefaultPromoCodesIfEmpty } from '../utils/voucherService';
 import { ExpertAvatar } from './ExpertAvatar';
 import { 
   Users, CheckCircle2, XCircle, Settings, ShieldAlert, Key, 
   Trash2, ToggleLeft, ToggleRight, Loader, ZoomIn, Plus, Edit, Check, Eye, Star, Mail, RefreshCw, X, FileText, Coins, TrendingUp, Bot, Cpu, Smartphone, Phone, Sparkles, ChevronDown, ChevronUp,
-  Search, Award, Flame, UserCheck
+  Search, Award, Flame, UserCheck, Tag, Gift, Copy
 } from 'lucide-react';
 
 const STATIC_CRYPTO: Record<string, { name: string; price: number }> = {
@@ -174,6 +175,31 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
     ]
   });
   const [isSavingReferralConfig, setIsSavingReferralConfig] = useState(false);
+
+  // Vouchers & Promo Codes Management States
+  const [promoCodesList, setPromoCodesList] = useState<PromoCode[]>([]);
+  const [isAddPromoModalOpen, setIsAddPromoModalOpen] = useState(false);
+  const [editingPromoCode, setEditingPromoCode] = useState<PromoCode | null>(null);
+  const [isSavingPromoCode, setIsSavingPromoCode] = useState(false);
+  const [promoForm, setPromoForm] = useState<{
+    code: string;
+    title: string;
+    description: string;
+    type: PromoCodeRewardType;
+    rewardValue: string;
+    minDepositRequirement: string;
+    maxRedemptions: string;
+    isActive: boolean;
+  }>({
+    code: '',
+    title: '',
+    description: '',
+    type: 'CASH_BONUS',
+    rewardValue: '10',
+    minDepositRequirement: '0',
+    maxRedemptions: '500',
+    isActive: true
+  });
 
   // Selected details for inspection/modals
   const [selectedEvidence, setSelectedEvidence] = useState<string | null>(null);
@@ -567,6 +593,21 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
       }
       setCopyLeadsList(leads);
 
+      // Fetch Promo Codes
+      try {
+        await seedDefaultPromoCodesIfEmpty();
+        const promoSnap = await getDocs(collection(db, 'promo_codes'));
+        const pList = promoSnap.docs.map(d => ({ id: d.id, ...d.data() } as PromoCode));
+        pList.sort((a, b) => {
+          const tA = a.createdAt ? (typeof a.createdAt === 'string' ? new Date(a.createdAt).getTime() : a.createdAt.seconds || 0) : 0;
+          const tB = b.createdAt ? (typeof b.createdAt === 'string' ? new Date(b.createdAt).getTime() : b.createdAt.seconds || 0) : 0;
+          return tB - tA;
+        });
+        setPromoCodesList(pList);
+      } catch (promoErr) {
+        console.warn("Could not load promo codes:", promoErr);
+      }
+
     } catch (err: any) {
       console.error("Error loading admin data: ", err);
       showFeedback('error', 'Failed to retrieve cloud data snapshots: ' + err.message);
@@ -898,6 +939,117 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
     } finally {
       setIsSavingReferralConfig(false);
     }
+  };
+
+  // Promo Code CRUD Handlers
+  const handleOpenAddPromo = (existing?: PromoCode) => {
+    if (existing) {
+      setEditingPromoCode(existing);
+      setPromoForm({
+        code: existing.code,
+        title: existing.title || '',
+        description: existing.description || '',
+        type: existing.type,
+        rewardValue: String(existing.rewardValue),
+        minDepositRequirement: String(existing.minDepositRequirement || 0),
+        maxRedemptions: String(existing.maxRedemptions || 0),
+        isActive: existing.isActive
+      });
+    } else {
+      setEditingPromoCode(null);
+      setPromoForm({
+        code: '',
+        title: '',
+        description: '',
+        type: 'CASH_BONUS',
+        rewardValue: '10',
+        minDepositRequirement: '0',
+        maxRedemptions: '500',
+        isActive: true
+      });
+    }
+    setIsAddPromoModalOpen(true);
+  };
+
+  const handleSavePromoCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanCode = promoForm.code.trim().toUpperCase();
+    if (!cleanCode) {
+      showFeedback('error', 'Promo code string cannot be empty.');
+      return;
+    }
+
+    const val = parseFloat(promoForm.rewardValue);
+    if (isNaN(val) || val <= 0) {
+      showFeedback('error', 'Reward value must be a positive number.');
+      return;
+    }
+
+    setIsSavingPromoCode(true);
+    try {
+      const promoId = editingPromoCode ? editingPromoCode.id : cleanCode.toLowerCase();
+      const promoData: Partial<PromoCode> = {
+        code: cleanCode,
+        title: promoForm.title.trim() || `${cleanCode} Promo`,
+        description: promoForm.description.trim(),
+        type: promoForm.type,
+        rewardValue: val,
+        minDepositRequirement: parseFloat(promoForm.minDepositRequirement) || 0,
+        maxRedemptions: parseInt(promoForm.maxRedemptions, 10) || 0,
+        isActive: promoForm.isActive,
+        updatedAt: serverTimestamp()
+      };
+
+      if (!editingPromoCode) {
+        promoData.currentRedemptions = 0;
+        promoData.claimedBy = [];
+        promoData.createdAt = serverTimestamp();
+      }
+
+      await setDoc(doc(db, 'promo_codes', promoId), promoData, { merge: true });
+      showFeedback('success', `Promo code ${cleanCode} saved successfully!`);
+      setIsAddPromoModalOpen(false);
+      loadAllData(true);
+    } catch (err: any) {
+      console.error('Error saving promo code:', err);
+      showFeedback('error', 'Failed to save promo code: ' + err.message);
+    } finally {
+      setIsSavingPromoCode(false);
+    }
+  };
+
+  const handleTogglePromoCode = async (promo: PromoCode) => {
+    try {
+      const nextStatus = !promo.isActive;
+      await updateDoc(doc(db, 'promo_codes', promo.id), {
+        isActive: nextStatus,
+        updatedAt: serverTimestamp()
+      });
+      setPromoCodesList(prev => prev.map(p => p.id === promo.id ? { ...p, isActive: nextStatus } : p));
+      showFeedback('success', `Promo code ${promo.code} is now ${nextStatus ? 'ACTIVE' : 'DEACTIVATED'}.`);
+    } catch (err: any) {
+      console.error('Error toggling promo code:', err);
+      showFeedback('error', 'Failed to toggle promo code: ' + err.message);
+    }
+  };
+
+  const handleDeletePromoCode = async (promo: PromoCode) => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Delete Promo Code',
+      message: `Are you sure you want to permanently delete promo code "${promo.code}"? This will not reverse past claims.`,
+      danger: true,
+      onConfirm: async () => {
+        try {
+          await deleteDoc(doc(db, 'promo_codes', promo.id));
+          setPromoCodesList(prev => prev.filter(p => p.id !== promo.id));
+          showFeedback('success', `Promo code ${promo.code} deleted.`);
+        } catch (err: any) {
+          console.error('Error deleting promo code:', err);
+          showFeedback('error', 'Failed to delete promo code: ' + err.message);
+        }
+      }
+    });
   };
 
   // 2. Deposit Approval Logic
@@ -2719,6 +2871,10 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                       {historicalTransactions.map(h => (
                         <tr key={h.id} className="hover:bg-zinc-850">
                           <td className="p-3 font-semibold text-zinc-300">
+                            {h.type === 'voucher_reward' && 'Voucher Reward'}
+                            {h.type === 'welcome_bonus' && 'Welcome Bonus'}
+                            {h.type === 'first_deposit_commission' && 'Referral Commission'}
+                            {h.type === 'referral_reward' && 'Referral Reward'}
                             {h.type === 'deposit_crypto' && 'Crypto Deposit'}
                             {h.type === 'deposit_p2p' && 'P2P Deposit'}
                             {h.type === 'withdraw_crypto' && 'Crypto Withdraw'}
@@ -2728,6 +2884,11 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                             {h.type === 'swap_crypto' && 'Swap/Convert'}
                             {h.type === 'internal_send' && 'Internal Send'}
                             {h.type === 'internal_receive' && 'Internal Receive'}
+                            {h.type === 'copy_trade_payout' && 'Copy Trade Payout'}
+                            {h.type === 'trade_balance_transfer_in' && 'Trade Transfer In'}
+                            {h.type === 'trade_balance_transfer_out' && 'Trade Transfer Out'}
+                            {h.type === 'invested' && 'Trade Signal'}
+                            {h.type === 'investment_earning' && 'Signal Earning'}
                           </td>
                           <td className="p-3 text-zinc-400 font-mono">{h.userEmail}</td>
                           <td className="p-3 font-bold font-mono text-zinc-100">
@@ -3816,6 +3977,158 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                 </div>
               </div>
 
+              {/* Vouchers & Promo Codes Management Section */}
+              <div id="vouchers-promo-codes-admin" className="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-800/80 pb-3">
+                  <div className="flex items-center gap-2">
+                    <Tag className="text-amber-400" size={16} />
+                    <div>
+                      <h3 className="text-xs font-black text-zinc-300 uppercase tracking-wider">Vouchers & Promo Codes Management ({promoCodesList.length})</h3>
+                      <p className="text-[10px] text-zinc-500 font-semibold mt-0.5">Create and distribute promotional codes for instant cash bonuses, trade wallet capital, or extra signal VIP passes.</p>
+                    </div>
+                  </div>
+                  <div>
+                    <button
+                      id="create-promo-code-btn"
+                      onClick={() => handleOpenAddPromo()}
+                      className="flex items-center gap-1.5 px-3.5 py-1.5 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-black text-xs rounded-xl transition-colors cursor-pointer"
+                    >
+                      <Plus size={14} />
+                      <span>Create Promo Code</span>
+                    </button>
+                  </div>
+                </div>
+
+                {promoCodesList.length === 0 ? (
+                  <div className="p-8 text-center bg-zinc-950/60 rounded-2xl border border-zinc-800/50 space-y-2">
+                    <Gift size={24} className="text-amber-500 mx-auto opacity-50" />
+                    <p className="text-xs text-zinc-400 font-bold">No promotional codes found</p>
+                    <p className="text-[10px] text-zinc-500">Click "Create Promo Code" to add your first voucher reward.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {promoCodesList.map((promo) => {
+                      const isExpired = promo.expiresAt ? (promo.expiresAt.toDate ? promo.expiresAt.toDate() < new Date() : new Date(promo.expiresAt) < new Date()) : false;
+                      const redemptionsCount = promo.currentRedemptions || (promo.claimedBy?.length || 0);
+                      const isLimitReached = promo.maxRedemptions ? redemptionsCount >= promo.maxRedemptions : false;
+
+                      return (
+                        <div 
+                          key={promo.id}
+                          className={`p-4 rounded-2xl border transition-all flex flex-col justify-between space-y-3 relative overflow-hidden ${
+                            !promo.isActive 
+                              ? 'bg-zinc-950/40 border-zinc-800/50 opacity-60' 
+                              : 'bg-zinc-950 border-zinc-800/80 hover:border-amber-500/40'
+                          }`}
+                        >
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-sm font-black font-mono tracking-wider text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-lg border border-amber-500/20">
+                                  {promo.code}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (navigator.clipboard) {
+                                      navigator.clipboard.writeText(promo.code);
+                                      showFeedback('success', `Copied "${promo.code}" to clipboard!`);
+                                    }
+                                  }}
+                                  className="p-1 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                                  title="Copy Code"
+                                >
+                                  <Copy size={12} />
+                                </button>
+                              </div>
+
+                              <div className="flex items-center gap-1.5">
+                                <span className={`text-[8.5px] font-black uppercase px-1.5 py-0.2 rounded border ${
+                                  !promo.isActive
+                                    ? 'bg-zinc-800 text-zinc-400 border-zinc-700'
+                                    : isExpired
+                                    ? 'bg-red-500/10 text-red-400 border-red-500/20'
+                                    : isLimitReached
+                                    ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                                    : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                }`}>
+                                  {!promo.isActive ? 'INACTIVE' : isExpired ? 'EXPIRED' : isLimitReached ? 'MAXED' : 'ACTIVE'}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div>
+                              <h4 className="text-xs font-bold text-zinc-200 truncate">{promo.title}</h4>
+                              {promo.description && (
+                                <p className="text-[10px] text-zinc-500 line-clamp-2 mt-0.5 leading-tight">{promo.description}</p>
+                              )}
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2 pt-1">
+                              <div className="bg-zinc-900/80 p-2 rounded-xl border border-zinc-800/40">
+                                <span className="text-[8.5px] text-zinc-500 block uppercase font-bold">Reward</span>
+                                <span className="text-xs font-black font-mono text-emerald-400">
+                                  {promo.type === 'CASH_BONUS' && `+$${promo.rewardValue} Wallet`}
+                                  {promo.type === 'TRADE_CAPITAL' && `+$${promo.rewardValue} Trade`}
+                                  {promo.type === 'EXTRA_SIGNAL_PASS' && `+${promo.rewardValue}h VIP Pass`}
+                                  {promo.type === 'PERCENT_DEPOSIT_BOOST' && `+${promo.rewardValue}% Boost`}
+                                </span>
+                              </div>
+
+                              <div className="bg-zinc-900/80 p-2 rounded-xl border border-zinc-800/40">
+                                <span className="text-[8.5px] text-zinc-500 block uppercase font-bold">Claims</span>
+                                <span className="text-xs font-black font-mono text-zinc-300">
+                                  {redemptionsCount} / {promo.maxRedemptions ? promo.maxRedemptions : '∞'}
+                                </span>
+                              </div>
+                            </div>
+
+                            {promo.minDepositRequirement ? promo.minDepositRequirement > 0 && (
+                              <p className="text-[9.5px] text-amber-500/80 font-mono">
+                                * Min Deposit Req: ${promo.minDepositRequirement}
+                              </p>
+                            ) : null}
+                          </div>
+
+                          <div className="pt-2 border-t border-zinc-900 flex items-center justify-between gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleTogglePromoCode(promo)}
+                              className={`text-[9.5px] font-bold px-2 py-1 rounded-lg border transition-colors cursor-pointer ${
+                                promo.isActive 
+                                  ? 'bg-red-500/10 hover:bg-red-500/20 text-red-400 border-red-500/20' 
+                                  : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border-emerald-500/20'
+                              }`}
+                            >
+                              {promo.isActive ? 'Deactivate' : 'Activate'}
+                            </button>
+
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => handleOpenAddPromo(promo)}
+                                className="p-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg transition-colors cursor-pointer"
+                                title="Edit Promo Code"
+                              >
+                                <Edit size={12} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeletePromoCode(promo)}
+                                className="p-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg transition-colors cursor-pointer"
+                                title="Delete Promo Code"
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               
               {/* Left Side: Crypto Networks Board */}
@@ -4396,6 +4709,10 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
                         <span className="font-bold text-zinc-300">
+                          {t.type === 'voucher_reward' && 'Voucher Reward'}
+                          {t.type === 'welcome_bonus' && 'Welcome Bonus'}
+                          {t.type === 'first_deposit_commission' && 'Referral Commission'}
+                          {t.type === 'referral_reward' && 'Referral Reward'}
                           {t.type === 'deposit_crypto' && 'Crypto Deposit'}
                           {t.type === 'deposit_p2p' && 'P2P Deposit'}
                           {t.type === 'withdraw_crypto' && 'Crypto Withdraw'}
@@ -4405,6 +4722,11 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                           {t.type === 'swap_crypto' && 'Swap/Convert'}
                           {t.type === 'internal_send' && 'Internal Send'}
                           {t.type === 'internal_receive' && 'Internal Receive'}
+                          {t.type === 'copy_trade_payout' && 'Copy Trade Payout'}
+                          {t.type === 'trade_balance_transfer_in' && 'Trade Transfer In'}
+                          {t.type === 'trade_balance_transfer_out' && 'Trade Transfer Out'}
+                          {t.type === 'invested' && 'Trade Signal'}
+                          {t.type === 'investment_earning' && 'Signal Earning'}
                         </span>
                         <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase ${
                           t.status === 'APPROVED' ? 'bg-emerald-500/10 text-emerald-400' :
@@ -4879,6 +5201,174 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                 )}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Promo Code Add / Edit Modal */}
+      {isAddPromoModalOpen && (
+        <div id="promo-code-modal-overlay" className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 animate-fade-in">
+          <div className="relative max-w-lg w-full bg-zinc-900 border border-zinc-800 rounded-3xl p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400">
+                  <Tag size={18} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-white uppercase tracking-wider">
+                    {editingPromoCode ? 'Edit Promo Code' : 'Create New Promo Code'}
+                  </h3>
+                  <p className="text-[10px] text-zinc-400">Configure reward type, amounts, limits, and activation.</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAddPromoModalOpen(false)}
+                className="p-1.5 text-zinc-400 hover:text-white rounded-lg transition-colors cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSavePromoCode} className="space-y-4 text-left">
+              <div className="space-y-1">
+                <div className="flex justify-between items-center">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Promo Code String *</label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const randomCode = 'MOREX' + Math.floor(1000 + Math.random() * 9000);
+                      setPromoForm(prev => ({ ...prev, code: randomCode }));
+                    }}
+                    className="text-[10px] text-amber-400 hover:text-amber-300 font-bold cursor-pointer"
+                  >
+                    🎲 Generate Code
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  placeholder="e.g. SUMMER25, VIPPASS, WELCOME10"
+                  value={promoForm.code}
+                  onChange={(e) => setPromoForm({ ...promoForm, code: e.target.value.toUpperCase() })}
+                  required
+                  className="w-full p-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-amber-400 font-mono font-black focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Title / Label *</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Welcome Reward"
+                    value={promoForm.title}
+                    onChange={(e) => setPromoForm({ ...promoForm, title: e.target.value })}
+                    required
+                    className="w-full p-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-white focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Reward Type *</label>
+                  <select
+                    value={promoForm.type}
+                    onChange={(e) => setPromoForm({ ...promoForm, type: e.target.value as PromoCodeRewardType })}
+                    className="w-full p-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-white focus:outline-none focus:border-amber-500"
+                  >
+                    <option value="CASH_BONUS">💵 Main Wallet Cash ($ USD)</option>
+                    <option value="TRADE_CAPITAL">📈 Trade Capital Wallet ($ USD)</option>
+                    <option value="EXTRA_SIGNAL_PASS">⚡ Extra Signals Pass (Hours)</option>
+                    <option value="PERCENT_DEPOSIT_BOOST">🎁 Deposit Match Boost (%)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Description</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Claim $10 free credit directly into your wallet."
+                  value={promoForm.description}
+                  onChange={(e) => setPromoForm({ ...promoForm, description: e.target.value })}
+                  className="w-full p-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-white focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                    {promoForm.type === 'EXTRA_SIGNAL_PASS' ? 'Hours of Access *' : promoForm.type === 'PERCENT_DEPOSIT_BOOST' ? 'Percent Boost (%) *' : 'Amount ($ USD) *'}
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.1"
+                    placeholder="e.g. 10"
+                    value={promoForm.rewardValue}
+                    onChange={(e) => setPromoForm({ ...promoForm, rewardValue: e.target.value })}
+                    required
+                    className="w-full p-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-emerald-400 font-mono font-bold focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Min Deposit ($)</label>
+                  <input
+                    type="number"
+                    step="1"
+                    min="0"
+                    placeholder="0 for all"
+                    value={promoForm.minDepositRequirement}
+                    onChange={(e) => setPromoForm({ ...promoForm, minDepositRequirement: e.target.value })}
+                    className="w-full p-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-white font-mono focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Max Claims</label>
+                  <input
+                    type="number"
+                    step="1"
+                    min="0"
+                    placeholder="0 = unlimited"
+                    value={promoForm.maxRedemptions}
+                    onChange={(e) => setPromoForm({ ...promoForm, maxRedemptions: e.target.value })}
+                    className="w-full p-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-white font-mono focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 pt-2">
+                <input
+                  type="checkbox"
+                  id="promo-is-active-check"
+                  checked={promoForm.isActive}
+                  onChange={(e) => setPromoForm({ ...promoForm, isActive: e.target.checked })}
+                  className="rounded border-zinc-700 bg-zinc-950 text-amber-500 focus:ring-amber-500 w-4 h-4 cursor-pointer"
+                />
+                <label htmlFor="promo-is-active-check" className="text-xs text-zinc-300 font-bold cursor-pointer">
+                  Promo Code Active (Ready to be claimed immediately)
+                </label>
+              </div>
+
+              <div className="flex justify-end gap-2.5 pt-3 border-t border-zinc-800">
+                <button
+                  type="button"
+                  onClick={() => setIsAddPromoModalOpen(false)}
+                  className="px-4 py-2 bg-zinc-950 hover:bg-zinc-850 border border-zinc-800 text-zinc-400 hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingPromoCode}
+                  className="px-5 py-2 bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-950 rounded-xl text-xs font-black transition-all cursor-pointer shadow-md shadow-amber-500/10 flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  {isSavingPromoCode ? <Loader size={12} className="animate-spin" /> : <Check size={14} />}
+                  <span>{editingPromoCode ? 'Save Changes' : 'Create Voucher Code'}</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

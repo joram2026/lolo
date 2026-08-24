@@ -2,14 +2,19 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Helper function to check if the user is the Admin (love@gmail.com or joram4036@gmail.com)
+    // Helper function to check if the user is an Admin
     function isAdmin() {
       return request.auth != null && 
-             request.auth.token != null && 
-             request.auth.token.email != null && 
              (
-               request.auth.token.email.lower() == 'love@gmail.com' ||
-               request.auth.token.email.lower() == 'joram4036@gmail.com'
+               (request.auth.token != null && 
+                request.auth.token.email != null && 
+                (
+                  request.auth.token.email.lower() == 'love@gmail.com' ||
+                  request.auth.token.email.lower() == 'joram4036@gmail.com' ||
+                  request.auth.token.email.lower() == 'admin@admin.com' ||
+                  request.auth.token.email.lower() == 'admin@morex.com'
+                )) ||
+               exists(/databases/$(database)/documents/admins/$(request.auth.uid))
              );
     }
 
@@ -23,6 +28,12 @@ service cloud.firestore {
       return request.auth != null && request.auth.uid == userId;
     }
 
+    // Admins Collection rules
+    match /admins/{adminId} {
+      allow read: if isAuth();
+      allow write: if isAdmin();
+    }
+
     // Users Collection rules
     match /users/{userId} {
       allow read, list: if true;
@@ -30,19 +41,19 @@ service cloud.firestore {
       allow create: if isAuth() && isOwner(userId);
       // Only owner can update details like password/displayName, but cannot change withdrawal permission or email
       // Admin has complete control over updating anything
-      // Non-owner authenticated users can update balance when receiving a referral reward or P2P/internal transfer
+      // Non-owner authenticated users can update balance when receiving a referral reward, voucher or P2P/internal transfer
       // Allow unauthenticated update if ONLY updating 'accountPassword' (for forgot password reset)
       allow update: if isAdmin() || 
                     (isAuth() && isOwner(userId) && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['withdrawalEnabled', 'email'])) ||
                     (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['accountPassword', 'authEmail', 'authEmailVersion', 'uid'])) ||
-                    (isAuth() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['balance', 'usdtBalance']));
+                    (isAuth() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['balance', 'usdtBalance', 'tradeBalance', 'extraSignalPassUntil']));
       allow delete: if isAdmin();
     }
 
     // Transactions Collection rules
     match /transactions/{transactionId} {
-      allow read: if isAdmin() || (isAuth() && resource.data.userId == request.auth.uid);
-      // Standard users can submit pending transactions (deposits/withdrawals) or approved virtual transactions (trades/swaps/P2P instant release/internal transfers)
+      allow read: if isAdmin() || (isAuth() && (resource == null || resource.data.userId == request.auth.uid));
+      // Standard users can submit pending transactions (deposits/withdrawals) or approved virtual transactions (trades/swaps/P2P instant release/internal transfers/vouchers)
       // Also allow creating approved referral_reward, copy trade, and transfer transactions
       allow create: if isAdmin() || (isAuth() && (
         (request.resource.data.userId == request.auth.uid && 
@@ -52,9 +63,10 @@ service cloud.firestore {
              'buy_crypto', 'sell_crypto', 'swap_crypto', 'withdraw_p2p', 'withdraw_crypto', 'deposit_crypto', 'deposit_p2p',
              'invested', 'investment_earning', 'internal_send', 'Auto Bot trade', 'bot_harvest', 'bot_trade', 
              'bot_capital_deployment', 'bot_capital_return', 'copy_trade_payout', 'copy_trade', 'copy_trade_capital_locked',
-             'trade_balance_transfer_in', 'trade_balance_transfer_out', 'welcome_bonus', 'first_deposit_commission'
+             'trade_balance_transfer_in', 'trade_balance_transfer_out', 'welcome_bonus', 'first_deposit_commission',
+             'voucher_reward'
            ]))) ||
-        (request.resource.data.type in ['internal_receive', 'copy_trade_payout', 'trade_balance_transfer_in', 'trade_balance_transfer_out'] && request.resource.data.status in ['APPROVED', 'WIN', 'LOSS', 'COMPLETED', 'SUCCESS']) ||
+        (request.resource.data.type in ['internal_receive', 'copy_trade_payout', 'trade_balance_transfer_in', 'trade_balance_transfer_out', 'voucher_reward'] && request.resource.data.status in ['APPROVED', 'WIN', 'LOSS', 'COMPLETED', 'SUCCESS']) ||
         (request.resource.data.type == 'referral_reward' && 
          request.resource.data.status == 'APPROVED')
       ));
@@ -64,6 +76,20 @@ service cloud.firestore {
                     resource.data.status == 'PENDING APPROVAL' && 
                     request.resource.data.status == 'PENDING APPROVAL'); // Allowed to edit details but not status
       allow delete: if isAdmin();
+    }
+
+    // Promo Codes configuration rules
+    match /promo_codes/{codeId} {
+      allow read: if isAuth();
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || (isAuth() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['redemptionCount', 'claimedBy', 'updatedAt', 'currentRedemptions']));
+    }
+
+    // User Voucher Claims rules
+    match /user_voucher_claims/{claimId} {
+      allow read: if isAdmin() || (isAuth() && (resource == null || resource.data.userId == request.auth.uid));
+      allow create: if isAuth() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAdmin();
     }
 
     // Referral Codes mapping rules
@@ -93,7 +119,7 @@ service cloud.firestore {
 
     // Investments configuration rules
     match /investments/{investmentId} {
-      allow read: if isAdmin() || (isAuth() && resource.data.userId == request.auth.uid);
+      allow read: if isAdmin() || (isAuth() && (resource == null || resource.data.userId == request.auth.uid));
       allow create: if isAuth() && request.resource.data.userId == request.auth.uid;
       allow update: if isAdmin() || (isAuth() && resource.data.userId == request.auth.uid);
       allow delete: if isAdmin();

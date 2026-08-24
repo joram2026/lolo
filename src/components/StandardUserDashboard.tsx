@@ -13,7 +13,7 @@ import {
   HelpCircle, RefreshCw, Coins, ArrowRight, MessageSquare, AlertCircle,
   History, ArrowLeft, X, ChevronDown, ChevronRight, Check, Lock, Unlock, Eye, EyeOff, Sparkles, BookOpen, Zap, Send,
   Cpu, Play, Pause, Bot, Crown, Gift, ListFilter, CheckCircle, CheckCircle2, Users, Globe, Clock, Headphones, Share2,
-  Copy, Calculator, Percent, Flame, ExternalLink, UserPlus
+  Copy, Calculator, Percent, Flame, ExternalLink, UserPlus, Tag
 } from 'lucide-react';
 import { RunningBotView } from './RunningBotView';
 import { getTradingPairConfig, TradingPairBadge, DEFAULT_BOT_TRADING_PAIRS } from '../utils/pairUtils';
@@ -1544,6 +1544,10 @@ export default function StandardUserDashboard({
 
   const getTxTypeBadge = (type: string) => {
     switch (type) {
+      case 'voucher_reward': return 'Voucher Reward';
+      case 'welcome_bonus': return 'Welcome Bonus';
+      case 'first_deposit_commission': return 'Referral Commission';
+      case 'referral_reward': return 'Referral Reward';
       case 'deposit_crypto': return 'Crypto Deposit';
       case 'deposit_p2p': return 'P2P Purchase';
       case 'withdraw_crypto': return 'Crypto Out';
@@ -3750,23 +3754,6 @@ export default function StandardUserDashboard({
                     }`}>
                       $ {totalPortfolioValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </h2>
-                    <div className={`flex items-center gap-1 mt-1.5 text-[11px] font-bold transition-all duration-300 ${
-                      isBalanceBlurred ? 'filter blur-md select-none pointer-events-none' : ''
-                    }`}>
-                      {portfolioDailyChange.isPositive ? (
-                        <span className="flex items-center gap-1 text-amber-100 bg-amber-700/30 px-2 py-0.5 rounded-full border border-amber-400/20 shadow-sm">
-                          <TrendingUp size={11} className="text-amber-300 shrink-0" />
-                          <span>+${Math.abs(portfolioDailyChange.diffUSD).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                          <span className="text-[9px] opacity-85 font-medium shrink-0">({portfolioDailyChange.pctChange.toFixed(2)}% today)</span>
-                        </span>
-                      ) : (
-                        <span className="flex items-center gap-1 text-rose-100 bg-rose-700/30 px-2 py-0.5 rounded-full border border-rose-400/20 shadow-sm">
-                          <TrendingDown size={11} className="text-rose-300 shrink-0" />
-                          <span>-${Math.abs(portfolioDailyChange.diffUSD).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                          <span className="text-[9px] opacity-85 font-medium shrink-0">({portfolioDailyChange.pctChange.toFixed(2)}% today)</span>
-                        </span>
-                      )}
-                    </div>
                   </div>
                   <div className="px-2 py-1 rounded-lg bg-white border border-white/20 text-[9px] font-black uppercase tracking-wider text-black shadow-sm">
                     USDT WALLET
@@ -3896,23 +3883,6 @@ export default function StandardUserDashboard({
                     }`}>
                       $ {totalPortfolioValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </h2>
-                    <div className={`flex items-center gap-1 mt-1.5 text-[11px] font-bold transition-all duration-300 ${
-                      isBalanceBlurred ? 'filter blur-md select-none pointer-events-none' : ''
-                    }`}>
-                      {portfolioDailyChange.isPositive ? (
-                        <span className="flex items-center gap-1 text-amber-100 bg-amber-700/30 px-2 py-0.5 rounded-full border border-amber-400/20 shadow-sm">
-                          <TrendingUp size={11} className="text-amber-300 shrink-0" />
-                          <span>+${Math.abs(portfolioDailyChange.diffUSD).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                          <span className="text-[9px] opacity-85 font-medium shrink-0">({portfolioDailyChange.pctChange.toFixed(2)}% today)</span>
-                        </span>
-                      ) : (
-                        <span className="flex items-center gap-1 text-rose-100 bg-rose-700/30 px-2 py-0.5 rounded-full border border-rose-400/20 shadow-sm">
-                          <TrendingDown size={11} className="text-rose-300 shrink-0" />
-                          <span>-${Math.abs(portfolioDailyChange.diffUSD).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                          <span className="text-[9px] opacity-85 font-medium shrink-0">({portfolioDailyChange.pctChange.toFixed(2)}% today)</span>
-                        </span>
-                      )}
-                    </div>
                   </div>
                   <div className="px-2 py-1 rounded-lg bg-white border border-white/20 text-[9px] font-black uppercase tracking-wider text-black shadow-sm">
                     USDT WALLET
@@ -3947,6 +3917,60 @@ export default function StandardUserDashboard({
                     <ArrowUpRight strokeWidth={3} className="text-slate-950 shrink-0 w-3.5 h-3.5 sm:w-4 sm:h-4" />
                     <span className="whitespace-nowrap truncate">Withdraw</span>
                   </button>
+                </div>
+              </div>
+
+              {/* Promo Code & Voucher Banner Quick Card */}
+              <div 
+                id="wallet-promo-voucher-banner"
+                onClick={() => {
+                  localStorage.setItem('profile_subpage', 'vouchers');
+                  onOpenProfile();
+                }}
+                className={`p-3.5 sm:p-4 rounded-2xl border transition-all cursor-pointer group flex items-center justify-between gap-3 shadow-sm hover:scale-[1.01] active:scale-[0.99] ${
+                  isLightTheme 
+                    ? 'bg-[#FFF8E1] border-amber-300/90 hover:border-amber-400 shadow-[0_2px_10px_rgba(245,158,11,0.08)]' 
+                    : 'bg-slate-800/90 border-slate-700/80 hover:border-amber-500/50'
+                }`}
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 group-hover:scale-105 transition-all ${
+                    isLightTheme 
+                      ? 'bg-amber-500 text-slate-950 shadow-xs' 
+                      : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                  }`}>
+                    <Tag size={18} strokeWidth={2.5} />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <h4 className={`text-xs font-black truncate tracking-tight ${
+                        isLightTheme ? 'text-zinc-900' : 'text-zinc-100'
+                      }`}>
+                        Have a Promo Code or Voucher?
+                      </h4>
+                      <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full shrink-0 tracking-wider font-mono ${
+                        isLightTheme 
+                          ? 'bg-amber-100 text-amber-900 border border-amber-300' 
+                          : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                      }`}>
+                        REWARDS
+                      </span>
+                    </div>
+                    <p className={`text-[11px] font-semibold truncate mt-0.5 ${
+                      isLightTheme ? 'text-zinc-600' : 'text-zinc-400'
+                    }`}>
+                      Redeem instant cash, trade bonuses, or VIP signals
+                    </p>
+                  </div>
+                </div>
+
+                <div className={`flex items-center gap-1 shrink-0 text-xs font-black px-2.5 py-1 rounded-xl transition-all ${
+                  isLightTheme 
+                    ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-2xs group-hover:shadow-xs' 
+                    : 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30'
+                }`}>
+                  <span>Redeem</span>
+                  <ChevronRight size={14} strokeWidth={3} className="group-hover:translate-x-0.5 transition-transform" />
                 </div>
               </div>
 
@@ -6173,72 +6197,74 @@ export default function StandardUserDashboard({
               </div>
             ) : (
               <div className="space-y-5 animate-fade-in">
-              {/* Interactive Trade Wallet Card at Top (Amber/Golden Wallet Theme) */}
-              <div id="copy-signal-interactive-trade-wallet" className="-mx-1 sm:-mx-2 md:mx-0 p-5 sm:p-6 md:p-7 px-5 sm:px-7 md:px-8 rounded-2xl sm:rounded-3xl bg-gradient-to-br from-amber-500 via-amber-500 to-orange-500 text-white shadow-lg shadow-amber-500/15 relative overflow-hidden transition-all duration-300 border border-amber-400/40">
+              {/* Interactive Trade Wallet Card at Top (Compact Space-Saving Golden Theme) */}
+              <div id="copy-signal-interactive-trade-wallet" className="-mx-1 sm:-mx-2 md:mx-0 p-3.5 sm:p-4 md:p-4.5 rounded-2xl sm:rounded-3xl bg-gradient-to-br from-amber-500 via-amber-500 to-orange-500 text-white shadow-md shadow-amber-500/15 relative overflow-hidden transition-all duration-300 border border-amber-400/40">
                 {/* Subtle light overlay glow */}
-                <div className="absolute top-0 right-0 w-56 h-56 bg-white/10 rounded-full blur-2xl -mr-12 -mt-12 pointer-events-none" />
-                <div className="absolute bottom-0 left-0 w-40 h-40 bg-orange-600/20 rounded-full blur-xl -ml-12 -mb-12 pointer-events-none" />
+                <div className="absolute top-0 right-0 w-44 h-44 bg-white/10 rounded-full blur-2xl -mr-10 -mt-10 pointer-events-none" />
+                <div className="absolute bottom-0 left-0 w-32 h-32 bg-orange-600/20 rounded-full blur-xl -ml-8 -mb-8 pointer-events-none" />
 
-                <div className="flex flex-col gap-3.5 sm:gap-4.5 relative z-10">
+                <div className="flex flex-col gap-2.5 relative z-10">
                   {/* Top Header Row */}
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-1.5">
-                      <Activity size={14} className="text-white shrink-0" />
-                      <span className="text-[11px] sm:text-xs font-black uppercase tracking-wider text-white font-sans">
+                      <Activity size={13} className="text-white shrink-0" strokeWidth={2.5} />
+                      <span className="text-[10.5px] sm:text-xs font-black uppercase tracking-wider text-white font-sans">
                         COPY TRADE BALANCE
-                      </span>
-                      <span className="text-[10px] text-amber-100/80 font-bold hidden md:inline-block">
-                        (Copy Signals & Trading)
                       </span>
                     </div>
 
-                    <span className="px-2.5 py-0.5 rounded-lg bg-white text-slate-950 font-black text-[10px] uppercase tracking-wider shadow-xs font-mono shrink-0">
+                    <span className="px-2 py-0.5 rounded-md bg-white text-slate-950 font-black text-[9px] uppercase tracking-wider shadow-2xs font-mono shrink-0">
                       TRADE WALLET
                     </span>
                   </div>
 
-                  {/* Balance & Action Buttons Container (Stacked on mobile, row on md) */}
-                  <div className="flex flex-col md:flex-row md:items-end justify-between gap-3.5 pt-0.5">
-                    {/* Balance Display */}
-                    <div className="space-y-1">
+                  {/* Main Balance & Key Badges */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                    <div>
                       <div className="flex items-baseline gap-1.5">
-                        <h2 className="text-3xl sm:text-4xl font-black font-sans tracking-tight text-white leading-none">
+                        <h2 className="text-2xl sm:text-3xl font-black font-sans tracking-tight text-white leading-none">
                           $ {(profile?.tradeBalance ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </h2>
-                        <span className="text-[11px] font-extrabold text-white/80 font-mono uppercase">USD</span>
+                        <span className="text-[10px] font-extrabold text-white/80 font-mono uppercase">USD</span>
                       </div>
 
-                      {/* System Wallet Pill & Free to Transfer Out Badge */}
-                      <div className="flex flex-wrap items-center gap-2 pt-0.5">
-                        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/20 text-white text-[11px] font-medium backdrop-blur-xs">
-                          <span className="text-white/80">Wallet Balance:</span>
+                      {/* Compact Badges Row (All on 1 clean line) */}
+                      <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                        <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-black/20 text-white text-[10px] font-medium backdrop-blur-xs">
+                          <span className="text-white/75">Wallet:</span>
                           <strong className="text-white font-mono font-bold">
-                            $ {getWalletBalance(profile).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            ${getWalletBalance(profile).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </strong>
                         </div>
 
                         {(() => {
                           const { lockedCapital, freeTransferrable } = getCopyTradeLockedAndFree();
                           return (
-                            <div id="copy-trade-free-transfer-badge" className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-950/60 border border-emerald-400/40 text-emerald-100 text-[11px] font-bold backdrop-blur-xs shadow-xs">
-                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
-                              <span className="text-emerald-100/90">Free for Transfer Out:</span>
-                              <strong className="text-emerald-300 font-mono font-black">
-                                $ {freeTransferrable.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                              </strong>
+                            <>
+                              <div id="copy-trade-free-transfer-badge" className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-950/70 border border-emerald-400/30 text-emerald-200 text-[10px] font-bold backdrop-blur-xs">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+                                <span className="text-emerald-100/80">Free:</span>
+                                <strong className="text-emerald-300 font-mono font-black">
+                                  ${freeTransferrable.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </strong>
+                              </div>
+
                               {lockedCapital > 0 && (
-                                <span className="text-[9.5px] text-amber-200/90 font-mono font-bold border-l border-emerald-400/30 pl-1.5 ml-0.5">
-                                  (${lockedCapital.toFixed(2)} Locked)
-                                </span>
+                                <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-950/50 border border-amber-300/30 text-amber-200 text-[10px] font-bold backdrop-blur-xs">
+                                  <span className="text-amber-200/80">Locked:</span>
+                                  <strong className="text-amber-300 font-mono font-bold">
+                                    ${lockedCapital.toFixed(2)}
+                                  </strong>
+                                </div>
                               )}
-                            </div>
+                            </>
                           );
                         })()}
                       </div>
                     </div>
 
-                    {/* Action Buttons: Transfer In (Black) & Transfer Out (White) */}
-                    <div className="flex items-center gap-2.5 shrink-0 pt-1 md:pt-0">
+                    {/* Compact Action Buttons */}
+                    <div className="flex items-center gap-2 shrink-0 pt-0.5 sm:pt-0">
                       <button
                         id="trade-wallet-transfer-in-btn"
                         type="button"
@@ -6246,9 +6272,9 @@ export default function StandardUserDashboard({
                           setTransferModalType('IN');
                           setTransferAmountInput('');
                         }}
-                        className="flex-1 md:flex-initial px-4 sm:px-5 py-2.5 rounded-xl sm:rounded-2xl bg-slate-950 hover:bg-slate-900 active:scale-95 text-white font-extrabold text-xs sm:text-sm shadow-sm transition-all cursor-pointer flex items-center justify-center gap-1.5 border border-slate-800"
+                        className="flex-1 sm:flex-initial px-3.5 py-2 rounded-xl bg-slate-950 hover:bg-slate-900 active:scale-95 text-white font-black text-xs shadow-2xs transition-all cursor-pointer flex items-center justify-center gap-1.5 border border-slate-800"
                       >
-                        <ArrowDownLeft size={15} strokeWidth={2.8} className="shrink-0 text-white" />
+                        <ArrowDownLeft size={13} strokeWidth={3} className="shrink-0 text-white" />
                         <span className="whitespace-nowrap">Transfer in</span>
                       </button>
 
@@ -6259,9 +6285,9 @@ export default function StandardUserDashboard({
                           setTransferModalType('OUT');
                           setTransferAmountInput('');
                         }}
-                        className="flex-1 md:flex-initial px-4 sm:px-5 py-2.5 rounded-xl sm:rounded-2xl bg-white hover:bg-amber-50 active:scale-95 text-slate-950 font-extrabold text-xs sm:text-sm shadow-sm transition-all cursor-pointer flex items-center justify-center gap-1.5 border border-white"
+                        className="flex-1 sm:flex-initial px-3.5 py-2 rounded-xl bg-white hover:bg-amber-50 active:scale-95 text-slate-950 font-black text-xs shadow-2xs transition-all cursor-pointer flex items-center justify-center gap-1.5 border border-white"
                       >
-                        <ArrowUpRight size={15} strokeWidth={2.8} className="shrink-0 text-slate-950" />
+                        <ArrowUpRight size={13} strokeWidth={3} className="shrink-0 text-slate-950" />
                         <span className="whitespace-nowrap">Transfer out</span>
                       </button>
                     </div>

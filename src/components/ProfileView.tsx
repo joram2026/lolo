@@ -9,8 +9,9 @@ import {
   Smartphone, Copy, CheckCircle2, QrCode, Power, Lock, ShieldAlert,
   ChevronRight, ChevronDown, ChevronUp, HelpCircle, Send, Download, Laptop,
   Gamepad2, LayoutGrid, Clapperboard, BookOpen, Star, Share2, Plus, 
-  Search, MoreVertical, Info, ShieldCheck, X, Zap
+  Search, MoreVertical, Info, ShieldCheck, X, Zap, Tag
 } from 'lucide-react';
+import VouchersView from './VouchersView';
 
 interface ProfileViewProps {
   user: any;
@@ -36,7 +37,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
   const message = messageState;
 
   // Active sub-page state
-  const [activeSubPage, setActiveSubPage] = useState<'menu' | 'personal' | 'referral' | 'pin' | '2fa' | 'support' | 'mobile_app'>(() => {
+  const [activeSubPage, setActiveSubPage] = useState<'menu' | 'personal' | 'referral' | 'vouchers' | 'pin' | '2fa' | 'support' | 'mobile_app'>(() => {
     return (localStorage.getItem('profile_subpage') as any) || 'menu';
   });
 
@@ -627,6 +628,27 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                 <div className="flex items-center gap-1.5 shrink-0">
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-zinc-100 border border-zinc-200 text-zinc-550">
                     {referredUsers.length}
+                  </span>
+                  <ChevronRight size={16} className="text-zinc-400 group-hover:text-zinc-600 transition-colors shrink-0" />
+                </div>
+              </button>
+
+              {/* Vouchers & Promo Codes */}
+              <button
+                id="nav-vouchers-rewards"
+                onClick={() => { setActiveSubPage('vouchers'); setMessage(null); }}
+                className="w-full bg-[#FFF8E1] border border-zinc-200/60 hover:border-amber-400/50 hover:bg-[#FFF8E1]/80 p-4 rounded-2xl flex items-center gap-4 transition-all cursor-pointer group shadow-sm"
+              >
+                <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-600 shrink-0 group-hover:bg-amber-500/20 group-hover:text-amber-700 transition-all">
+                  <Tag size={18} />
+                </div>
+                <div className="flex-1 min-w-0 text-left">
+                  <h4 className="text-sm font-bold text-zinc-700 group-hover:text-zinc-900 transition-colors">Vouchers & Promo Codes</h4>
+                  <p className="text-[11px] text-zinc-500 mt-0.5 leading-tight">Redeem promotional vouchers & trial passes</p>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-100 border border-amber-300 text-amber-850">
+                    Redeem
                   </span>
                   <ChevronRight size={16} className="text-zinc-400 group-hover:text-zinc-600 transition-colors shrink-0" />
                 </div>
@@ -1234,6 +1256,19 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Subpage: Vouchers & Promo Codes */}
+      {activeSubPage === 'vouchers' && (
+        <VouchersView
+          user={user}
+          profile={profile}
+          onProfileUpdate={(updated) => {
+            setProfile(prev => prev ? { ...prev, ...updated } : null);
+          }}
+          onBack={() => setActiveSubPage('menu')}
+          isLightTheme={true}
+        />
       )}
 
       {/* Subpage: Wallet Security PIN */}
