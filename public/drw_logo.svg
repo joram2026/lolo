@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 240" width="520" height="240">
+  <defs>
+    <radialGradient id="drwNavyGrad" cx="50%" cy="30%" r="90%">
+      <stop offset="0%" stop-color="#142742" />
+      <stop offset="100%" stop-color="#0a1626" />
+    </radialGradient>
+  </defs>
+
+  <!-- Dark Navy Base Container -->
+  <rect width="520" height="240" rx="32" fill="url(#drwNavyGrad)" />
+
+  <g transform="translate(45, 42)">
+    <!-- Letter 'D' -->
+    <path d="M 0 0 L 52 0 C 88 0 114 24 114 78 C 114 132 88 156 52 156 L 0 156 Z M 32 30 L 32 126 L 48 126 C 68 126 82 110 82 78 C 82 46 68 30 48 30 Z" fill="#FFFFFF" />
+
+    <!-- Letter 'R' -->
+    <path d="M 132 0 L 194 0 C 224 0 244 18 244 54 C 244 78 230 94 208 100 L 248 156 L 210 156 L 174 104 L 164 104 L 164 156 L 132 156 Z M 164 28 L 164 78 L 188 78 C 204 78 212 70 212 53 C 212 36 204 28 188 28 Z" fill="#FFFFFF" />
+
+    <!-- Stylized 'W': First White Diagonal Stripe -->
+    <polygon points="266,156 288,0 320,0 298,156" fill="#FFFFFF" />
+
+    <!-- Stylized 'W': Second White Diagonal Stripe -->
+    <polygon points="328,156 350,0 382,0 360,156" fill="#FFFFFF" />
+
+    <!-- Stylized 'W': Teal Accent Top Wedge -->
+    <polygon points="384,0 422,0 402,74" fill="#00D2B4" />
+  </g>
+</svg>

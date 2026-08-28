@@ -10,7 +10,7 @@ import {
   updatePassword
 } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp, getDoc, collection, query, where, getDocs, updateDoc, increment, addDoc, deleteDoc } from 'firebase/firestore';
-import { Shield, Mail, Lock, User, Phone, Sparkles, AlertCircle, RefreshCw, Eye, EyeOff, Globe, ChevronDown, Check, TrendingUp, Zap, Award, ArrowUpRight, Activity, DollarSign, Users, Percent, CheckCircle, ArrowLeft, KeyRound, CheckCheck, Headphones } from 'lucide-react';
+import { Shield, Mail, Lock, User, Phone, Sparkles, AlertCircle, RefreshCw, Eye, EyeOff, Globe, ChevronDown, Check, TrendingUp, Zap, Award, ArrowUpRight, Activity, DollarSign, Users, Percent, CheckCircle, ArrowLeft, KeyRound, CheckCheck, Headphones, Handshake } from 'lucide-react';
 import { validateEmailAddress } from '../utils/emailValidation';
 import { sendEmailOtp, verifyEmailOtp } from '../utils/otpService';
 
@@ -782,26 +782,59 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
       </div>
 
       {/* 2. Centered Auth Container */}
-      <div className="w-full max-w-sm px-4 relative z-10 flex flex-col justify-center">
+      <div className="w-full max-w-[420px] px-4 relative z-10 flex flex-col justify-center">
             
-            {/* Logo/Banner section */}
-            <div className="text-center mb-6">
-              <div className="inline-flex items-center justify-center mb-3 relative group">
-                <div className="absolute inset-0 bg-amber-500/10 rounded-full blur-xl group-hover:bg-amber-500/20 transition-all duration-700 animate-pulse"></div>
-                <div className="relative w-16 h-16 rounded-2xl bg-white border border-zinc-200/80 p-1.5 shadow-lg flex items-center justify-center overflow-hidden">
-                  <img 
-                    src="/icon.svg" 
-                    alt="Morex" 
-                    className="w-full h-full object-contain transform group-hover:scale-105 transition-transform duration-500"
-                    referrerPolicy="no-referrer"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-zinc-950/5 to-transparent pointer-events-none"></div>
+            {/* Logo/Banner section with MOREX + DRW Collaboration */}
+            <div className="text-center mb-5">
+              {/* Sleek Unified Collaboration Badge with Names Below Logos */}
+              <div className="inline-flex items-center gap-3 sm:gap-4 p-2.5 px-4 bg-white/95 backdrop-blur-md rounded-2xl border border-amber-200/90 shadow-sm mb-4 group hover:border-amber-300 transition-all">
+                {/* MOREX Logo & Label */}
+                <div className="flex flex-col items-center justify-center gap-1">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-500 to-yellow-400 p-1 flex items-center justify-center shadow-xs shrink-0">
+                    <img 
+                      src="/icon.svg" 
+                      alt="MOREX" 
+                      className="w-full h-full object-contain filter drop-shadow-xs"
+                      referrerPolicy="no-referrer"
+                    />
+                  </div>
+                  <span className="text-[10.5px] font-black text-zinc-900 tracking-wider">
+                    MOREX
+                  </span>
+                </div>
+
+                {/* Collaboration Symbol */}
+                <div className="flex items-center justify-center mb-4">
+                  <span className="text-[11px] font-black text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded-md border border-amber-200 font-mono">
+                    ✕
+                  </span>
+                </div>
+
+                {/* DRW Trading Group Logo & Label */}
+                <div className="flex flex-col items-center justify-center gap-1">
+                  <div className="h-10 px-3 rounded-xl bg-[#0a1626] border border-slate-700/60 flex items-center justify-center shrink-0 shadow-2xs">
+                    <img 
+                      src="/drw_logo.svg" 
+                      alt="DRW Trading Group" 
+                      className="h-5.5 w-auto object-contain"
+                      referrerPolicy="no-referrer"
+                    />
+                  </div>
+                  <span className="text-[10px] font-extrabold text-slate-900 tracking-tight whitespace-nowrap">
+                    DRW Trading Group
+                  </span>
                 </div>
               </div>
-              <h1 className="text-xl font-black text-zinc-900 tracking-tight">Morex Holdings</h1>
-              <p className="text-[11px] text-zinc-500 mt-0.5 max-w-[260px] mx-auto leading-normal">
-                Start earning from high-yield crypto & forex arbitrage copy trading.
-              </p>
+
+              {/* Attractive 'Be Your Own Boss' Headline & Subtitle */}
+              <div className="space-y-1">
+                <h1 className="text-2xl sm:text-[26px] font-black tracking-tight text-zinc-900 leading-tight">
+                  Be Your Own Boss<span className="text-amber-500">.</span>
+                </h1>
+                <p className="text-xs sm:text-[12.5px] font-medium text-zinc-600 max-w-[310px] mx-auto leading-relaxed">
+                  Earn daily passive income with automated expert copy trading & high-frequency arbitrage.
+                </p>
+              </div>
             </div>
 
             {/* Main Auth Form Container Card */}
@@ -1302,12 +1335,12 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
                   </form>
 
                   {/* Toggle Button */}
-                  <div className="text-center">
+                  <div className="text-center pt-1">
                     {isReset ? (
                       <button
                         id="auth-back-to-login"
                         onClick={() => { navigate('/login'); setError(null); }}
-                        className="text-xs font-semibold text-zinc-500 hover:text-zinc-800 hover:underline"
+                        className="text-xs font-semibold text-zinc-500 hover:text-zinc-800 hover:underline cursor-pointer"
                       >
                         Back to Sign In
                       </button>
@@ -1317,7 +1350,7 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
                         <button
                           id="auth-toggle-btn"
                           onClick={() => { navigate(isSignUp ? '/login' : '/signup'); setError(null); }}
-                          className="text-xs font-bold text-amber-600 hover:text-amber-700 hover:underline"
+                          className="text-xs font-bold text-amber-600 hover:text-amber-700 hover:underline cursor-pointer"
                         >
                           {isSignUp ? 'Sign In' : 'Sign Up'}
                         </button>
