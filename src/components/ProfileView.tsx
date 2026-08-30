@@ -9,7 +9,7 @@ import {
   Smartphone, Copy, CheckCircle2, QrCode, Power, Lock, ShieldAlert,
   ChevronRight, ChevronDown, ChevronUp, HelpCircle, Send, Download, Laptop,
   Gamepad2, LayoutGrid, Clapperboard, BookOpen, Star, Share2, Plus, 
-  Search, MoreVertical, Info, ShieldCheck, X, Zap, Tag
+  Search, MoreVertical, Info, ShieldCheck, X, Zap, Tag, Wallet
 } from 'lucide-react';
 import VouchersView from './VouchersView';
 
@@ -37,7 +37,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
   const message = messageState;
 
   // Active sub-page state
-  const [activeSubPage, setActiveSubPage] = useState<'menu' | 'personal' | 'referral' | 'vouchers' | 'pin' | '2fa' | 'support' | 'mobile_app'>(() => {
+  const [activeSubPage, setActiveSubPage] = useState<'menu' | 'personal' | 'referral' | 'vouchers' | 'pin' | 'withdrawal_address' | '2fa' | 'support' | 'mobile_app'>(() => {
     return (localStorage.getItem('profile_subpage') as any) || 'menu';
   });
 
@@ -60,6 +60,22 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
   };
   const pinMessage = pinMessageState;
   const [pinSaving, setPinSaving] = useState(false);
+
+  // BEP20 Withdrawal Address Binding States
+  const [bep20AddressInput, setBep20AddressInput] = useState('');
+  const [bep20PinInput, setBep20PinInput] = useState('');
+  const [bep202faInput, setBep202faInput] = useState('');
+  const [isChangingAddress, setIsChangingAddress] = useState(false);
+  const [addressSaving, setAddressSaving] = useState(false);
+  const [addressCopied, setAddressCopied] = useState(false);
+  const [addressMessageState, setAddressMessageState] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const setAddressMessage = (msg: { type: 'success' | 'error'; text: string } | null) => {
+    setAddressMessageState(msg);
+    if (msg) {
+      if (msg.type === 'success') toast.success(msg.text, 'Withdrawal Address');
+      else toast.error(msg.text, 'Address Error');
+    }
+  };
 
   // Two-Factor Authentication States
   const [is2faSetupOpen, setIs2faSetupOpen] = useState(false);
@@ -450,6 +466,84 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
     }
   };
 
+  const handleSaveBep20Address = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAddressMessage(null);
+
+    const cleanAddress = bep20AddressInput.trim();
+
+    // Validate BEP20 format: 0x followed by 40 hex characters
+    if (!/^0x[a-fA-F0-9]{40}$/.test(cleanAddress)) {
+      setAddressMessage({
+        type: 'error',
+        text: 'Invalid BEP20 address. Must be a valid 42-character BNB Smart Chain address starting with 0x (e.g. 0x71C...3a9F).'
+      });
+      return;
+    }
+
+    // Require Wallet PIN verification if user has configured a PIN
+    if (profile?.walletPassword) {
+      if (!bep20PinInput || bep20PinInput.trim() !== profile.walletPassword) {
+        setAddressMessage({
+          type: 'error',
+          text: 'Incorrect 4-digit Wallet Security PIN. Please enter your valid PIN to authorize binding.'
+        });
+        return;
+      }
+    } else {
+      setAddressMessage({
+        type: 'error',
+        text: 'Please configure your 4-digit Wallet Security PIN in the PIN menu first before binding a withdrawal address.'
+      });
+      return;
+    }
+
+    // If 2FA active, require Google Authenticator code
+    if (profile?.twoFactorEnabled) {
+      if (!bep202faInput || bep202faInput.length !== 6 || isNaN(Number(bep202faInput))) {
+        setAddressMessage({
+          type: 'error',
+          text: 'Please enter a valid 6-digit Google Authenticator code to authorize binding.'
+        });
+        return;
+      }
+    }
+
+    setAddressSaving(true);
+    try {
+      const docRef = doc(db, 'users', user.uid);
+      const isUpdating = !!profile?.bep20WithdrawalAddress;
+      await updateDoc(docRef, {
+        bep20WithdrawalAddress: cleanAddress,
+        bep20AddressBoundAt: new Date().toISOString(),
+        withdrawalAddressVerified: true
+      });
+
+      setProfile(prev => prev ? {
+        ...prev,
+        bep20WithdrawalAddress: cleanAddress,
+        bep20AddressBoundAt: new Date().toISOString(),
+        withdrawalAddressVerified: true
+      } : null);
+
+      setBep20AddressInput('');
+      setBep20PinInput('');
+      setBep202faInput('');
+      setIsChangingAddress(false);
+
+      setAddressMessage({
+        type: 'success',
+        text: isUpdating ? 'BEP20 withdrawal address successfully updated!' : 'BEP20 withdrawal address successfully locked and bound!'
+      });
+      setTimeout(() => setAddressMessage(null), 4000);
+    } catch (err: any) {
+      console.error('Error saving BEP20 address:', err);
+      setAddressMessage({ type: 'error', text: err.message || 'Failed to save BEP20 withdrawal address.' });
+    } finally {
+      setAddressSaving(false);
+    }
+  };
+
   const triggerFileDownload = () => {
     try {
       const a = document.createElement('a');
@@ -675,6 +769,41 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                   ) : (
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 border border-amber-100 text-amber-600 animate-pulse">
                       Not Set
+                    </span>
+                  )}
+                  <ChevronRight size={16} className="text-zinc-400 group-hover:text-zinc-600 transition-colors shrink-0" />
+                </div>
+              </button>
+
+              {/* Bound Withdrawal Address (BEP20) */}
+              <button
+                id="nav-withdrawal-address"
+                onClick={() => { 
+                  setActiveSubPage('withdrawal_address'); 
+                  setAddressMessage(null);
+                  setIsChangingAddress(false);
+                }}
+                className="w-full bg-[#FFF8E1] border border-zinc-200/60 hover:border-amber-400/50 hover:bg-[#FFF8E1]/80 p-4 rounded-2xl flex items-center gap-4 transition-all cursor-pointer group shadow-sm"
+              >
+                <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-600 shrink-0 group-hover:bg-amber-500/20 group-hover:text-amber-700 transition-all">
+                  <Wallet size={18} />
+                </div>
+                <div className="flex-1 min-w-0 text-left">
+                  <div className="flex items-center gap-2">
+                    <h4 className="text-sm font-bold text-zinc-700 group-hover:text-zinc-900 transition-colors">Bound USDT Address</h4>
+                    <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 bg-amber-100/90 text-amber-900 border border-amber-300/80 rounded">USDT BEP20</span>
+                  </div>
+                  <p className="text-[11px] text-zinc-500 mt-0.5 leading-tight">Verified destination wallet for fast automated USDT cashouts</p>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {profile?.bep20WithdrawalAddress ? (
+                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 flex items-center gap-1">
+                      <CheckCircle2 size={10} />
+                      <span>{profile.bep20WithdrawalAddress.slice(0, 4)}...{profile.bep20WithdrawalAddress.slice(-4)}</span>
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-50 border border-rose-200 text-rose-600 animate-pulse">
+                      Not Bound
                     </span>
                   )}
                   <ChevronRight size={16} className="text-zinc-400 group-hover:text-zinc-600 transition-colors shrink-0" />
@@ -1431,7 +1560,233 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
         </div>
       )}
 
-      {/* Subpage: Google Authenticator 2FA */}
+      {/* Subpage: Bound Withdrawal Address (BEP20) */}
+      {activeSubPage === 'withdrawal_address' && (
+        <div className="space-y-6">
+          {/* Header */}
+          <div className="flex items-center gap-3">
+            <button 
+              id="withdrawal-address-back-btn"
+              onClick={() => { setActiveSubPage('menu'); setAddressMessage(null); }}
+              className="p-2.5 rounded-full bg-white border border-zinc-200 text-zinc-650 hover:text-zinc-900 transition-colors cursor-pointer shadow-sm active:scale-95"
+            >
+              <ArrowLeft size={18} />
+            </button>
+            <div className="text-left">
+              <h2 className="text-xl font-bold tracking-tight text-zinc-800">Bound USDT Withdrawal Address</h2>
+              <p className="text-xs text-zinc-500">USDT BEP20 (BNB Smart Chain) destination wallet</p>
+            </div>
+          </div>
+
+          <div id="bep20-address-security-card" className="space-y-4 text-left">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Wallet className="text-amber-500" size={18} />
+                <h3 className="text-sm font-bold text-zinc-800 font-sans">USDT (BEP20) Payout Address</h3>
+              </div>
+              {profile?.bep20WithdrawalAddress ? (
+                <span className="text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-0.5 rounded-full font-bold flex items-center gap-1 uppercase tracking-wider">
+                  <CheckCircle2 size={10} /> Verified & Bound
+                </span>
+              ) : (
+                <span className="text-[10px] bg-rose-50 text-rose-600 border border-rose-200 px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider animate-pulse">
+                  Unbound
+                </span>
+              )}
+            </div>
+
+            {/* Explanation / Security Banner */}
+            <div className="p-3.5 bg-amber-50/70 border border-amber-200/80 rounded-2xl flex items-start gap-3 text-xs text-amber-900">
+              <ShieldCheck size={18} className="text-amber-600 shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <p className="font-bold text-[11px] text-amber-950 uppercase tracking-wide">
+                  USDT Zero Network Mismatch Protection
+                </p>
+                <p className="text-[11px] text-amber-800 leading-relaxed">
+                  USDT withdrawals are securely processed via the fast, low-fee BEP20 (BNB Smart Chain) network and route automatically to your verified bound address. This prevents network mismatches or loss of funds.
+                </p>
+              </div>
+            </div>
+
+            {profile?.bep20WithdrawalAddress && !isChangingAddress ? (
+              <div className="bg-[#FFF8E1] border border-zinc-200 shadow-sm rounded-2xl p-4 sm:p-5 flex flex-col gap-4 text-left">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Current Bound Address</span>
+                    <span className="text-[9px] font-mono font-bold px-2 py-0.5 bg-amber-100 text-amber-900 border border-amber-300 rounded-md">
+                      USDT BEP20 (BSC)
+                    </span>
+                  </div>
+
+                  <div className="p-3 bg-white border border-zinc-200/80 rounded-xl flex items-center justify-between gap-3">
+                    <span className="font-mono text-xs font-bold text-zinc-800 break-all select-all">
+                      {profile.bep20WithdrawalAddress}
+                    </span>
+                    <button
+                      type="button"
+                      id="copy-bound-address-btn"
+                      onClick={() => {
+                        if (profile.bep20WithdrawalAddress) {
+                          navigator.clipboard.writeText(profile.bep20WithdrawalAddress);
+                          setAddressCopied(true);
+                          toast.success('Address copied to clipboard', 'Copied');
+                          setTimeout(() => setAddressCopied(false), 2500);
+                        }
+                      }}
+                      className="p-2 rounded-lg bg-zinc-50 hover:bg-zinc-100 border border-zinc-200 text-zinc-600 transition-colors shrink-0 cursor-pointer"
+                      title="Copy Address"
+                    >
+                      {addressCopied ? <Check size={14} className="text-emerald-600" /> : <Copy size={14} />}
+                    </button>
+                  </div>
+
+                  <p className="text-[10px] text-zinc-500">
+                    Bound status: <strong className="text-emerald-700 font-semibold">Active & Locked</strong>. USDT withdrawals will be routed to this wallet.
+                  </p>
+                </div>
+
+                <button
+                  id="change-bep20-address-btn"
+                  type="button"
+                  onClick={() => {
+                    setIsChangingAddress(true);
+                    setBep20AddressInput(profile.bep20WithdrawalAddress || '');
+                    setBep20PinInput('');
+                    setBep202faInput('');
+                    setAddressMessage(null);
+                  }}
+                  className="w-full py-2.5 bg-zinc-100 border border-zinc-200 hover:bg-zinc-200 text-zinc-700 hover:text-zinc-900 rounded-xl text-xs font-bold transition-all cursor-pointer text-center active:scale-[0.99]"
+                >
+                  Update Bound USDT BEP20 Address
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleSaveBep20Address} className="bg-[#FFF8E1] border border-zinc-200 shadow-sm rounded-2xl p-4 sm:p-5 space-y-4 text-left">
+                <h4 className="text-xs font-bold text-zinc-800 flex items-center justify-between">
+                  <span>{profile?.bep20WithdrawalAddress ? 'Update Bound USDT BEP20 Address' : 'Bind New USDT BEP20 Address'}</span>
+                  <span className="text-[10px] text-amber-700 font-mono bg-amber-100/70 px-2 py-0.5 rounded border border-amber-300/60">USDT BEP20 Only</span>
+                </h4>
+
+                {/* BEP20 Address Input */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block">
+                    BNB Smart Chain (BEP20) Address *
+                  </label>
+                  <div className="relative">
+                    <input
+                      id="bep20-address-input"
+                      type="text"
+                      required
+                      placeholder="0x..."
+                      value={bep20AddressInput}
+                      onChange={(e) => setBep20AddressInput(e.target.value.trim())}
+                      className="w-full px-3.5 py-2.5 pr-8 bg-zinc-50 border border-zinc-200 rounded-xl font-mono text-xs text-zinc-800 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
+                    />
+                    {bep20AddressInput && (
+                      <div className="absolute inset-y-0 right-0 pr-2.5 flex items-center pointer-events-none">
+                        {/^0x[a-fA-F0-9]{40}$/.test(bep20AddressInput.trim()) ? (
+                          <CheckCircle2 size={16} className="text-emerald-600" />
+                        ) : (
+                          <AlertCircle size={16} className="text-rose-500" />
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-zinc-500 leading-tight">
+                    Must start with <strong className="font-mono text-zinc-700">0x</strong> and be 42 characters long.
+                  </p>
+                </div>
+
+                {/* Security PIN Authorization */}
+                <div className="space-y-1.5 pt-1 border-t border-zinc-100">
+                  <div className="flex justify-between items-center">
+                    <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider flex items-center gap-1">
+                      <Lock size={11} className="text-amber-500" />
+                      <span>Wallet Security PIN (4 Digits) *</span>
+                    </label>
+                    {!profile?.walletPassword && (
+                      <button
+                        type="button"
+                        onClick={() => { setActiveSubPage('pin'); }}
+                        className="text-[10px] text-amber-600 font-bold hover:underline cursor-pointer"
+                      >
+                        Set PIN First
+                      </button>
+                    )}
+                  </div>
+                  <input
+                    id="bep20-pin-input"
+                    type="password"
+                    required
+                    maxLength={4}
+                    placeholder="••••"
+                    value={bep20PinInput}
+                    onChange={(e) => setBep20PinInput(e.target.value.replace(/\D/g, ''))}
+                    className="w-full px-3.5 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-center font-mono text-sm tracking-widest text-zinc-800 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
+                  />
+                </div>
+
+                {/* Google Authenticator if enabled */}
+                {profile?.twoFactorEnabled && (
+                  <div className="space-y-1.5 pt-1 border-t border-zinc-100">
+                    <label className="text-xs font-semibold text-zinc-600 flex items-center gap-1.5">
+                      <Smartphone size={13} className="text-amber-500" />
+                      <span>Google Authenticator (2FA) Code *</span>
+                    </label>
+                    <input
+                      id="bep20-2fa-input"
+                      type="text"
+                      required
+                      maxLength={6}
+                      placeholder="000000"
+                      value={bep202faInput}
+                      onChange={(e) => setBep202faInput(e.target.value.replace(/\D/g, ''))}
+                      className="w-full px-3.5 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-center font-mono text-sm tracking-widest text-zinc-800 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
+                    />
+                  </div>
+                )}
+
+                <div className="flex gap-2 pt-2">
+                  <button
+                    id="submit-bep20-address-btn"
+                    type="submit"
+                    disabled={addressSaving || !bep20AddressInput || !/^0x[a-fA-F0-9]{40}$/.test(bep20AddressInput.trim()) || (profile?.walletPassword ? bep20PinInput.length !== 4 : false)}
+                    className="flex-1 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 disabled:bg-zinc-200 disabled:text-zinc-400 text-white font-bold rounded-xl text-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5 shadow-md shadow-amber-500/10 active:scale-95"
+                  >
+                    {addressSaving ? (
+                      <>
+                        <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        <span>Saving Address...</span>
+                      </>
+                    ) : (
+                      <span>Lock & Bind BEP20 Address</span>
+                    )}
+                  </button>
+
+                  {profile?.bep20WithdrawalAddress && (
+                    <button
+                      id="cancel-bep20-edit-btn"
+                      type="button"
+                      onClick={() => {
+                        setIsChangingAddress(false);
+                        setBep20AddressInput('');
+                        setBep20PinInput('');
+                        setBep202faInput('');
+                        setAddressMessage(null);
+                      }}
+                      className="px-4 py-2.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-600 font-bold rounded-xl text-xs transition-colors cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                  )}
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Subpage: 2FA */}
       {activeSubPage === '2fa' && (
         <div className="space-y-6">
           {/* Header */}

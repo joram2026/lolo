@@ -18,6 +18,9 @@ export interface UserAccount {
   holdings?: Record<string, number>;
   twoFactorEnabled?: boolean;
   twoFactorSecret?: string;
+  bep20WithdrawalAddress?: string;
+  bep20AddressBoundAt?: any;
+  withdrawalAddressVerified?: boolean;
 }
 
 export type TransactionType = 

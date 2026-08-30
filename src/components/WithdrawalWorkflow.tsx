@@ -6,7 +6,7 @@ import { DEFAULT_MERCHANTS } from '../seedData';
 import { 
   ArrowLeft, Send, Users, ShieldAlert, ChevronRight, Check, 
   HelpCircle, AlertCircle, RefreshCw, Star, ArrowUpRight, DollarSign, Lock,
-  Key, ArrowRight, X, AlertTriangle, ShieldCheck, Eye
+  Key, ArrowRight, X, AlertTriangle, ShieldCheck, Eye, Wallet, ExternalLink, Copy, CheckCircle2
 } from 'lucide-react';
 import { CoinIcon } from './StandardUserDashboard';
 import { useToast } from '../context/ToastContext';
@@ -52,10 +52,19 @@ interface WithdrawalWorkflowProps {
 }
 
 export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProfile, onViewContract }: WithdrawalWorkflowProps) {
-  const [method, setMethod] = useState<'selection' | 'crypto_coin_select' | 'crypto' | 'p2p' | 'p2p_calc' | 'p2p_instructions' | 'p2p_pin_confirm' | 'crypto_pin_confirm'>('crypto_coin_select');
+  const [method, setMethod] = useState<'selection' | 'crypto_coin_select' | 'crypto' | 'p2p' | 'p2p_calc' | 'p2p_instructions' | 'p2p_pin_confirm' | 'crypto_pin_confirm' | 'bind_address'>('crypto_coin_select');
 
   const handleGoToPinSettings = () => {
     localStorage.setItem('profile_subpage', 'pin');
+    if (onGoToProfile) {
+      onGoToProfile();
+    } else {
+      onBack();
+    }
+  };
+
+  const handleGoToAddressBinding = () => {
+    localStorage.setItem('profile_subpage', 'withdrawal_address');
     if (onGoToProfile) {
       onGoToProfile();
     } else {
@@ -81,6 +90,13 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
   const [showActiveContractWarningModal, setShowActiveContractWarningModal] = useState<boolean>(false);
   const [pendingWithdrawType, setPendingWithdrawType] = useState<'crypto' | 'p2p' | null>(null);
   const [cryptoPrices, setCryptoPrices] = useState<Record<string, CryptoPrice>>({});
+
+  // In-flow Address Binding States
+  const [bindAddressInput, setBindAddressInput] = useState<string>('');
+  const [bindPinInput, setBindPinInput] = useState<string>('');
+  const [bind2faInput, setBind2faInput] = useState<string>('');
+  const [bindSaving, setBindSaving] = useState<boolean>(false);
+  const [copiedBoundAddr, setCopiedBoundAddr] = useState<boolean>(false);
   
   // Asset holding helpers
   const getCoinHolding = (symbol: string): number => {
@@ -289,6 +305,75 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
     };
   }, []);
 
+  // Auto-sync bound BEP20 address
+  useEffect(() => {
+    if (profile?.bep20WithdrawalAddress) {
+      setDestAddress(profile.bep20WithdrawalAddress);
+    }
+  }, [profile?.bep20WithdrawalAddress]);
+
+  const handleSaveInflowBinding = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+
+    const cleanAddress = bindAddressInput.trim();
+    if (!/^0x[a-fA-F0-9]{40}$/.test(cleanAddress)) {
+      setError('Invalid BEP20 address. Must be a valid 42-character BNB Smart Chain address starting with 0x (e.g. 0x71C...3a9F).');
+      return;
+    }
+
+    if (!profile?.walletPassword) {
+      setError('Please configure your 4-digit Wallet Security PIN in Settings first before binding a withdrawal address.');
+      return;
+    }
+
+    if (bindPinInput !== profile.walletPassword) {
+      setError('Incorrect 4-digit Wallet Security PIN. Please verify your PIN.');
+      return;
+    }
+
+    if (profile?.twoFactorEnabled) {
+      if (!bind2faInput || bind2faInput.length !== 6 || isNaN(Number(bind2faInput))) {
+        setError('Please enter a valid 6-digit Google Authenticator code.');
+        return;
+      }
+    }
+
+    setBindSaving(true);
+    try {
+      const userRef = doc(db, 'users', user.uid);
+      await updateDoc(userRef, {
+        bep20WithdrawalAddress: cleanAddress,
+        bep20AddressBoundAt: new Date().toISOString(),
+        withdrawalAddressVerified: true
+      });
+
+      setProfile(prev => prev ? {
+        ...prev,
+        bep20WithdrawalAddress: cleanAddress,
+        bep20AddressBoundAt: new Date().toISOString(),
+        withdrawalAddressVerified: true
+      } : null);
+
+      setDestAddress(cleanAddress);
+      setBindAddressInput('');
+      setBindPinInput('');
+      setBind2faInput('');
+      toast.success('BEP20 withdrawal address locked and bound successfully!', 'Address Bound');
+
+      if (selectedCoin) {
+        setMethod('crypto');
+      } else {
+        setMethod('crypto_coin_select');
+      }
+    } catch (err: any) {
+      console.error('Error binding BEP20 address in workflow:', err);
+      setError(err.message || 'Failed to bind BEP20 address.');
+    } finally {
+      setBindSaving(false);
+    }
+  };
+
   // Helper regex validator for destination crypto addresses based on selected network
   const validateCryptoAddress = (address: string, networkName: string): boolean => {
     const trimmed = address.trim();
@@ -313,15 +398,23 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
 
   // Pre-flight check and modal prompt for Crypto Withdrawal
   const handleInitiateCryptoWithdrawal = async () => {
+    const coinSym = selectedCoin ? selectedCoin.id.toUpperCase() : 'USDT';
+    const isUSDT = coinSym === 'USDT';
+
+    if (isUSDT && !profile?.bep20WithdrawalAddress) {
+      setMethod('bind_address');
+      setError('Please bind your USDT BEP20 withdrawal address before requesting a withdrawal.');
+      return;
+    }
+
     if (!amountUSD || parseFloat(amountUSD) <= 0) {
       setError('Please enter a valid amount to withdraw.');
       return;
     }
     const usdVal = parseFloat(amountUSD);
-    const coinSym = selectedCoin ? selectedCoin.id.toUpperCase() : 'USDT';
     const unlockedHolding = getUnlockedCoinHolding(coinSym);
     const price = getCoinPrice(coinSym);
-    const availableUSD = coinSym === 'USDT' ? Math.max(0, (profile?.balance || 0) - lockedUSDT) : unlockedHolding * price;
+    const availableUSD = isUSDT ? Math.max(0, (profile?.balance || 0) - lockedUSDT) : unlockedHolding * price;
     const minLimitUSD = selectedCoin?.minWithdrawalUSD ?? 10;
 
     if (usdVal < minLimitUSD) {
@@ -330,15 +423,26 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
     }
 
     if (usdVal > availableUSD + 0.0001) {
-      if (coinSym === 'USDT') {
+      if (isUSDT) {
         setError(`Insufficient available balance. You have $${availableUSD.toLocaleString(undefined, { minimumFractionDigits: 2 })} available ($${lockedUSDT.toLocaleString(undefined, { minimumFractionDigits: 2 })} USDT is locked in MMF).`);
       } else {
         setError(`Insufficient ${coinSym} balance. You have ${unlockedHolding.toFixed(6)} ${coinSym} (≈ $${availableUSD.toLocaleString(undefined, { minimumFractionDigits: 2 })} USD) available.`);
       }
       return;
     }
-    if (!validateCryptoAddress(destAddress, selectedNetwork)) {
-      setError(`Invalid ${selectedNetwork} address format. Please check and enter a valid ${selectedNetwork} destination address.`);
+
+    const targetAddress = isUSDT ? (profile?.bep20WithdrawalAddress || destAddress) : destAddress;
+    if (!targetAddress || !targetAddress.trim()) {
+      setError(`Please enter a valid destination ${coinSym} withdrawal address.`);
+      return;
+    }
+
+    if (!validateCryptoAddress(targetAddress, selectedNetwork)) {
+      if (isUSDT) {
+        setError('Invalid bound BEP20 destination address. Must be a valid 42-character BNB Smart Chain address starting with 0x.');
+      } else {
+        setError(`Invalid destination address format for ${selectedNetwork}. Please verify the address.`);
+      }
       return;
     }
     if (!profile?.walletPassword) {
@@ -573,6 +677,10 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
           id="withdraw-back-btn"
           onClick={() => {
             if (method === 'selection' || method === 'crypto_coin_select') onBack();
+            else if (method === 'bind_address') {
+              if (selectedCoin) setMethod('crypto_coin_select');
+              else onBack();
+            }
             else if (method === 'crypto') setMethod('crypto_coin_select');
             else if (method === 'crypto_pin_confirm') setMethod('crypto');
             else onBack();
@@ -584,11 +692,13 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
         <div>
           <h2 className="text-lg font-black tracking-tight text-zinc-800">
             {(method === 'selection' || method === 'crypto_coin_select') && 'Select Coin to Withdraw'}
+            {method === 'bind_address' && 'Bind USDT BEP20 Address'}
             {method === 'crypto' && 'Crypto Withdrawal Details'}
             {method === 'crypto_pin_confirm' && 'Verify Security PIN'}
           </h2>
           <p className="text-xs text-zinc-500">
             {(method === 'selection' || method === 'crypto_coin_select') && 'Select a coin from your available asset holdings to withdraw'}
+            {method === 'bind_address' && 'USDT BEP20 (BNB Smart Chain) verified destination wallet'}
             {method === 'crypto' && `Configure network and destination for ${selectedCoin ? formatCoinName(selectedCoin.tokenName) : ''}`}
             {method === 'crypto_pin_confirm' && 'Enter your 4-digit PIN to authorize withdrawal'}
           </p>
@@ -626,6 +736,36 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
           >
             <Key size={14} />
             <span>Set Up Security PIN Now</span>
+            <ArrowRight size={14} />
+          </button>
+        </div>
+      )}
+
+      {/* Alert banner if user has NOT bound their BEP20 withdrawal address */}
+      {profile && profile.walletPassword && !profile.bep20WithdrawalAddress && method !== 'bind_address' && (
+        <div id="missing-bep20-address-banner" className="p-4 mb-5 bg-amber-50/90 border border-amber-300 text-zinc-800 rounded-2xl text-xs space-y-3 shadow-sm">
+          <div className="flex items-start gap-3">
+            <div className="p-2 rounded-xl bg-amber-500/20 text-amber-700 shrink-0">
+              <Wallet size={18} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h4 className="font-extrabold text-sm text-zinc-900">BEP20 Address Binding Required</h4>
+                <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 bg-amber-200/80 text-amber-900 rounded">BEP20</span>
+              </div>
+              <p className="text-xs text-zinc-600 mt-1 leading-relaxed">
+                To prevent blockchain mismatch and fund loss, bind your verified BEP20 destination address before proceeding with crypto cashouts.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            id="bind-bep20-address-top-btn"
+            onClick={() => setMethod('bind_address')}
+            className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-gradient-to-r from-amber-500 to-amber-600 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-amber-500/10 hover:from-amber-600 hover:to-amber-700 cursor-pointer"
+          >
+            <Wallet size={14} />
+            <span>Bind BEP20 Withdrawal Address</span>
             <ArrowRight size={14} />
           </button>
         </div>
@@ -725,12 +865,24 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
                       id={`crypto-withdraw-select-asset-${net.id}`}
                       onClick={() => {
                         setSelectedCoin(net);
-                        if (net.networks.length > 0) {
-                          setSelectedNetwork(net.networks[0]);
+                        const isUSDT = sym === 'USDT';
+
+                        if (isUSDT) {
+                          const bepNet = net.networks.find(n => n.toUpperCase().includes('BEP20') || n.toUpperCase().includes('BSC') || n.toUpperCase().includes('BNB')) || (net.networks.length > 0 ? net.networks[0] : 'BEP20');
+                          setSelectedNetwork(bepNet);
+
+                          if (!profile?.bep20WithdrawalAddress) {
+                            setMethod('bind_address');
+                          } else {
+                            setDestAddress(profile.bep20WithdrawalAddress);
+                            setMethod('crypto');
+                          }
                         } else {
-                          setSelectedNetwork('');
+                          const defaultNet = net.networks && net.networks.length > 0 ? net.networks[0] : 'Standard';
+                          setSelectedNetwork(defaultNet);
+                          setDestAddress('');
+                          setMethod('crypto');
                         }
-                        setMethod('crypto');
                       }}
                       className="w-full flex items-center justify-between p-4 bg-white hover:bg-zinc-50 border border-zinc-200 rounded-2xl transition-all text-left group cursor-pointer"
                     >
@@ -757,17 +909,150 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
             );
           })()}
 
+          {/* BEP20 Address Binding Interceptor Screen */}
+          {method === 'bind_address' && (
+            <div className="space-y-4">
+              <div className="bg-white border border-zinc-200 rounded-2xl p-5 space-y-4 text-left">
+                <div className="flex items-start gap-3.5 pb-3 border-b border-zinc-100">
+                  <div className="w-11 h-11 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-600 shrink-0">
+                    <Wallet size={22} />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-sm font-black text-zinc-900">Bind BEP20 Withdrawal Address</h3>
+                      <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 bg-amber-100 text-amber-800 rounded uppercase">BEP20 Required</span>
+                    </div>
+                    <p className="text-xs text-zinc-500 mt-0.5">
+                      Prevent network mismatch loss with a verified BNB Smart Chain address
+                    </p>
+                  </div>
+                </div>
+
+                <div className="p-3.5 bg-amber-50/80 border border-amber-200/80 rounded-xl text-xs text-amber-900 leading-relaxed space-y-1.5">
+                  <div className="flex items-center gap-1.5 font-bold text-amber-950">
+                    <ShieldCheck size={15} className="text-amber-600 shrink-0" />
+                    <span>One-Time Address Binding</span>
+                  </div>
+                  <p className="text-[11px] text-amber-800">
+                    To guarantee that withdrawals are never sent on the wrong network, your payout destination is securely locked to your verified BEP20 (BNB Smart Chain) address.
+                  </p>
+                </div>
+
+                <form onSubmit={handleSaveInflowBinding} className="space-y-4 pt-1">
+                  {/* Address Input */}
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between items-center">
+                      <label className="text-xs font-semibold text-zinc-700">BEP20 (BSC) Wallet Address</label>
+                      {bindAddressInput.trim() && /^0x[a-fA-F0-9]{40}$/.test(bindAddressInput.trim()) && (
+                        <span className="text-[10px] text-emerald-600 font-bold flex items-center gap-1">
+                          <CheckCircle2 size={12} /> Valid BEP20 Format
+                        </span>
+                      )}
+                    </div>
+                    <div className="relative">
+                      <input
+                        id="inflow-bind-bep20-address"
+                        type="text"
+                        required
+                        placeholder="0x... (42-character BEP20 BNB Smart Chain address)"
+                        value={bindAddressInput}
+                        onChange={(e) => setBindAddressInput(e.target.value)}
+                        className="w-full px-3.5 py-3 bg-zinc-50 border border-zinc-250 rounded-xl text-xs font-mono text-zinc-900 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
+                      />
+                    </div>
+                    <p className="text-[10px] text-zinc-400">
+                      Must start with <strong className="font-mono text-zinc-600">0x</strong> and be 42 characters long.
+                    </p>
+                  </div>
+
+                  {/* 4-digit PIN */}
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between items-center">
+                      <label className="text-xs font-semibold text-zinc-700">Enter 4-Digit Wallet Security PIN</label>
+                      <button
+                        type="button"
+                        onClick={handleGoToPinSettings}
+                        className="text-[11px] text-amber-600 hover:text-amber-700 font-bold cursor-pointer"
+                      >
+                        Change PIN
+                      </button>
+                    </div>
+                    <input
+                      id="inflow-bind-pin"
+                      type="password"
+                      maxLength={4}
+                      required
+                      placeholder="••••"
+                      value={bindPinInput}
+                      onChange={(e) => setBindPinInput(e.target.value.replace(/\D/g, ''))}
+                      className="w-32 px-3.5 py-2.5 bg-zinc-50 border border-zinc-250 rounded-xl text-center text-base font-mono tracking-widest text-zinc-900 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
+                    />
+                  </div>
+
+                  {/* 2FA Code if enabled */}
+                  {profile?.twoFactorEnabled && (
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-zinc-700">Google Authenticator (2FA) Code</label>
+                      <input
+                        id="inflow-bind-2fa"
+                        type="text"
+                        maxLength={6}
+                        required
+                        placeholder="6-digit 2FA code"
+                        value={bind2faInput}
+                        onChange={(e) => setBind2faInput(e.target.value.replace(/\D/g, ''))}
+                        className="w-40 px-3.5 py-2.5 bg-zinc-50 border border-zinc-250 rounded-xl text-center text-base font-mono tracking-widest text-zinc-900 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
+                      />
+                    </div>
+                  )}
+
+                  <button
+                    id="save-inflow-bind-bep20-btn"
+                    type="submit"
+                    disabled={bindSaving || !bindAddressInput || !bindPinInput || bindPinInput.length !== 4}
+                    className="w-full flex items-center justify-center gap-2 py-3 px-5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 disabled:bg-zinc-200 disabled:text-zinc-400 text-white rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer"
+                  >
+                    {bindSaving ? (
+                      <>
+                        <RefreshCw size={14} className="animate-spin" />
+                        <span>Binding BEP20 Address...</span>
+                      </>
+                    ) : (
+                      <>
+                        <ShieldCheck size={15} />
+                        <span>Lock & Bind BEP20 Address</span>
+                      </>
+                    )}
+                  </button>
+                </form>
+
+                <div className="pt-2 border-t border-zinc-100 text-center">
+                  <button
+                    type="button"
+                    onClick={handleGoToAddressBinding}
+                    className="text-xs text-amber-600 hover:text-amber-700 font-bold inline-flex items-center gap-1 cursor-pointer"
+                  >
+                    <span>Or manage bound withdrawal address in Profile Settings</span>
+                    <ExternalLink size={12} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Crypto Withdrawal Panel */}
           {method === 'crypto' && selectedCoin && (() => {
             const sym = selectedCoin.id.toUpperCase();
+            const isUSDT = sym === 'USDT';
             const unlocked = getUnlockedCoinHolding(sym);
             const price = getCoinPrice(sym);
-            const availableUSD = sym === 'USDT' ? Math.max(0, (profile?.balance || 0) - lockedUSDT) : unlocked * price;
+            const availableUSD = isUSDT ? Math.max(0, (profile?.balance || 0) - lockedUSDT) : unlocked * price;
             const currentNumVal = parseFloat(amountUSD || '0');
             const coinEquivalent = price > 0 ? (currentNumVal / price) : 0;
+            const boundAddress = profile?.bep20WithdrawalAddress || destAddress;
 
             return (
-              <div className="space-y-4">
+              <div className="space-y-4 text-left">
                 {/* Selected Coin Banner */}
                 <div className="bg-white border border-zinc-200 rounded-2xl p-4 flex items-center justify-between gap-3.5 mb-2">
                   <div className="flex items-center gap-3.5">
@@ -788,85 +1073,153 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
                   </div>
                 </div>
 
-                {/* Clean Noticeable Network Selector */}
-                <div className="space-y-2">
+                {/* Network Indicator / Selector */}
+                <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
                     <label className="text-xs font-bold text-zinc-700 uppercase tracking-wider">
-                      Select Network
+                      Withdrawal Network
                     </label>
-                    {selectedNetwork && (
-                      <span className="text-xs font-black font-mono text-amber-600 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
-                        {selectedNetwork}
+                    {isUSDT ? (
+                      <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200 flex items-center gap-1">
+                        <ShieldCheck size={12} className="text-amber-600" />
+                        Locked to BEP20
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-bold text-zinc-500 bg-zinc-100 px-2 py-0.5 rounded-md">
+                        {selectedCoin.networks.length} Supported {selectedCoin.networks.length === 1 ? 'Network' : 'Networks'}
                       </span>
                     )}
                   </div>
 
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                    {selectedCoin.networks.map(net => {
-                      const isSelected = selectedNetwork === net;
-                      const netInfo = getNetworkMetadata(net);
-
-                      return (
-                        <button
-                          key={net}
-                          id={`withdraw-network-btn-${net}`}
-                          type="button"
-                          onClick={() => setSelectedNetwork(net)}
-                          className={`py-2 px-3 rounded-xl border-2 transition-all flex items-center justify-between gap-2 cursor-pointer text-left ${
-                            isSelected
-                              ? 'bg-amber-500 text-white border-amber-500 shadow-xs'
-                              : 'bg-white border-zinc-200 text-zinc-800 hover:border-amber-400 hover:bg-amber-50/20 shadow-2xs'
-                          }`}
-                        >
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className={`font-mono font-black text-xs tracking-tight ${
-                                isSelected ? 'text-white' : 'text-zinc-900'
-                              }`}>
-                                {net}
-                              </span>
-                              {netInfo.badge && (
-                                <span className={`text-[9px] font-mono font-bold px-1 py-0.5 rounded leading-none uppercase ${
-                                  isSelected ? 'bg-white/20 text-white' : 'bg-zinc-100 text-zinc-600'
-                                }`}>
-                                  {netInfo.badge}
-                                </span>
-                              )}
-                            </div>
-                            <p className={`text-[10px] font-medium truncate mt-0.5 leading-tight ${
-                              isSelected ? 'text-amber-100' : 'text-zinc-500'
-                            }`}>
-                              {netInfo.fullName}
-                            </p>
+                  {isUSDT ? (
+                    <div className="p-3 bg-white border border-zinc-200 rounded-2xl flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-7 h-7 rounded-lg bg-amber-500/15 flex items-center justify-center font-black text-xs text-amber-600 font-mono">
+                          BSC
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-mono font-bold text-xs text-zinc-900">BEP20</span>
+                            <span className="text-[9px] font-mono font-bold px-1 py-0.5 rounded bg-zinc-100 text-zinc-600">BNB Chain</span>
                           </div>
-
-                          <div className="shrink-0">
-                            {isSelected ? (
-                              <div className="w-4 h-4 rounded-full bg-white text-amber-600 flex items-center justify-center shadow-2xs">
-                                <Check size={11} strokeWidth={3.5} />
+                          <p className="text-[10px] text-zinc-500">BNB Smart Chain (BEP-20 Standard)</p>
+                        </div>
+                      </div>
+                      <div className="w-5 h-5 rounded-full bg-amber-500 text-white flex items-center justify-center">
+                        <Check size={12} strokeWidth={3} />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {selectedCoin.networks.map((netName) => {
+                        const isSelected = selectedNetwork === netName;
+                        return (
+                          <button
+                            key={netName}
+                            type="button"
+                            onClick={() => setSelectedNetwork(netName)}
+                            className={`p-3 rounded-xl border text-left flex items-center justify-between transition-all cursor-pointer ${
+                              isSelected
+                                ? 'bg-amber-50/80 border-amber-500 text-amber-950 font-bold shadow-sm'
+                                : 'bg-white border-zinc-200 hover:border-zinc-300 text-zinc-700'
+                            }`}
+                          >
+                            <span className="font-mono text-xs">{netName}</span>
+                            {isSelected && (
+                              <div className="w-4 h-4 rounded-full bg-amber-500 text-white flex items-center justify-center">
+                                <Check size={10} strokeWidth={3} />
                               </div>
-                            ) : (
-                              <div className="w-3.5 h-3.5 rounded-full border-2 border-zinc-300" />
                             )}
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
 
-                {/* Destination Address */}
+                {/* Destination Address: Bound for USDT vs Editable for non-USDT */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-zinc-500">External Destination Wallet Address ({selectedNetwork})</label>
-                  <input
-                    id="withdraw-crypto-address"
-                    type="text"
-                    required
-                    placeholder={`Paste external ${selectedNetwork} wallet address`}
-                    value={destAddress}
-                    onChange={(e) => setDestAddress(e.target.value)}
-                    className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 text-zinc-800 font-mono"
-                  />
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-zinc-700 uppercase tracking-wider">
+                      {isUSDT ? 'Bound Destination Address' : 'Destination Wallet Address'}
+                    </label>
+                    {isUSDT && (
+                      <button
+                        type="button"
+                        id="change-bound-address-link"
+                        onClick={handleGoToAddressBinding}
+                        className="text-[11px] font-bold text-amber-600 hover:text-amber-700 flex items-center gap-1 cursor-pointer transition-colors"
+                      >
+                        <span>Change Address</span>
+                        <ExternalLink size={11} />
+                      </button>
+                    )}
+                  </div>
+
+                  {isUSDT ? (
+                    boundAddress ? (
+                      <div className="bg-white border border-zinc-200 rounded-2xl p-3.5 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200 flex items-center gap-1">
+                            <ShieldCheck size={11} className="text-emerald-600" />
+                            BEP20 Verified Payout Wallet
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(boundAddress);
+                              setCopiedBoundAddr(true);
+                              setTimeout(() => setCopiedBoundAddr(false), 2000);
+                            }}
+                            className="text-[10px] font-bold text-zinc-500 hover:text-zinc-800 flex items-center gap-1 transition-colors cursor-pointer"
+                          >
+                            {copiedBoundAddr ? (
+                              <>
+                                <Check size={11} className="text-emerald-600" />
+                                <span className="text-emerald-600">Copied!</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy size={11} />
+                                <span>Copy</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                        <div className="font-mono text-xs text-zinc-900 bg-zinc-50 p-2.5 rounded-xl border border-zinc-200/80 break-all select-all font-semibold">
+                          {boundAddress}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="bg-red-50 border border-red-200 rounded-2xl p-3.5 flex items-center justify-between">
+                        <div className="text-xs text-red-800 font-semibold">
+                          No bound BEP20 withdrawal address found.
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setMethod('bind_address')}
+                          className="px-3 py-1.5 bg-red-600 text-white rounded-xl text-xs font-bold hover:bg-red-700 cursor-pointer"
+                        >
+                          Bind Now
+                        </button>
+                      </div>
+                    )
+                  ) : (
+                    <div className="space-y-1">
+                      <input
+                        id="withdraw-crypto-dest-address"
+                        type="text"
+                        required
+                        placeholder={`Enter your ${selectedNetwork} address`}
+                        value={destAddress}
+                        onChange={(e) => setDestAddress(e.target.value)}
+                        className="w-full px-3.5 py-3 bg-white border border-zinc-200 rounded-xl text-xs font-mono text-zinc-900 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 placeholder-zinc-400"
+                      />
+                      <p className="text-[10px] text-zinc-400">
+                        Please make sure your destination address matches the selected network ({selectedNetwork}).
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 {/* Amount USD */}
@@ -874,7 +1227,7 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
                   <div className="flex justify-between items-center">
                     <label className="text-xs font-semibold text-zinc-500">Amount (USD)</label>
                     <span className="text-[10px] text-zinc-500 font-semibold">
-                      Available: {sym === 'USDT' ? `$${availableUSD.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : `${unlocked.toFixed(6)} ${sym} ($${availableUSD.toLocaleString(undefined, { minimumFractionDigits: 2 })})`}
+                      Available: {isUSDT ? `$${availableUSD.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : `${unlocked.toFixed(6)} ${sym} ($${availableUSD.toLocaleString(undefined, { minimumFractionDigits: 2 })})`}
                     </span>
                   </div>
                   <div className="relative">
@@ -923,6 +1276,24 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
                   id="withdraw-crypto-proceed"
                   onClick={() => {
                     setError(null);
+                    if (isUSDT && !profile?.bep20WithdrawalAddress) {
+                      setMethod('bind_address');
+                      setError('Please bind your USDT BEP20 withdrawal address before requesting a withdrawal.');
+                      return;
+                    }
+                    const activeDest = isUSDT ? (profile?.bep20WithdrawalAddress || destAddress) : destAddress;
+                    if (!activeDest || !activeDest.trim()) {
+                      setError(`Please enter your destination ${sym} wallet address.`);
+                      return;
+                    }
+                    if (!validateCryptoAddress(activeDest, selectedNetwork)) {
+                      if (isUSDT) {
+                        setError('Invalid bound BEP20 destination address. Must be a valid 42-character BNB Smart Chain address starting with 0x.');
+                      } else {
+                        setError(`Invalid destination address format for ${selectedNetwork}. Please verify the address.`);
+                      }
+                      return;
+                    }
                     const usdVal = parseFloat(amountUSD);
                     const minLimitUSD = selectedCoin.minWithdrawalUSD ?? 10;
                     if (!amountUSD || isNaN(usdVal) || usdVal <= 0) {
@@ -939,14 +1310,6 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
                       } else {
                         setError(`Insufficient ${sym} balance. You have ${unlocked.toFixed(6)} ${sym} (≈ $${availableUSD.toLocaleString(undefined, { minimumFractionDigits: 2 })} USD) available.`);
                       }
-                      return;
-                    }
-                    if (!destAddress.trim()) {
-                      setError('Please provide a valid destination wallet address.');
-                      return;
-                    }
-                    if (!validateCryptoAddress(destAddress, selectedNetwork)) {
-                      setError(`Invalid ${selectedNetwork} address format. Please check and enter a valid ${selectedNetwork} destination address.`);
                       return;
                     }
                     if (!profile?.walletPassword) {
