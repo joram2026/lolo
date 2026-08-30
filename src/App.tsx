@@ -276,6 +276,12 @@ export default function App() {
           user={user}
           onBack={() => navigate('/dashboard')}
           onGoToProfile={() => navigate('/profile')}
+          onViewContract={(contractId) => {
+            if (contractId) {
+              localStorage.setItem('view_active_contract_id', contractId);
+            }
+            navigate('/earn');
+          }}
           onSuccess={() => handleTxSuccess('Your withdrawal request has been placed in the queue or processed successfully.')}
         />
       )}

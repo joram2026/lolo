@@ -798,12 +798,32 @@ export default function StandardUserDashboard({
         existing.grossProfit = parseFloat(((existing.grossProfit || 0) + (trade.grossProfit || 0)).toFixed(2));
         existing.commissionDeducted = parseFloat(((existing.commissionDeducted || 0) + (trade.commissionDeducted || 0)).toFixed(2));
         existing.contractCapital = Math.max(existing.contractCapital || 0, trade.contractCapital || trade.amount || 0);
+        existing.amount = Math.max(existing.amount || 0, trade.amount || trade.contractCapital || 0);
         existing.executedSignals = [...(existing.executedSignals || []), ...sigs];
       }
     });
 
     return Object.values(groupedMap);
   };
+
+  // Check if routed to view a specific active contract (e.g. from withdrawal workflow)
+  useEffect(() => {
+    const contractToOpen = localStorage.getItem('view_active_contract_id');
+    if (contractToOpen && userCopyTrades && userCopyTrades.length > 0) {
+      const activeContracts = getMergedActiveContracts(userCopyTrades);
+      let target: UserCopyTrade | undefined;
+      if (contractToOpen !== 'any') {
+        target = activeContracts.find(t => t.id === contractToOpen || t.leadId === contractToOpen || t.leadName === contractToOpen)
+          || userCopyTrades.find(t => t.id === contractToOpen || t.leadId === contractToOpen || t.leadName === contractToOpen);
+      }
+      const contractToShow = target || activeContracts[0] || userCopyTrades.find(t => (t.status || '').toString().trim().toUpperCase() === 'ACTIVE') || userCopyTrades[0];
+      if (contractToShow) {
+        setSelectedContractForDetail(contractToShow);
+        setActiveTab('earn');
+      }
+      localStorage.removeItem('view_active_contract_id');
+    }
+  }, [userCopyTrades, path]);
 
   // Helper to calculate locked contract capital and free transferrable amount on copy trading
   const getCopyTradeLockedAndFree = () => {
@@ -2116,14 +2136,23 @@ export default function StandardUserDashboard({
     } else {
       const minCap = selectedLeadForCopy.minCapital ?? 50;
       const maxCap = selectedLeadForCopy.maxCapital ?? 10000;
+      const currentContractPrincipal = existingActiveContract?.contractCapital || existingActiveContract?.amount || 0;
+      const effectiveMinCap = Math.max(minCap, currentContractPrincipal);
 
-      if (isNaN(amount) || amount < minCap) {
-        toast.error(`Trade amount must be at least ${minCap}.`, 'Invalid Trade Amount');
+      if (isNaN(amount) || amount < effectiveMinCap) {
+        if (currentContractPrincipal > 0) {
+          toast.error(
+            `Trade amount cannot be lower than your current active contract principal ($${currentContractPrincipal.toFixed(2)} USD). You can trade with your principal or scale up to a higher amount.`,
+            'Amount Below Principal'
+          );
+        } else {
+          toast.error(`Trade amount must be at least $${minCap}.`, 'Invalid Trade Amount');
+        }
         return;
       }
 
       if (amount > maxCap) {
-        toast.error(`Trade amount cannot exceed ${maxCap}.`, 'Exceeds Maximum');
+        toast.error(`Trade amount cannot exceed $${maxCap}.`, 'Exceeds Maximum');
         return;
       }
 
@@ -2212,7 +2241,16 @@ export default function StandardUserDashboard({
         const updatedCommission = (existingActiveContract.commissionDeducted || 0) + commissionDeducted;
         const prevSignals = Array.isArray(existingActiveContract.executedSignals) ? existingActiveContract.executedSignals : [];
 
+        // Dynamically update locked principal if the user traded with a higher amount or scaled up
+        const updatedContractCapital = Math.max(
+          existingActiveContract.contractCapital || 0,
+          existingActiveContract.amount || 0,
+          amount
+        );
+
         await updateDoc(doc(db, 'user_copy_trades', existingActiveContract.id), {
+          contractCapital: parseFloat(updatedContractCapital.toFixed(2)),
+          amount: parseFloat(updatedContractCapital.toFixed(2)),
           netProfit: parseFloat(updatedNetProfit.toFixed(2)),
           grossProfit: parseFloat(updatedGrossProfit.toFixed(2)),
           commissionDeducted: parseFloat(updatedCommission.toFixed(2)),
@@ -5893,6 +5931,8 @@ export default function StandardUserDashboard({
                         const totalBal = profile?.tradeBalance ?? 0;
                         const currentLeadKey = selectedLeadForCopy.id || selectedLeadForCopy.name;
                         const currentLeadLockedCap = activeContractCapitalByLead[currentLeadKey] || 0;
+                        const minLeadCap = selectedLeadForCopy.minCapital ?? 50;
+                        const effectiveMinCap = Math.max(minLeadCap, currentLeadLockedCap);
                         const lockedInOtherExperts = Math.max(0, rawLockedCapital - currentLeadLockedCap);
                         const availableForThisLead = Math.max(0, totalBal - lockedInOtherExperts);
 
@@ -5900,7 +5940,7 @@ export default function StandardUserDashboard({
                           <div className="space-y-2">
                             <div className="flex justify-between items-center text-xs">
                               <label className={`font-black uppercase tracking-wider text-[10.5px] ${isLightTheme ? 'text-zinc-800' : 'text-zinc-300'}`}>
-                                Amount
+                                Trade Capital Amount
                               </label>
                               <div className="flex items-center gap-1.5">
                                 <span className={`text-[10.5px] font-mono ${isLightTheme ? 'text-zinc-600' : 'text-zinc-400'}`}>
@@ -5928,7 +5968,8 @@ export default function StandardUserDashboard({
                               <input
                                 type="number"
                                 step="any"
-                                placeholder={`Min $${selectedLeadForCopy.minCapital ?? 50}`}
+                                min={effectiveMinCap}
+                                placeholder={`Min $${effectiveMinCap.toFixed(0)}`}
                                 value={copyTradeAmountInput}
                                 onChange={(e) => setCopyTradeAmountInput(e.target.value)}
                                 className={`w-full bg-transparent font-mono text-base font-black outline-none ${
@@ -5950,16 +5991,24 @@ export default function StandardUserDashboard({
                               )}
                             </div>
 
-                            {/* Principal Quick Chip Only */}
+                            {/* Principal Quick Chip & Lock Information */}
                             {currentLeadLockedCap > 0 && (
-                              <div className="flex items-center gap-1.5 pt-0.5">
-                                <button
-                                  type="button"
-                                  onClick={() => setCopyTradeAmountInput(currentLeadLockedCap.toFixed(2))}
-                                  className="px-3 py-1 rounded-lg text-[10.5px] font-mono font-black bg-amber-100/90 text-amber-950 dark:bg-amber-500/15 dark:text-amber-300 border border-amber-300 dark:border-amber-500/30 hover:bg-amber-200 transition-all cursor-pointer shadow-2xs"
-                                >
-                                  Principal (${currentLeadLockedCap.toFixed(0)})
-                                </button>
+                              <div className="space-y-1.5 pt-0.5">
+                                <div className="flex items-center gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => setCopyTradeAmountInput(currentLeadLockedCap.toFixed(2))}
+                                    className="px-3 py-1 rounded-lg text-[10.5px] font-mono font-black bg-amber-100/90 text-amber-950 dark:bg-amber-500/15 dark:text-amber-300 border border-amber-300 dark:border-amber-500/30 hover:bg-amber-200 transition-all cursor-pointer shadow-2xs"
+                                  >
+                                    Principal (${currentLeadLockedCap.toFixed(2)})
+                                  </button>
+                                </div>
+                                <p className={`text-[10px] font-medium flex items-center gap-1 leading-snug ${
+                                  isLightTheme ? 'text-zinc-500' : 'text-zinc-400'
+                                }`}>
+                                  <Lock size={10} className="shrink-0 text-amber-600 dark:text-amber-400" />
+                                  <span>Active principal ($${currentLeadLockedCap.toFixed(2)}) is locked. You can trade with this amount or scale up to a higher amount.</span>
+                                </p>
                               </div>
                             )}
                           </div>
@@ -5967,26 +6016,37 @@ export default function StandardUserDashboard({
                       })()}
 
                       {/* Step 2 Actions */}
-                      <div className="pt-2 flex gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setCopyTradeStep(1)}
-                          className={`flex-1 py-2.5 px-3 rounded-xl border text-xs font-bold cursor-pointer transition-all flex items-center justify-center gap-1.5 active:scale-[0.98] ${
-                            isLightTheme ? 'bg-zinc-100 hover:bg-zinc-200 border-zinc-200 text-zinc-700' : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-zinc-200'
-                          }`}
-                        >
-                          <ArrowLeft size={14} className="shrink-0" />
-                          <span>Previous</span>
-                        </button>
-                        <button
-                          type="button"
-                          disabled={!copyTradeAmountInput || parseFloat(copyTradeAmountInput) < (selectedLeadForCopy.minCapital ?? 50)}
-                          onClick={() => setCopyTradeStep(3)}
-                          className="flex-1 py-2.5 px-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs shadow-xs border border-amber-400 cursor-pointer transition-all flex items-center justify-center active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          Next
-                        </button>
-                      </div>
+                      {(() => {
+                        const { activeContractCapitalByLead } = getCopyTradeLockedAndFree();
+                        const currentLeadKey = selectedLeadForCopy.id || selectedLeadForCopy.name;
+                        const currentLeadLockedCap = activeContractCapitalByLead[currentLeadKey] || 0;
+                        const minLeadCap = selectedLeadForCopy.minCapital ?? 50;
+                        const effectiveMinCap = Math.max(minLeadCap, currentLeadLockedCap);
+                        const isInvalid = !copyTradeAmountInput || parseFloat(copyTradeAmountInput) < effectiveMinCap || parseFloat(copyTradeAmountInput) > (selectedLeadForCopy.maxCapital ?? 10000);
+
+                        return (
+                          <div className="pt-2 flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setCopyTradeStep(1)}
+                              className={`flex-1 py-2.5 px-3 rounded-xl border text-xs font-bold cursor-pointer transition-all flex items-center justify-center gap-1.5 active:scale-[0.98] ${
+                                isLightTheme ? 'bg-zinc-100 hover:bg-zinc-200 border-zinc-200 text-zinc-700' : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-zinc-200'
+                              }`}
+                            >
+                              <ArrowLeft size={14} className="shrink-0" />
+                              <span>Previous</span>
+                            </button>
+                            <button
+                              type="button"
+                              disabled={isInvalid}
+                              onClick={() => setCopyTradeStep(3)}
+                              className="flex-1 py-2.5 px-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs shadow-xs border border-amber-400 cursor-pointer transition-all flex items-center justify-center active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              Next
+                            </button>
+                          </div>
+                        );
+                      })()}
                     </div>
                   )}
 

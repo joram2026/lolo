@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { collection, addDoc, getDoc, getDocs, doc, updateDoc, runTransaction, serverTimestamp, query, where } from 'firebase/firestore';
-import { CryptoNetwork, P2PMerchant, UserAccount, Transaction, CryptoPrice } from '../types';
+import { collection, addDoc, getDoc, getDocs, doc, updateDoc, runTransaction, serverTimestamp, query, where, onSnapshot } from 'firebase/firestore';
+import { CryptoNetwork, P2PMerchant, UserAccount, Transaction, CryptoPrice, UserCopyTrade } from '../types';
 import { DEFAULT_MERCHANTS } from '../seedData';
 import { 
   ArrowLeft, Send, Users, ShieldAlert, ChevronRight, Check, 
   HelpCircle, AlertCircle, RefreshCw, Star, ArrowUpRight, DollarSign, Lock,
-  Key, ArrowRight, X
+  Key, ArrowRight, X, AlertTriangle, ShieldCheck, Eye
 } from 'lucide-react';
 import { CoinIcon } from './StandardUserDashboard';
 import { useToast } from '../context/ToastContext';
@@ -48,9 +48,10 @@ interface WithdrawalWorkflowProps {
   onBack: () => void;
   onSuccess: () => void;
   onGoToProfile?: () => void;
+  onViewContract?: (contractId?: string) => void;
 }
 
-export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProfile }: WithdrawalWorkflowProps) {
+export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProfile, onViewContract }: WithdrawalWorkflowProps) {
   const [method, setMethod] = useState<'selection' | 'crypto_coin_select' | 'crypto' | 'p2p' | 'p2p_calc' | 'p2p_instructions' | 'p2p_pin_confirm' | 'crypto_pin_confirm'>('crypto_coin_select');
 
   const handleGoToPinSettings = () => {
@@ -76,6 +77,9 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
   const [profile, setProfile] = useState<UserAccount | null>(null);
   const [lockedUSDT, setLockedUSDT] = useState<number>(0);
   const [activeInvestments, setActiveInvestments] = useState<any[]>([]);
+  const [activeCopyContracts, setActiveCopyContracts] = useState<UserCopyTrade[]>([]);
+  const [showActiveContractWarningModal, setShowActiveContractWarningModal] = useState<boolean>(false);
+  const [pendingWithdrawType, setPendingWithdrawType] = useState<'crypto' | 'p2p' | null>(null);
   const [cryptoPrices, setCryptoPrices] = useState<Record<string, CryptoPrice>>({});
   
   // Asset holding helpers
@@ -146,30 +150,54 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
     setErrorState(null);
   }, [method, selectedMerchant?.id, selectedCoin?.id, p2pUSDAmount, amountUSD]);
 
-  // Fetch latest balance, networks & merchants
+  // Fetch latest balance, networks, merchants & real-time active copy trades
   useEffect(() => {
-    async function fetchData() {
-      setLoading(true);
+    if (!user?.uid) return;
+
+    setLoading(true);
+
+    // 1. User Account Real-time Listener
+    const userRef = doc(db, 'users', user.uid);
+    const unsubscribeUser = onSnapshot(userRef, (userSnap) => {
+      if (userSnap.exists()) {
+        setProfile(userSnap.data() as UserAccount);
+      }
+    }, (err) => {
+      console.error('Error fetching user profile:', err);
+    });
+
+    // 2. Investments Real-time Listener (Locked USDT)
+    const invCol = collection(db, 'investments');
+    const invQuery = query(invCol, where('userId', '==', user.uid));
+    const unsubscribeInvestments = onSnapshot(invQuery, (invSnap) => {
+      const invList = invSnap.docs.map(d => d.data());
+      const userActiveInvs = invList.filter((inv: any) => inv.status === 'active');
+      setActiveInvestments(userActiveInvs);
+      const lockedSum = userActiveInvs
+        .filter((inv: any) => inv.coinSymbol === 'USDT')
+        .reduce((sum: number, inv: any) => sum + (inv.amount || 0), 0);
+      setLockedUSDT(lockedSum);
+    }, (err) => {
+      console.error('Error fetching investments:', err);
+    });
+
+    // 3. User Copy Trades Real-time Listener (Matches both 'ACTIVE' and case-insensitive 'active')
+    const copyCol = collection(db, 'user_copy_trades');
+    const copyQuery = query(copyCol, where('userId', '==', user.uid));
+    const unsubscribeCopyTrades = onSnapshot(copyQuery, (copySnap) => {
+      const allTrades = copySnap.docs.map(doc => ({ ...doc.data(), id: doc.id } as UserCopyTrade));
+      const activeContracts = allTrades.filter(t => {
+        const stat = (t.status || '').toString().trim().toUpperCase();
+        return stat === 'ACTIVE';
+      });
+      setActiveCopyContracts(activeContracts);
+    }, (err) => {
+      console.error('Error listening to copy trades:', err);
+    });
+
+    // 4. One-time fetch for static networks, prices, and merchants
+    async function fetchStaticData() {
       try {
-        const userRef = doc(db, 'users', user.uid);
-        const userSnap = await getDoc(userRef);
-        if (userSnap.exists()) {
-          setProfile(userSnap.data() as UserAccount);
-        }
-
-        // Fetch user's locked USDT amount from active investments
-        const invCol = collection(db, 'investments');
-        const invQuery = query(invCol, where('userId', '==', user.uid));
-        const invSnap = await getDocs(invQuery);
-        const invList = invSnap.docs.map(d => d.data());
-        const userActiveInvs = invList.filter((inv: any) => inv.status === 'active');
-        setActiveInvestments(userActiveInvs);
-        const lockedSum = userActiveInvs
-          .filter((inv: any) => inv.coinSymbol === 'USDT')
-          .reduce((sum: number, inv: any) => sum + (inv.amount || 0), 0);
-        setLockedUSDT(lockedSum);
-
-        // Fetch crypto prices
         const pricesCol = collection(db, 'crypto_prices');
         const pricesSnap = await getDocs(pricesCol);
         const pricesMap: Record<string, CryptoPrice> = {};
@@ -213,14 +241,19 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
         }
         setMerchants(merchList);
       } catch (err) {
-        console.error('Error fetching details:', err);
-        setError('Failed to fetch details.');
+        console.error('Error fetching static details:', err);
       } finally {
         setLoading(false);
       }
     }
-    fetchData();
-  }, [user]);
+    fetchStaticData();
+
+    return () => {
+      unsubscribeUser();
+      unsubscribeInvestments();
+      unsubscribeCopyTrades();
+    };
+  }, [user?.uid]);
 
   // Handle offline mode for P2P merchants
   useEffect(() => {
@@ -278,8 +311,8 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
     return trimmed.length >= 10;
   };
 
-  // Submit Crypto Withdrawal (Deducts balance immediately & stores 10% fee breakdown)
-  const handleCryptoWithdrawSubmit = async () => {
+  // Pre-flight check and modal prompt for Crypto Withdrawal
+  const handleInitiateCryptoWithdrawal = async () => {
     if (!amountUSD || parseFloat(amountUSD) <= 0) {
       setError('Please enter a valid amount to withdraw.');
       return;
@@ -321,16 +354,49 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
       return;
     }
 
+    // Check if user has active copy trading contracts with any expert (both state and live check)
+    try {
+      const copyTradesCol = collection(db, 'user_copy_trades');
+      const copyTradesSnap = await getDocs(query(copyTradesCol, where('userId', '==', user.uid)));
+      const activeContracts = copyTradesSnap.docs
+        .map(d => ({ ...d.data(), id: d.id } as UserCopyTrade))
+        .filter(t => (t.status || '').toString().trim().toUpperCase() === 'ACTIVE');
+
+      if (activeContracts.length > 0 || activeCopyContracts.length > 0) {
+        setActiveCopyContracts(activeContracts.length > 0 ? activeContracts : activeCopyContracts);
+        setPendingWithdrawType('crypto');
+        setShowActiveContractWarningModal(true);
+        return;
+      }
+    } catch (e) {
+      console.error('Error verifying active contracts:', e);
+      if (activeCopyContracts.length > 0) {
+        setPendingWithdrawType('crypto');
+        setShowActiveContractWarningModal(true);
+        return;
+      }
+    }
+
+    // Direct execution with standard 15% fee
+    executeCryptoWithdrawSubmit(15);
+  };
+
+  // Submit Crypto Withdrawal Execution
+  const executeCryptoWithdrawSubmit = async (feePercentToApply: number) => {
+    const usdVal = parseFloat(amountUSD);
+    const coinSym = selectedCoin ? selectedCoin.id.toUpperCase() : 'USDT';
+    const price = getCoinPrice(coinSym);
+
     setSubmitting(true);
     setError(null);
 
     try {
+      const feePercent = feePercentToApply;
+      const feeAmount = parseFloat((usdVal * (feePercent / 100)).toFixed(2));
+      const netAmount = parseFloat((usdVal - feeAmount).toFixed(2));
       const coinAmt = price > 0 ? parseFloat((usdVal / price).toFixed(8)) : usdVal;
-      const feePercent = 10;
-      const feeAmount = parseFloat((usdVal * 0.10).toFixed(2));
-      const netAmount = parseFloat((usdVal * 0.90).toFixed(2));
 
-      // Run transaction to immediately deduct balance and record withdrawal request with 10% fee breakdown
+      // Run transaction to immediately deduct balance and record withdrawal request
       await runTransaction(db, async (transaction) => {
         const userRef = doc(db, 'users', user.uid);
         const userSnap = await transaction.get(userRef);
@@ -375,6 +441,7 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
           netAmount: netAmount,
           coinSymbol: coinSym,
           coinAmount: coinAmt,
+          earlyContractWithdrawal: feePercent === 50,
           status: 'PENDING APPROVAL',
           createdAt: serverTimestamp(),
           network: selectedNetwork,
@@ -383,6 +450,7 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
         });
       });
 
+      setShowActiveContractWarningModal(false);
       onSuccess();
     } catch (err: any) {
       console.error('Crypto withdrawal error:', err);
@@ -392,8 +460,8 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
     }
   };
 
-  // Submit P2P Withdrawal (User releases Escrow upon receiving payment, instantly deducting USD)
-  const handleP2PSellRelease = async () => {
+  // Pre-flight check and modal prompt for P2P Withdrawal
+  const handleInitiateP2PWithdrawal = async () => {
     if (profile && !profile.withdrawalEnabled) {
       setError('Your withdrawal permission is currently suspended.');
       return;
@@ -406,13 +474,45 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
       setError('Incorrect Wallet Security PIN. Please verify your PIN.');
       return;
     }
-    
+
+    // Check if user has active copy trading contracts with any expert (both state and live check)
+    try {
+      const copyTradesCol = collection(db, 'user_copy_trades');
+      const copyTradesSnap = await getDocs(query(copyTradesCol, where('userId', '==', user.uid)));
+      const activeContracts = copyTradesSnap.docs
+        .map(d => ({ ...d.data(), id: d.id } as UserCopyTrade))
+        .filter(t => (t.status || '').toString().trim().toUpperCase() === 'ACTIVE');
+
+      if (activeContracts.length > 0 || activeCopyContracts.length > 0) {
+        setActiveCopyContracts(activeContracts.length > 0 ? activeContracts : activeCopyContracts);
+        setPendingWithdrawType('p2p');
+        setShowActiveContractWarningModal(true);
+        return;
+      }
+    } catch (e) {
+      console.error('Error verifying active contracts:', e);
+      if (activeCopyContracts.length > 0) {
+        setPendingWithdrawType('p2p');
+        setShowActiveContractWarningModal(true);
+        return;
+      }
+    }
+
+    // Direct execution with standard 15% fee
+    executeP2PSellRelease(15);
+  };
+
+  // Submit P2P Withdrawal Execution (User releases Escrow upon receiving payment)
+  const executeP2PSellRelease = async (feePercentToApply: number) => {
     setSubmitting(true);
     setError(null);
 
     try {
       const usdVal = parseFloat(p2pUSDAmount);
       const localShillings = usdVal * (selectedMerchant?.rate || 0);
+      const feePercent = feePercentToApply;
+      const feeAmount = parseFloat((usdVal * (feePercent / 100)).toFixed(2));
+      const netAmount = parseFloat((usdVal - feeAmount).toFixed(2));
 
       // Perform transaction to safely deduct balance and create transaction
       await runTransaction(db, async (transaction) => {
@@ -428,10 +528,6 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
         if (usdVal > availableBalance) {
           throw new Error(`Insufficient available balance during transaction execution. You have $${availableBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })} available ($${lockedUSDT.toLocaleString(undefined, { minimumFractionDigits: 2 })} USDT is locked in MMF).`);
         }
-
-        const feePercent = 10;
-        const feeAmount = parseFloat((usdVal * 0.10).toFixed(2));
-        const netAmount = parseFloat((usdVal * 0.90).toFixed(2));
 
         // Deduct balance instantly
         transaction.update(userRef, {
@@ -450,6 +546,7 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
           feeAmount: feeAmount,
           netAmount: netAmount,
           localAmount: localShillings,
+          earlyContractWithdrawal: feePercent === 50,
           status: 'APPROVED', // Marked approved instantly because client released it!
           createdAt: serverTimestamp(),
           merchantName: selectedMerchant?.name || '',
@@ -458,6 +555,7 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
         });
       });
 
+      setShowActiveContractWarningModal(false);
       onSuccess();
     } catch (err: any) {
       console.error('P2P release error:', err);
@@ -869,8 +967,9 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
           {/* Crypto Enter PIN Final Confirm Screen */}
           {method === 'crypto_pin_confirm' && selectedCoin && (() => {
             const grossVal = parseFloat(amountUSD) || 0;
-            const feeVal = grossVal * 0.10;
-            const netVal = grossVal * 0.90;
+            const hasActiveContract = activeCopyContracts.length > 0;
+            const feeVal = grossVal * 0.15;
+            const netVal = grossVal * 0.85;
             const coinSym = selectedCoin.id.toUpperCase();
             const price = getCoinPrice(coinSym);
             const netCoinVal = price > 0 ? (netVal / price) : netVal;
@@ -887,6 +986,18 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
                       <p className="text-[11px] text-zinc-500">Authorize transfer of assets to your destination address</p>
                     </div>
                   </div>
+
+                  {hasActiveContract && (
+                    <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl flex items-start gap-2.5 text-xs text-amber-900">
+                      <AlertTriangle size={16} className="text-amber-600 mt-0.5 shrink-0" />
+                      <div>
+                        <span className="font-extrabold text-[11px] block text-amber-800 uppercase tracking-wide">Active Trading Contract Detected</span>
+                        <p className="text-[11px] text-amber-700 mt-0.5 leading-relaxed">
+                          Withdrawing now applies a 50% early fee. Standard fee is 15% upon contract completion.
+                        </p>
+                      </div>
+                    </div>
+                  )}
                   
                   <div className="space-y-3 text-xs">
                     <div className="flex justify-between items-center pb-1 border-b border-zinc-100">
@@ -906,11 +1017,11 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
                       <span className="font-mono font-bold text-zinc-800">${grossVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD</span>
                     </div>
                     <div className="flex justify-between items-center pb-1 border-b border-zinc-100">
-                      <span className="text-zinc-500">10% Withdrawal Fee</span>
+                      <span className="text-zinc-500">{hasActiveContract ? 'Standard Fee (15%)' : '15% Withdrawal Fee'}</span>
                       <span className="font-mono font-bold text-red-500">-${feeVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD</span>
                     </div>
                     <div className="flex justify-between items-center pt-1 bg-emerald-50/80 p-2.5 rounded-xl border border-emerald-200/80">
-                      <span className="text-emerald-900 font-bold">You Will Receive (Net)</span>
+                      <span className="text-emerald-900 font-bold">Standard Net Payout</span>
                       <div className="text-right">
                         <span className="font-mono font-black text-emerald-700 text-sm block">${netVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD</span>
                         {coinSym !== 'USDT' && (
@@ -920,8 +1031,8 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
                     </div>
                   </div>
 
-                  <div className="p-3 bg-red-50 border border-red-100 text-red-800 text-[10px] rounded-xl leading-relaxed text-center">
-                    <strong>Caution:</strong> Ensure the wallet address is correct. Crypto transfers are irreversible. A 10% system processing fee is deducted from your requested withdrawal.
+                  <div className="p-3 bg-zinc-50 border border-zinc-200 text-zinc-600 text-[10px] rounded-xl leading-relaxed text-center">
+                    <strong>Caution:</strong> Ensure the wallet address is correct. Crypto transfers are irreversible.
                   </div>
                 </div>
 
@@ -954,7 +1065,7 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
 
                 <button
                   id="confirm-crypto-release-btn"
-                  onClick={handleCryptoWithdrawSubmit}
+                  onClick={handleInitiateCryptoWithdrawal}
                   disabled={submitting || !walletPIN || walletPIN.length !== 4}
                   className="w-full flex items-center justify-center gap-2 py-3.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600 disabled:bg-zinc-200 disabled:text-zinc-400 rounded-xl text-sm font-black transition-all shadow-md cursor-pointer uppercase tracking-wider"
                 >
@@ -1201,95 +1312,226 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
           )}
 
           {/* P2P Enter PIN Final Release Screen */}
-          {method === 'p2p_pin_confirm' && selectedMerchant && (
-            <div className="space-y-5">
-              <div className="bg-white border border-zinc-200 rounded-2xl p-5 space-y-4">
-                <div className="flex flex-col items-center justify-center text-center gap-2.5 pb-2 border-b border-zinc-200/60">
-                  <div className="w-12 h-12 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-500">
-                    <Lock size={22} />
+          {method === 'p2p_pin_confirm' && selectedMerchant && (() => {
+            const grossVal = parseFloat(p2pUSDAmount) || 0;
+            const hasActiveContract = activeCopyContracts.length > 0;
+            const rate = selectedMerchant.rate > 1.5 ? selectedMerchant.rate - 1.5 : 0;
+            const localGross = grossVal * rate;
+
+            return (
+              <div className="space-y-5">
+                <div className="bg-white border border-zinc-200 rounded-2xl p-5 space-y-4">
+                  <div className="flex flex-col items-center justify-center text-center gap-2.5 pb-2 border-b border-zinc-200/60">
+                    <div className="w-12 h-12 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-500">
+                      <Lock size={22} />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-black text-zinc-800">Release Escrow USD</h3>
+                      <p className="text-[11px] text-zinc-500">Authorize final transfer to {selectedMerchant.name}</p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="text-sm font-black text-zinc-800">Release Escrow USD</h3>
-                    <p className="text-[11px] text-zinc-500">Authorize final transfer to {selectedMerchant.name}</p>
+
+                  {hasActiveContract && (
+                    <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl flex items-start gap-2.5 text-xs text-amber-900 text-left">
+                      <AlertTriangle size={16} className="text-amber-600 mt-0.5 shrink-0" />
+                      <div>
+                        <span className="font-extrabold text-[11px] block text-amber-800 uppercase tracking-wide">Active Trading Contract Detected</span>
+                        <p className="text-[11px] text-amber-700 mt-0.5 leading-relaxed">
+                          Withdrawing now applies a 50% early fee. Standard fee is 15% upon contract completion.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center text-xs pb-1">
+                      <span className="text-zinc-500">Releasing Escrow</span>
+                      <span className="font-mono font-bold text-zinc-800">${grossVal.toLocaleString(undefined, { minimumFractionDigits: 2 })} USD</span>
+                    </div>
+                    <div className="flex justify-between items-center text-xs pb-1">
+                      <span className="text-zinc-500">Amount Received</span>
+                      <span className="font-mono font-bold text-amber-600">
+                        {localGross.toLocaleString()} Shs
+                      </span>
+                    </div>
                   </div>
-                </div>
-                
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center text-xs pb-1">
-                    <span className="text-zinc-500">Releasing Escrow</span>
-                    <span className="font-mono font-bold text-zinc-800">${parseFloat(p2pUSDAmount).toLocaleString()} USD</span>
-                  </div>
-                  <div className="flex justify-between items-center text-xs pb-1">
-                    <span className="text-zinc-500">Amount Received</span>
-                    <span className="font-mono font-bold text-amber-600">
-                      {(parseFloat(p2pUSDAmount) * (selectedMerchant.rate > 1.5 ? selectedMerchant.rate - 1.5 : 0)).toLocaleString()} Shs
-                    </span>
+
+                  <div className="p-3 bg-red-50 border border-red-100 text-red-800 text-[10px] rounded-xl leading-relaxed text-center">
+                    <strong>Caution:</strong> Releasing escrow is final and cannot be reversed. Only input your PIN if you have verified the funds are in your mobile wallet.
                   </div>
                 </div>
 
-                <div className="p-3 bg-red-50 border border-red-100 text-red-800 text-[10px] rounded-xl leading-relaxed text-center">
-                  <strong>Caution:</strong> Releasing escrow is final and cannot be reversed. Only input your PIN if you have verified the funds are in your mobile wallet.
+                {/* Wallet PIN Form */}
+                <div className="space-y-4 bg-white border border-zinc-200 rounded-2xl p-4">
+                  <div className="space-y-1.5 text-center">
+                    <label className="text-xs font-semibold text-zinc-500 block">
+                      Enter 4-Digit Wallet Security PIN
+                    </label>
+                    <input
+                      id="withdraw-final-p2p-pin"
+                      type="password"
+                      maxLength={4}
+                      required
+                      placeholder="••••"
+                      value={walletPIN}
+                      onChange={(e) => setWalletPIN(e.target.value.replace(/\D/g, ''))}
+                      className="w-32 mx-auto px-4 py-3 bg-zinc-50 border border-zinc-250 rounded-xl text-center text-lg font-mono tracking-widest focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 text-zinc-800 block"
+                    />
+                    <button
+                      type="button"
+                      id="p2p-forgot-pin-btn"
+                      onClick={handleGoToPinSettings}
+                      className="mt-2 text-amber-600 hover:text-amber-700 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer mx-auto"
+                    >
+                      <Key size={13} />
+                      <span>Wrong or forgot PIN? Change PIN in Settings</span>
+                    </button>
+                  </div>
+
+                  <button
+                    id="confirm-release-pin-btn"
+                    onClick={handleInitiateP2PWithdrawal}
+                    disabled={submitting || !walletPIN || walletPIN.length !== 4}
+                    className="w-full flex items-center justify-center gap-2 py-3.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600 disabled:bg-zinc-200 disabled:text-zinc-400 rounded-xl text-sm font-black transition-all shadow-md cursor-pointer"
+                  >
+                    {submitting ? (
+                      <>
+                        <RefreshCw size={15} className="animate-spin" />
+                        <span>Processing Withdrawal...</span>
+                      </>
+                    ) : (
+                      <span>CONFIRM & RELEASE ESCROW</span>
+                    )}
+                  </button>
+
+                  <button
+                    id="cancel-pin-confirm-btn"
+                    onClick={() => {
+                      setError(null);
+                      setMethod('p2p_instructions');
+                    }}
+                    className="w-full py-2.5 bg-white hover:bg-zinc-50 border border-zinc-200 text-zinc-500 hover:text-zinc-700 rounded-xl text-xs font-bold transition-all cursor-pointer text-center"
+                  >
+                    Cancel & Go Back
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
+        </>
+      )}
+
+      {/* Active Contract Early Withdrawal Confirmation Modal */}
+      {showActiveContractWarningModal && (() => {
+        const withdrawGross = pendingWithdrawType === 'crypto' 
+          ? (parseFloat(amountUSD) || 0) 
+          : (parseFloat(p2pUSDAmount) || 0);
+        const earlyFeeAmount = withdrawGross * 0.50;
+        const earlyNetAmount = withdrawGross * 0.50;
+        const standardFeeAmount = withdrawGross * 0.15;
+        const standardNetAmount = withdrawGross * 0.85;
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs animate-in fade-in duration-200">
+            <div className="bg-white border border-zinc-200 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-5 text-left relative overflow-hidden animate-in zoom-in-95 duration-200">
+              
+              {/* Header Warning Badge */}
+              <div className="flex items-center gap-3.5 pb-4 border-b border-zinc-100">
+                <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-600 shrink-0">
+                  <AlertTriangle size={24} />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-zinc-900 leading-snug">Active Contract Warning</h3>
+                  <p className="text-xs text-amber-700 font-semibold mt-0.5">Early Withdrawal Terms</p>
                 </div>
               </div>
 
-              {/* Wallet PIN Form */}
-              <div className="space-y-4 bg-white border border-zinc-200 rounded-2xl p-4">
-                <div className="space-y-1.5 text-center">
-                  <label className="text-xs font-semibold text-zinc-500 block">
-                    Enter 4-Digit Wallet Security PIN
-                  </label>
-                  <input
-                    id="withdraw-final-p2p-pin"
-                    type="password"
-                    maxLength={4}
-                    required
-                    placeholder="••••"
-                    value={walletPIN}
-                    onChange={(e) => setWalletPIN(e.target.value.replace(/\D/g, ''))}
-                    className="w-32 mx-auto px-4 py-3 bg-zinc-50 border border-zinc-250 rounded-xl text-center text-lg font-mono tracking-widest focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 text-zinc-800 block"
-                  />
-                  <button
-                    type="button"
-                    id="p2p-forgot-pin-btn"
-                    onClick={handleGoToPinSettings}
-                    className="mt-2 text-amber-600 hover:text-amber-700 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer mx-auto"
-                  >
-                    <Key size={13} />
-                    <span>Wrong or forgot PIN? Change PIN in Settings</span>
-                  </button>
+              {/* Shortened Clear Statement */}
+              <div className="p-4 bg-amber-50/80 border border-amber-200/80 rounded-2xl space-y-2">
+                <p className="text-xs font-semibold text-amber-950 leading-relaxed">
+                  You have an active contract. Withdrawing now incurs a <strong className="text-red-600 font-black">50% fee</strong>. Wait for the contract to end to withdraw with a <strong className="text-emerald-700 font-black">15% fee</strong>.
+                </p>
+              </div>
+
+              {/* Calculation Breakdown Comparison */}
+              <div className="space-y-2 bg-zinc-50 border border-zinc-200/80 rounded-2xl p-3.5 text-xs">
+                <div className="flex justify-between items-center pb-2 border-b border-zinc-200/60">
+                  <span className="text-zinc-500">Requested Withdrawal</span>
+                  <span className="font-mono font-bold text-zinc-900">${withdrawGross.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD</span>
                 </div>
 
+                <div className="p-2.5 bg-red-50/70 rounded-xl border border-red-200/60 space-y-1">
+                  <div className="flex justify-between items-center">
+                    <span className="text-red-800 font-bold">If Withdrawing Now (50% Fee)</span>
+                    <span className="font-mono font-bold text-red-600">-${earlyFeeAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD</span>
+                  </div>
+                  <div className="flex justify-between items-center font-bold">
+                    <span className="text-red-950 text-[11px]">Net Payout Received</span>
+                    <span className="font-mono font-black text-red-700 text-xs">${earlyNetAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD</span>
+                  </div>
+                </div>
+
+                <div className="p-2.5 bg-emerald-50/70 rounded-xl border border-emerald-200/60 space-y-1">
+                  <div className="flex justify-between items-center">
+                    <span className="text-emerald-800 font-bold">If Waiting Contract End (15% Fee)</span>
+                    <span className="font-mono font-bold text-emerald-600">-${standardFeeAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD</span>
+                  </div>
+                  <div className="flex justify-between items-center font-bold">
+                    <span className="text-emerald-950 text-[11px]">Net Payout Received</span>
+                    <span className="font-mono font-black text-emerald-700 text-xs">${standardNetAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="space-y-2.5 pt-2">
                 <button
-                  id="confirm-release-pin-btn"
-                  onClick={handleP2PSellRelease}
-                  disabled={submitting || !walletPIN || walletPIN.length !== 4}
-                  className="w-full flex items-center justify-center gap-2 py-3.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600 disabled:bg-zinc-200 disabled:text-zinc-400 rounded-xl text-sm font-black transition-all shadow-md cursor-pointer"
+                  id="active-contract-continue-withdraw-btn"
+                  onClick={() => {
+                    if (pendingWithdrawType === 'crypto') {
+                      executeCryptoWithdrawSubmit(50);
+                    } else if (pendingWithdrawType === 'p2p') {
+                      executeP2PSellRelease(50);
+                    }
+                  }}
+                  disabled={submitting}
+                  className="w-full flex items-center justify-center gap-2 py-3.5 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 text-white rounded-xl text-xs font-black transition-all shadow-md cursor-pointer uppercase tracking-wider"
                 >
                   {submitting ? (
                     <>
-                      <RefreshCw size={15} className="animate-spin" />
-                      <span>Releasing Escrow...</span>
+                      <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      <span>Processing...</span>
                     </>
                   ) : (
-                    <span>CONFIRM & RELEASE ESCROW</span>
+                    <span>CONTINUE WITHDRAWAL (50% FEE)</span>
                   )}
                 </button>
 
                 <button
-                  id="cancel-pin-confirm-btn"
+                  id="active-contract-cancel-view-contract-btn"
                   onClick={() => {
-                    setError(null);
-                    setMethod('p2p_instructions');
+                    setShowActiveContractWarningModal(false);
+                    setPendingWithdrawType(null);
+                    const chosenContract = activeCopyContracts.length > 0 ? activeCopyContracts[0] : null;
+                    const contractKey = chosenContract?.id || chosenContract?.leadId || 'any';
+                    localStorage.setItem('view_active_contract_id', contractKey);
+                    if (onViewContract) {
+                      onViewContract(contractKey);
+                    } else {
+                      onBack();
+                    }
                   }}
-                  className="w-full py-2.5 bg-white hover:bg-zinc-50 border border-zinc-200 text-zinc-500 hover:text-zinc-700 rounded-xl text-xs font-bold transition-all cursor-pointer text-center"
+                  disabled={submitting}
+                  className="w-full py-3 bg-white hover:bg-amber-50/60 border border-amber-300 text-amber-950 rounded-xl text-xs font-bold transition-all cursor-pointer text-center flex items-center justify-center gap-1.5 shadow-2xs"
                 >
-                  Cancel & Go Back
+                  <Eye size={14} className="text-amber-600" />
+                  <span>Cancel and View Contract</span>
                 </button>
               </div>
             </div>
-          )}
-        </>
-      )}
+          </div>
+        );
+      })()}
     </div>
   );
 }

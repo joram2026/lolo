@@ -69,9 +69,9 @@ export interface Transaction {
   merchantName?: string;
   coinSymbol?: string; // for MMF or specific coin transactions
   coinAmount?: number; // for MMF or specific coin transactions
-  feePercent?: number; // e.g. 10
-  feeAmount?: number;  // 10% fee in USD
-  netAmount?: number;  // amount user actually receives (90%)
+  feePercent?: number; // e.g. 15 or 50
+  feeAmount?: number;  // fee in USD (e.g. 15% standard or 50% early)
+  netAmount?: number;  // amount user actually receives (e.g. 85% or 50%)
   aiAudit?: {
     isValid: boolean;
     confidence: number;

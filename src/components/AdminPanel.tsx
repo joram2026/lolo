@@ -2965,12 +2965,12 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                             <span className="text-sm font-bold text-zinc-300 font-mono">${tx.amount?.toFixed(2)} USD</span>
                           </div>
                           <div>
-                            <span className="text-[9px] text-zinc-500 uppercase font-black block">10% Fee</span>
-                            <span className="text-sm font-bold text-red-400 font-mono">-${(tx.feeAmount !== undefined ? tx.feeAmount : tx.amount * 0.10).toFixed(2)} USD</span>
+                            <span className="text-[9px] text-zinc-500 uppercase font-black block">{tx.feePercent ? `${tx.feePercent}% Fee` : '15% Fee'}</span>
+                            <span className="text-sm font-bold text-red-400 font-mono">-${(tx.feeAmount !== undefined ? tx.feeAmount : tx.amount * 0.15).toFixed(2)} USD</span>
                           </div>
                           <div className="bg-emerald-950/40 p-1.5 rounded-lg border border-emerald-800/40">
                             <span className="text-[9px] text-emerald-400 uppercase font-black block">Net Payout to Send</span>
-                            <span className="text-sm font-black text-emerald-400 font-mono">${(tx.netAmount !== undefined ? tx.netAmount : tx.amount * 0.90).toFixed(2)} USD</span>
+                            <span className="text-sm font-black text-emerald-400 font-mono">${(tx.netAmount !== undefined ? tx.netAmount : tx.amount * 0.85).toFixed(2)} USD</span>
                           </div>
                         </div>
 
