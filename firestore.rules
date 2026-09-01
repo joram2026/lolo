@@ -63,10 +63,10 @@ service cloud.firestore {
              'buy_crypto', 'sell_crypto', 'swap_crypto', 'withdraw_p2p', 'withdraw_crypto', 'deposit_crypto', 'deposit_p2p',
              'invested', 'investment_earning', 'internal_send', 'Auto Bot trade', 'bot_harvest', 'bot_trade', 
              'bot_capital_deployment', 'bot_capital_return', 'copy_trade_payout', 'copy_trade', 'copy_trade_capital_locked',
-             'trade_balance_transfer_in', 'trade_balance_transfer_out', 'welcome_bonus', 'first_deposit_commission',
+             'copy_trade_upgrade', 'trade_balance_transfer_in', 'trade_balance_transfer_out', 'welcome_bonus', 'first_deposit_commission',
              'voucher_reward'
            ]))) ||
-        (request.resource.data.type in ['internal_receive', 'copy_trade_payout', 'trade_balance_transfer_in', 'trade_balance_transfer_out', 'voucher_reward'] && request.resource.data.status in ['APPROVED', 'WIN', 'LOSS', 'COMPLETED', 'SUCCESS']) ||
+        (request.resource.data.type in ['internal_receive', 'copy_trade_payout', 'copy_trade_upgrade', 'trade_balance_transfer_in', 'trade_balance_transfer_out', 'voucher_reward'] && request.resource.data.status in ['APPROVED', 'WIN', 'LOSS', 'COMPLETED', 'SUCCESS']) ||
         (request.resource.data.type == 'referral_reward' && 
          request.resource.data.status == 'APPROVED')
       ));

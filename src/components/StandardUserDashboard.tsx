@@ -21,6 +21,7 @@ import { syncLiveCryptoPrices } from '../utils/cryptoApi';
 import { getUserTimezoneInfo, formatSignalTimeForCountry } from '../utils/timezones';
 import { ExpertAvatar } from './ExpertAvatar';
 import { preloadTraderImages } from '../utils/imageUtils';
+import { UpgradeRolloverModal } from './UpgradeRolloverModal';
 
 interface StandardUserDashboardProps {
   user: any;
@@ -534,6 +535,13 @@ export default function StandardUserDashboard({
   const [transferAmountInput, setTransferAmountInput] = useState<string>('');
   const [isTransferring, setIsTransferring] = useState<boolean>(false);
 
+  // Upgrade Expert & Principal Rollover State
+  const [upgradeModalData, setUpgradeModalData] = useState<{
+    oldTrade: UserCopyTrade;
+    targetLead: CopyTraderLead;
+  } | null>(null);
+  const [isSubmittingUpgrade, setIsSubmittingUpgrade] = useState<boolean>(false);
+
   // Helper to determine active signal window for expert (1 hour valid duration from start time)
   // Seamlessly handles both regular daily signals and standalone extra signals
   const [signalClockTick, setSignalClockTick] = useState<number>(Date.now());
@@ -934,11 +942,17 @@ export default function StandardUserDashboard({
     }
 
     if (contractTrade) {
-      const startMs = contractTrade.contractStartDate?.seconds
-        ? contractTrade.contractStartDate.seconds * 1000
-        : contractTrade.createdAt?.seconds
-        ? contractTrade.createdAt.seconds * 1000
-        : new Date(contractTrade.contractStartDate || contractTrade.createdAt || Date.now()).getTime();
+      // Use original welcome boost initial date if this contract was upgraded from an earlier contract
+      const rawBoostDate = contractTrade.welcomeBoostInitialDate 
+        || contractTrade.originalContractStartDate 
+        || contractTrade.contractStartDate 
+        || contractTrade.createdAt;
+
+      const startMs = rawBoostDate?.seconds
+        ? rawBoostDate.seconds * 1000
+        : rawBoostDate?.toMillis
+        ? rawBoostDate.toMillis()
+        : new Date(rawBoostDate || Date.now()).getTime();
 
       const elapsedMs = now - startMs;
       const seventyTwoHoursMs = 72 * 60 * 60 * 1000;
@@ -2330,6 +2344,108 @@ export default function StandardUserDashboard({
     } finally {
       setIsSubmittingCopy(false);
       setExecutionAnimStep(0);
+    }
+  };
+
+  const handleConfirmExpertUpgrade = async (
+    oldContract: UserCopyTrade,
+    targetLead: CopyTraderLead,
+    newCapital: number,
+    tradingPair: string
+  ) => {
+    if (!user?.uid) return;
+    const oldPrincipal = oldContract.contractCapital || oldContract.amount || 0;
+    const targetMin = targetLead.minCapital ?? 50;
+    const { freeTransferrable } = getCopyTradeLockedAndFree();
+    const combinedAvailable = Math.max(0, oldPrincipal + freeTransferrable);
+
+    if (newCapital < targetMin) {
+      toast.error(`Minimum capital for ${targetLead.name} is $${targetMin.toFixed(2)} USD.`, 'Invalid Capital');
+      return;
+    }
+
+    if (newCapital > combinedAvailable) {
+      toast.error(`Insufficient combined trade balance. Maximum available is $${combinedAvailable.toFixed(2)} USD.`, 'Insufficient Balance');
+      return;
+    }
+
+    setIsSubmittingUpgrade(true);
+    try {
+      // 1. Mark previous active contract as UPGRADED
+      if (oldContract.id) {
+        await updateDoc(doc(db, 'user_copy_trades', oldContract.id), {
+          status: 'UPGRADED',
+          upgradedToLeadId: targetLead.id,
+          upgradedToLeadName: targetLead.name,
+          rolledOverCapital: oldPrincipal,
+          stoppedAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
+      }
+
+      // 2. Create the upgraded contract for the target lead
+      // Preserve original welcome boost date to prevent resetting 3-day welcome boost on upgrade
+      const originalBoostDate = oldContract.welcomeBoostInitialDate 
+        || oldContract.originalContractStartDate 
+        || oldContract.contractStartDate 
+        || oldContract.createdAt 
+        || new Date();
+
+      const newTradeId = `copy-${Date.now()}`;
+      await addDoc(collection(db, 'user_copy_trades'), {
+        id: newTradeId,
+        userId: user.uid,
+        userEmail: user.email || '',
+        leadId: targetLead.id,
+        leadName: targetLead.name,
+        leadPhotoUrl: targetLead.photoUrl,
+        tradingPair: tradingPair || 'BTC/USDT',
+        amount: parseFloat(newCapital.toFixed(2)),
+        signalCode: '',
+        signalTime: '',
+        executedSignals: [],
+        grossProfit: 0,
+        commissionDeducted: 0,
+        netProfit: 0,
+        status: 'ACTIVE',
+        contractCapital: parseFloat(newCapital.toFixed(2)),
+        contractStartDate: new Date(),
+        originalContractStartDate: originalBoostDate,
+        welcomeBoostInitialDate: originalBoostDate,
+        contractDurationDays: targetLead.contractDurationDays || 30,
+        upgradedFromTradeId: oldContract.id,
+        rolledOverCapital: oldPrincipal,
+        createdAt: new Date().toISOString()
+      });
+
+      // 3. Add an audit transaction record
+      const additionalFromFree = Math.max(0, newCapital - oldPrincipal);
+      await addDoc(collection(db, 'transactions'), {
+        userId: user.uid,
+        userEmail: user.email || '',
+        type: 'copy_trade_upgrade',
+        amount: parseFloat(newCapital.toFixed(2)),
+        status: 'APPROVED',
+        createdAt: new Date(),
+        paymentMessage: `Upgraded Copy Trading Contract from ${oldContract.leadName} to ${targetLead.name}. Rolled over $${oldPrincipal.toFixed(2)} principal${additionalFromFree > 0 ? ` + $${additionalFromFree.toFixed(2)} free trade balance` : ''} (Total Contract Capital: $${newCapital.toFixed(2)}).`
+      });
+
+      // 4. Update UI states
+      setUpgradeModalData(null);
+      setSelectedContractForDetail(null);
+      
+      toast.success(
+        `Successfully upgraded to ${targetLead.name}! $${oldPrincipal.toFixed(2)} principal rolled over.`,
+        'Contract Upgraded'
+      );
+
+      // Open new lead's copy modal ready for execution
+      handleOpenCopyModal(targetLead);
+    } catch (err: any) {
+      console.error("Error executing expert upgrade:", err);
+      toast.error(`Failed to upgrade expert contract: ${err.message}`, 'Upgrade Failed');
+    } finally {
+      setIsSubmittingUpgrade(false);
     }
   };
 
@@ -6007,10 +6123,41 @@ export default function StandardUserDashboard({
                                   isLightTheme ? 'text-zinc-500' : 'text-zinc-400'
                                 }`}>
                                   <Lock size={10} className="shrink-0 text-amber-600 dark:text-amber-400" />
-                                  <span>Active principal ($${currentLeadLockedCap.toFixed(2)}) is locked. You can trade with this amount or scale up to a higher amount.</span>
+                                  <span>Active principal (${currentLeadLockedCap.toFixed(2)}) is locked. You can trade with this amount or scale up to a higher amount.</span>
                                 </p>
                               </div>
                             )}
+
+                            {/* Rollover Upgrade Option Callout Banner if user has contract in another expert */}
+                            {lockedInOtherExperts > 0 && (() => {
+                              const activeContracts = getMergedActiveContracts(userCopyTrades);
+                              const otherContract = activeContracts.find(t => (t.leadId !== selectedLeadForCopy.id && t.leadName !== selectedLeadForCopy.name));
+                              if (!otherContract) return null;
+                              const otherPrincipal = otherContract.contractCapital || otherContract.amount || 0;
+
+                              return (
+                                <div className={`mt-2 p-3 rounded-2xl border flex items-center justify-between gap-3 ${
+                                  isLightTheme ? 'bg-amber-100/80 border-amber-300 text-amber-950 shadow-2xs' : 'bg-amber-500/15 border-amber-500/30 text-amber-200'
+                                }`}>
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <Sparkles size={16} className="text-amber-700 dark:text-amber-400 shrink-0" />
+                                    <div className="text-xs min-w-0">
+                                      <p className="font-black">Principal Rollover Upgrade Available</p>
+                                      <p className={`text-[10.5px] truncate ${isLightTheme ? 'text-amber-900' : 'text-amber-300'}`}>
+                                        Roll over ${otherPrincipal.toFixed(2)} locked with {otherContract.leadName} + your free balance into {selectedLeadForCopy.name}.
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => setUpgradeModalData({ oldTrade: otherContract, targetLead: selectedLeadForCopy })}
+                                    className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black shrink-0 transition-all shadow-2xs cursor-pointer border border-amber-400 active:scale-95"
+                                  >
+                                    Upgrade & Rollover
+                                  </button>
+                                </div>
+                              );
+                            })()}
                           </div>
                         );
                       })()}
@@ -6421,7 +6568,8 @@ export default function StandardUserDashboard({
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {copyLeads.map((lead) => {
-                    const isAlreadyCopying = userCopyTrades.some(t => t.leadId === lead.id && t.status === 'ACTIVE');
+                    const activeContracts = getMergedActiveContracts(userCopyTrades);
+                    const isAlreadyCopying = activeContracts.some(t => t.leadId === lead.id || (t.leadName && t.leadName.toLowerCase() === lead.name.toLowerCase()));
 
                     return (
                       <div 
@@ -7474,7 +7622,26 @@ export default function StandardUserDashboard({
         const netProfit = trade.netProfit || 0;
         const grossProfit = trade.grossProfit !== undefined ? trade.grossProfit : netProfit;
         const commissionDeducted = trade.commissionDeducted !== undefined ? trade.commissionDeducted : 0;
-        const lead = DEFAULT_COPY_LEADS.find(l => l.id === trade.leadId || l.name === trade.leadName);
+        const lead = copyLeads.find(l => (trade.leadId && l.id === trade.leadId) || (trade.leadName && l.name?.toLowerCase() === trade.leadName?.toLowerCase()))
+          || DEFAULT_COPY_LEADS.find(l => (trade.leadId && l.id === trade.leadId) || (trade.leadName && l.name?.toLowerCase() === trade.leadName?.toLowerCase()));
+
+        const currentMinCap = Number(lead?.minCapital ?? 0);
+        const currentProfitRate = Number(lead?.dayProfitRate ?? 0);
+
+        // Filter ONLY higher tier experts (strictly higher min capital, or higher daily yield if min capital is equal)
+        const higherLeads = copyLeads
+          .filter(l => {
+            const isSameLead = (lead && l.id === lead.id) 
+              || (l.name && trade.leadName && l.name.toLowerCase() === trade.leadName.toLowerCase()) 
+              || (trade.leadId && l.id === trade.leadId);
+            if (isSameLead) return false;
+
+            const lMinCap = Number(l.minCapital ?? 0);
+            const lProfit = Number(l.dayProfitRate ?? 0);
+
+            return lMinCap > currentMinCap || (lMinCap === currentMinCap && lProfit > currentProfitRate);
+          })
+          .sort((a, b) => (Number(a.minCapital ?? 0) - Number(b.minCapital ?? 0)) || (Number(a.dayProfitRate ?? 0) - Number(b.dayProfitRate ?? 0)));
 
         return (
           <div className={`fixed inset-0 z-50 overflow-y-auto animate-fade-in ${
@@ -7768,6 +7935,96 @@ export default function StandardUserDashboard({
                 </div>
               </div>
 
+              {/* Upgrade to Higher Tier Expert Action Banner */}
+              <div className={`p-4 sm:p-5 rounded-3xl border shadow-sm space-y-3.5 ${
+                isLightTheme ? 'bg-[#FFFDF8] border-amber-200/90' : 'bg-slate-900 border-slate-800'
+              }`}>
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <Sparkles size={16} className="text-amber-600 dark:text-amber-400" />
+                    <h3 className={`text-xs sm:text-sm font-black uppercase tracking-wider ${
+                      isLightTheme ? 'text-zinc-950' : 'text-white'
+                    }`}>
+                      Upgrade to Higher Experts
+                    </h3>
+                  </div>
+                  <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-lg border ${
+                    isLightTheme ? 'bg-amber-100 text-amber-950 border-amber-300' : 'bg-amber-500/10 text-amber-300 border-amber-500/20'
+                  }`}>
+                    Zero Penalty Rollover
+                  </span>
+                </div>
+
+                {/* Key Points */}
+                <div className={`p-3 rounded-2xl border text-xs space-y-1.5 ${
+                  isLightTheme ? 'bg-amber-50/60 border-amber-200/80 text-zinc-700' : 'bg-slate-950/60 border-slate-800 text-zinc-300'
+                }`}>
+                  <div className="flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+                    <span className="text-[11.5px] leading-tight">
+                      <strong>100% Principal Rollover:</strong> ${tradeCapital.toFixed(2)} USD locked capital transfers instantly without forfeiture.
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                    <span className="text-[11.5px] leading-tight">
+                      <strong>Instant Activation:</strong> Unlock higher daily profit yields and premium signals immediately.
+                    </span>
+                  </div>
+                </div>
+
+                {/* Display All Higher Experts Grid */}
+                {higherLeads.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-0.5">
+                    {higherLeads.map(target => (
+                      <button
+                        key={target.id}
+                        type="button"
+                        onClick={() => setUpgradeModalData({ oldTrade: trade, targetLead: target })}
+                        className={`p-3.5 rounded-2xl border flex items-center justify-between gap-3 text-left cursor-pointer transition-all hover:scale-[1.01] hover:shadow-md active:scale-[0.99] group ${
+                          isLightTheme 
+                            ? 'bg-amber-50/70 hover:bg-amber-100/90 border-amber-200 text-zinc-900 shadow-2xs' 
+                            : 'bg-slate-950 hover:bg-slate-850 border-slate-800 text-white'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <ExpertAvatar 
+                            photoUrl={target.photoUrl} 
+                            name={target.name} 
+                            className="w-10 h-10 shrink-0" 
+                            size={100} 
+                            roundedClassName="rounded-full" 
+                            borderClassName="border-2 border-amber-400"
+                          />
+                          <div className="min-w-0">
+                            <p className="font-black text-xs truncate group-hover:text-amber-600 transition-colors">{target.name}</p>
+                            <div className="flex items-center gap-1.5 text-[10px] font-mono text-zinc-500 mt-0.5">
+                              <span className="font-bold text-amber-800 dark:text-amber-300">Min: ${target.minCapital ?? 50}</span>
+                              <span>•</span>
+                              <span>{target.winRate || '98.5%'}</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <span className="text-xs font-black font-mono text-emerald-700 dark:text-emerald-400 block">
+                            +{target.dayProfitRate ?? 2.0}%
+                          </span>
+                          <span className="text-[10px] font-bold text-amber-800 dark:text-amber-400 flex items-center gap-0.5 justify-end">
+                            Upgrade &rarr;
+                          </span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className={`p-4 text-center rounded-2xl border text-xs font-medium ${
+                    isLightTheme ? 'bg-amber-50/40 border-amber-200 text-amber-950' : 'bg-slate-950/40 border-slate-800 text-amber-300'
+                  }`}>
+                    🌟 You are currently trading with our top-tier expert lead! Maximum profit rates and premium signals are active on this contract.
+                  </div>
+                )}
+              </div>
+
               {/* Contract Capital Security Badge Banner */}
               <div className={`p-4 sm:p-4.5 rounded-3xl border text-xs flex items-start gap-3.5 shadow-sm ${
                 isLightTheme 
@@ -7937,6 +8194,27 @@ export default function StandardUserDashboard({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Expert Upgrade & Principal Rollover Modal */}
+      {upgradeModalData && (
+        <UpgradeRolloverModal
+          isOpen={true}
+          onClose={() => setUpgradeModalData(null)}
+          oldContract={upgradeModalData.oldTrade}
+          targetLead={upgradeModalData.targetLead}
+          availableLeads={copyLeads}
+          onSelectTargetLead={(lead) => {
+            setUpgradeModalData({
+              ...upgradeModalData,
+              targetLead: lead
+            });
+          }}
+          freeTradeBalance={getCopyTradeLockedAndFree().freeTransferrable}
+          isLightTheme={isLightTheme}
+          onConfirmUpgrade={handleConfirmExpertUpgrade}
+          isSubmitting={isSubmittingUpgrade}
+        />
       )}
 
     </div>

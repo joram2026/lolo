@@ -38,7 +38,9 @@ export type TransactionType =
   | 'invested' 
   | 'investment_earning' 
   | 'internal_send' 
-  | 'internal_receive';
+  | 'internal_receive'
+  | 'copy_trade_payout'
+  | 'copy_trade_upgrade';
 
 export interface DepositBonusTier {
   id: string;
@@ -222,10 +224,16 @@ export interface UserCopyTrade {
   grossProfit: number;
   commissionDeducted: number;
   netProfit: number;
-  status: 'COMPLETED' | 'ACTIVE' | 'EXPIRED';
+  status: 'COMPLETED' | 'ACTIVE' | 'EXPIRED' | 'UPGRADED';
   contractCapital?: number;
   contractStartDate?: any;
+  originalContractStartDate?: any;
+  welcomeBoostInitialDate?: any;
   contractDurationDays?: number;
+  upgradedToLeadId?: string;
+  upgradedToLeadName?: string;
+  upgradedFromTradeId?: string;
+  rolledOverCapital?: number;
   executedSignals?: { 
     code: string; 
     time: string; 
