@@ -2059,17 +2059,12 @@ export default function StandardUserDashboard({
     setActiveTab('earn');
     setSelectedLeadForCopy(lead);
 
-    // Check if user already has an active running contract with this expert
+    // Always start at Step 1 (Schedule & Parameters) so users see all the process (Time, Capital, and Execution)
+    setCopyTradeStep(1);
+
     const existingActiveContract = userCopyTrades.find(
       t => (t.leadId === lead.id || (t.leadName && t.leadName.toLowerCase() === lead.name.toLowerCase())) && t.status === 'ACTIVE'
     );
-
-    // Option 1: Context-Aware Smart Step Navigation (Skip Redundant Steps)
-    if (existingActiveContract) {
-      setCopyTradeStep(3); // Jump straight to Signal Execution
-    } else {
-      setCopyTradeStep(1); // First time: Start with overview
-    }
 
     const defaultPair = existingActiveContract?.tradingPair || (lead.tradingPairs && lead.tradingPairs.length > 0 ? lead.tradingPairs[0] : 'BTC/USDT');
     setCopyTradePair(defaultPair);
