@@ -2,8 +2,10 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion } from 'motion/react';
 import { db } from '../firebase';
 import { doc, getDoc, onSnapshot, collection, query, where, getDocs, updateDoc, addDoc, serverTimestamp } from 'firebase/firestore';
-import { UserAccount, Transaction, CryptoPrice, ArbitrageConfig, CopyTraderLead, UserCopyTrade } from '../types';
+import { UserAccount, Transaction, CryptoPrice, ArbitrageConfig, CopyTraderLead, UserCopyTrade, InAppAd } from '../types';
 import { DEFAULT_COPY_LEADS } from '../data/copyTraders';
+import { DEFAULT_IN_APP_ADS } from '../data/defaultAds';
+import { InAppAdPopupModal } from './InAppAdPopupModal';
 import { useToast } from '../context/ToastContext';
 import NewsCarousel from './NewsCarousel';
 import ActivityLog from './ActivityLog';
@@ -541,6 +543,10 @@ export default function StandardUserDashboard({
     targetLead: CopyTraderLead;
   } | null>(null);
   const [isSubmittingUpgrade, setIsSubmittingUpgrade] = useState<boolean>(false);
+
+  // In-App Promotional Ads State
+  const [inAppAdsList, setInAppAdsList] = useState<InAppAd[]>(DEFAULT_IN_APP_ADS);
+  const [activePopupAd, setActivePopupAd] = useState<InAppAd | null>(null);
 
   // Helper to determine active signal window for expert (1 hour valid duration from start time)
   // Seamlessly handles both regular daily signals and standalone extra signals
@@ -1499,6 +1505,47 @@ export default function StandardUserDashboard({
       console.error("Error fetching user copy trades:", err);
     });
 
+    // Real-time listener for In-App Promotional Ads
+    const adsCol = collection(db, 'in_app_ads');
+    const unsubscribeAds = onSnapshot(adsCol, (snapshot) => {
+      let fetchedAds = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as InAppAd));
+      if (fetchedAds.length === 0) {
+        fetchedAds = [...DEFAULT_IN_APP_ADS];
+      }
+      fetchedAds.sort((a, b) => (a.priority || 99) - (b.priority || 99));
+      setInAppAdsList(fetchedAds);
+
+      // Check for eligible popup ad if not dismissed today
+      const todayDate = new Date().toISOString().split('T')[0];
+      const dismissedDate = localStorage.getItem('in_app_ad_popup_dismissed_date');
+
+      if (dismissedDate !== todayDate) {
+        const popupCandidate = fetchedAds.find(
+          a => a.isActive && a.placement === 'POPUP'
+        );
+        if (popupCandidate) {
+          // Trigger popup with a smooth slight delay after dashboard loads
+          const popupTimer = setTimeout(() => {
+            setActivePopupAd(popupCandidate);
+            // Track view count
+            try {
+              if (popupCandidate.id && !popupCandidate.id.startsWith('ad_')) {
+                updateDoc(doc(db, 'in_app_ads', popupCandidate.id), {
+                  viewCount: (popupCandidate.viewCount || 0) + 1
+                });
+              }
+            } catch (err) {
+              console.warn("Failed to increment ad view count:", err);
+            }
+          }, 1200);
+          return () => clearTimeout(popupTimer);
+        }
+      }
+    }, (err) => {
+      console.error("Error fetching in-app ads:", err);
+      setInAppAdsList([...DEFAULT_IN_APP_ADS]);
+    });
+
     return () => {
       unsubscribeUser();
       unsubscribeTx();
@@ -1509,6 +1556,7 @@ export default function StandardUserDashboard({
       unsubscribeTemplates();
       unsubscribeCopyLeads();
       unsubscribeCopyTrades();
+      unsubscribeAds();
     };
   }, [user.uid]);
 
@@ -2803,6 +2851,50 @@ export default function StandardUserDashboard({
     } finally {
       setSwapLoading(false);
     }
+  };
+
+  // In-App Ad interaction and navigation router
+  const handleAdAction = (ad: InAppAd) => {
+    // Increment click count in Firestore
+    try {
+      if (ad.id && !ad.id.startsWith('ad_')) {
+        updateDoc(doc(db, 'in_app_ads', ad.id), {
+          clickCount: (ad.clickCount || 0) + 1
+        });
+      }
+    } catch (err) {
+      console.warn("Failed to increment ad click count:", err);
+    }
+
+    if (ad.actionType === 'EARN') {
+      setActiveTab('earn');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else if (ad.actionType === 'BOT_TRADING') {
+      setActiveTab('bots');
+      setBotHubView('TEMPLATES');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else if (ad.actionType === 'DEPOSIT') {
+      onOpenDeposit();
+    } else if (ad.actionType === 'REFERRALS') {
+      localStorage.setItem('profile_subpage', 'referrals');
+      onOpenProfile();
+    } else if (ad.actionType === 'VOUCHERS') {
+      localStorage.setItem('profile_subpage', 'vouchers');
+      onOpenProfile();
+    } else if (ad.actionType === 'LEADERBOARD') {
+      setActiveTab('leaderboard');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else if (ad.actionType === 'EXTERNAL_LINK' && ad.actionUrl) {
+      window.open(ad.actionUrl, '_blank', 'noopener,noreferrer');
+    }
+  };
+
+  const handleCloseAdPopup = (dontShowToday?: boolean) => {
+    if (dontShowToday) {
+      const todayDate = new Date().toISOString().split('T')[0];
+      localStorage.setItem('in_app_ad_popup_dismissed_date', todayDate);
+    }
+    setActivePopupAd(null);
   };
 
   if (selectedCoin) {
@@ -8209,6 +8301,15 @@ export default function StandardUserDashboard({
           isLightTheme={isLightTheme}
           onConfirmUpgrade={handleConfirmExpertUpgrade}
           isSubmitting={isSubmittingUpgrade}
+        />
+      )}
+
+      {/* In-App Promotional Ad Popup Modal */}
+      {activePopupAd && (
+        <InAppAdPopupModal
+          ad={activePopupAd}
+          onClose={handleCloseAdPopup}
+          onAdAction={handleAdAction}
         />
       )}
 

@@ -158,6 +158,13 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // In-App Promotional Ads configuration rules
+    match /in_app_ads/{adId} {
+      allow read: if true;
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || (isAuth() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viewCount', 'clickCount']));
+    }
+
     // Email Verifications for signup OTP
     match /email_verifications/{emailDoc} {
       allow read, write: if true;

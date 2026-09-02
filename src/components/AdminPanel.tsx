@@ -6,15 +6,17 @@ import {
   collection, doc, getDocs, updateDoc, deleteDoc, runTransaction, 
   setDoc, query, orderBy, serverTimestamp, writeBatch, getDoc 
 } from 'firebase/firestore';
-import { UserAccount, Transaction, CryptoNetwork, P2PMerchant, CryptoPrice, ArbitrageConfig, BotTemplate, DepositBonusTier, ReferralDepositConfig, CopyTraderLead, PromoCode, PromoCodeRewardType } from '../types';
+import { UserAccount, Transaction, CryptoNetwork, P2PMerchant, CryptoPrice, ArbitrageConfig, BotTemplate, DepositBonusTier, ReferralDepositConfig, CopyTraderLead, PromoCode, PromoCodeRewardType, InAppAd } from '../types';
 import { DEFAULT_COPY_LEADS } from '../data/copyTraders';
+import { DEFAULT_IN_APP_ADS } from '../data/defaultAds';
 import { fetchLivePriceFromBinance, fetchAllLivePrices, syncLiveCryptoPrices } from '../utils/cryptoApi';
 import { seedDefaultPromoCodesIfEmpty } from '../utils/voucherService';
 import { ExpertAvatar } from './ExpertAvatar';
+import { AdminAdsManager } from './AdminAdsManager';
 import { 
   Users, CheckCircle2, XCircle, Settings, ShieldAlert, Key, 
   Trash2, ToggleLeft, ToggleRight, Loader, ZoomIn, Plus, Edit, Check, Eye, Star, Mail, RefreshCw, X, FileText, Coins, TrendingUp, Bot, Cpu, Smartphone, Phone, Sparkles, ChevronDown, ChevronUp,
-  Search, Award, Flame, UserCheck, Tag, Gift, Copy
+  Search, Award, Flame, UserCheck, Tag, Gift, Copy, Megaphone
 } from 'lucide-react';
 
 const STATIC_CRYPTO: Record<string, { name: string; price: number }> = {
@@ -75,7 +77,7 @@ interface AdminPanelProps {
 }
 
 export default function AdminPanel({ onLogout }: AdminPanelProps) {
-  const [activeTab, setActiveTab] = useState<'users' | 'deposits' | 'withdrawals' | 'settings' | 'bot-templates'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'deposits' | 'withdrawals' | 'settings' | 'bot-templates' | 'ads'>('users');
   
   // Data States
   const [usersList, setUsersList] = useState<UserAccount[]>([]);
@@ -86,6 +88,8 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
   const [investmentsList, setInvestmentsList] = useState<any[]>([]);
   const [userBotsList, setUserBotsList] = useState<any[]>([]);
   const [botTemplatesList, setBotTemplatesList] = useState<BotTemplate[]>([]);
+  const [adsList, setAdsList] = useState<InAppAd[]>([]);
+  const [isSavingAd, setIsSavingAd] = useState(false);
   const [editingBotTemplate, setEditingBotTemplate] = useState<BotTemplate | null>(null);
   const [isAddingBotTemplate, setIsAddingBotTemplate] = useState(false);
   const [botTemplateForm, setBotTemplateForm] = useState({
@@ -606,6 +610,29 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
         setPromoCodesList(pList);
       } catch (promoErr) {
         console.warn("Could not load promo codes:", promoErr);
+      }
+
+      // Fetch In-App Promotional Ads
+      try {
+        const adsSnap = await getDocs(collection(db, 'in_app_ads'));
+        let loadedAds = adsSnap.docs.map(d => ({ id: d.id, ...d.data() } as InAppAd));
+
+        if (loadedAds.length === 0) {
+          // Seed defaults
+          for (const defaultAd of DEFAULT_IN_APP_ADS) {
+            try {
+              await setDoc(doc(db, 'in_app_ads', defaultAd.id), defaultAd);
+            } catch (adSeedErr) {
+              console.error("Error seeding in-app ad:", adSeedErr);
+            }
+          }
+          loadedAds = [...DEFAULT_IN_APP_ADS];
+        }
+
+        loadedAds.sort((a, b) => (a.priority || 99) - (b.priority || 99));
+        setAdsList(loadedAds);
+      } catch (adsErr) {
+        console.warn("Could not load in-app ads:", adsErr);
       }
 
     } catch (err: any) {
@@ -2016,6 +2043,77 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
     }
   };
 
+  const handleSaveAd = async (adData: Partial<InAppAd>, adId?: string) => {
+    setIsSavingAd(true);
+    try {
+      const id = adId || ('ad_' + Date.now());
+      const payload: InAppAd = {
+        id,
+        title: adData.title || 'Special Promotion',
+        subtitle: adData.subtitle || '',
+        description: adData.description || '',
+        badgeText: adData.badgeText || 'SPECIAL OFFER',
+        badgeColor: adData.badgeColor || 'amber',
+        bgGradient: adData.bgGradient || 'from-amber-600 via-amber-700 to-yellow-800',
+        iconName: adData.iconName || 'Sparkles',
+        actionType: adData.actionType || 'EARN',
+        actionUrl: adData.actionUrl || '',
+        ctaText: adData.ctaText || 'Explore Now',
+        placement: adData.placement || 'CAROUSEL',
+        priority: adData.priority || 1,
+        isActive: adData.isActive ?? true,
+        targetAudience: adData.targetAudience || 'ALL',
+        viewCount: adData.viewCount || 0,
+        clickCount: adData.clickCount || 0,
+        createdAt: adData.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
+      await setDoc(doc(db, 'in_app_ads', id), payload, { merge: true });
+      showFeedback('success', adId ? 'Promotional Ad updated successfully!' : 'New Promotional Ad created successfully!');
+      await loadAllData(true);
+    } catch (err: any) {
+      console.error(err);
+      showFeedback('error', 'Failed to save In-App Ad: ' + err.message);
+    } finally {
+      setIsSavingAd(false);
+    }
+  };
+
+  const handleToggleAd = async (ad: InAppAd) => {
+    try {
+      const newStatus = !ad.isActive;
+      await updateDoc(doc(db, 'in_app_ads', ad.id), {
+        isActive: newStatus,
+        updatedAt: new Date().toISOString()
+      });
+      showFeedback('success', `Ad "${ad.title}" is now ${newStatus ? 'Active' : 'Inactive'}.`);
+      await loadAllData(true);
+    } catch (err: any) {
+      console.error(err);
+      showFeedback('error', 'Failed to update ad status: ' + err.message);
+    }
+  };
+
+  const handleDeleteAd = (ad: InAppAd) => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Delete In-App Promo Ad',
+      message: `Are you sure you want to delete ad "${ad.title}"? Users will no longer see this promotion.`,
+      danger: true,
+      onConfirm: async () => {
+        try {
+          await deleteDoc(doc(db, 'in_app_ads', ad.id));
+          showFeedback('success', `Deleted ad "${ad.title}".`);
+          await loadAllData(true);
+        } catch (err: any) {
+          console.error(err);
+          showFeedback('error', 'Failed to delete ad: ' + err.message);
+        }
+      }
+    });
+  };
+
   // Filter Transactions
   const pendingCryptoDeposits = txList.filter(t => t.type === 'deposit_crypto' && t.status === 'PENDING APPROVAL');
   const pendingP2PDeposits = txList.filter(t => t.type === 'deposit_p2p' && t.status === 'PENDING APPROVAL');
@@ -2056,12 +2154,13 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
       </div>
 
       {/* Main Tabs Selection */}
-      <div className="grid grid-cols-5 max-w-xl mx-auto bg-slate-800 border-b border-slate-700 p-1 rounded-xl my-4 mx-4">
+      <div className="grid grid-cols-6 max-w-2xl mx-auto bg-slate-800 border-b border-slate-700 p-1 rounded-xl my-4 mx-4">
         {([
           { id: 'users', label: 'Users', icon: Users },
           { id: 'deposits', label: 'Deposits', icon: CheckCircle2 },
           { id: 'withdrawals', label: 'Withdraw', icon: XCircle },
           { id: 'bot-templates', label: 'Bots', icon: Bot },
+          { id: 'ads', label: 'In-App Ads', icon: Megaphone },
           { id: 'settings', label: 'System', icon: Settings }
         ] as const).map(tab => {
           const Icon = tab.icon;
@@ -2073,7 +2172,7 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                 setActiveTab(tab.id);
                 loadAllData(true);
               }}
-              className={`flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 py-2 px-1 rounded-lg text-[10px] sm:text-xs font-bold transition-all ${
+              className={`flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 py-2 px-1 rounded-lg text-[10px] sm:text-xs font-bold transition-all cursor-pointer ${
                 activeTab === tab.id 
                   ? 'bg-emerald-500 text-slate-950 shadow' 
                   : 'text-zinc-400 hover:text-zinc-200'
@@ -4646,6 +4745,17 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
 
             </div>
           </div>
+          )}
+
+          {/* 6. In-App Promotional Ads Manager Tab */}
+          {activeTab === 'ads' && (
+            <AdminAdsManager
+              adsList={adsList}
+              onSaveAd={handleSaveAd}
+              onDeleteAd={handleDeleteAd}
+              onToggleAd={handleToggleAd}
+              isSaving={isSavingAd}
+            />
           )}
 
         </div>

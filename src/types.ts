@@ -282,3 +282,31 @@ export interface VoucherClaim {
   rewardText: string;
   claimedAt: any;
 }
+
+export type AdPlacement = 'CAROUSEL' | 'POPUP' | 'BANNER';
+export type AdActionType = 'DEPOSIT' | 'EARN' | 'REFERRALS' | 'VOUCHERS' | 'LEADERBOARD' | 'BOT_TRADING' | 'EXTERNAL_LINK';
+
+export interface InAppAd {
+  id: string;
+  title: string;
+  subtitle: string;
+  description?: string;
+  badgeText?: string; // e.g. "HOT 🔥", "BONUS 💰", "VIP 🚀"
+  badgeColor?: string; // e.g. "amber", "emerald", "purple", "blue"
+  bgGradient?: string; // e.g. "from-amber-600 via-amber-700 to-yellow-800"
+  imageUrl?: string;
+  iconName?: string; // Lucide icon key
+  actionType: AdActionType;
+  actionUrl?: string; // Used when actionType is EXTERNAL_LINK
+  ctaText: string; // e.g. "Deposit Now", "Explore VIP Traders", "Invite Friends"
+  placement: AdPlacement; // CAROUSEL | POPUP | BANNER
+  priority: number; // 1 = top priority
+  isActive: boolean;
+  startDate?: any;
+  endDate?: any;
+  targetAudience?: 'ALL' | 'NEW_USERS' | 'NO_ACTIVE_CONTRACT';
+  clickCount?: number;
+  viewCount?: number;
+  createdAt?: any;
+  updatedAt?: any;
+}
