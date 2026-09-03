@@ -6,7 +6,8 @@ import { DEFAULT_MERCHANTS } from '../seedData';
 import { 
   ArrowLeft, Send, Users, ShieldAlert, ChevronRight, Check, 
   HelpCircle, AlertCircle, RefreshCw, Star, ArrowUpRight, DollarSign, Lock,
-  Key, ArrowRight, X, AlertTriangle, ShieldCheck, Eye, Wallet, ExternalLink, Copy, CheckCircle2
+  Key, ArrowRight, X, AlertTriangle, ShieldCheck, Eye, Wallet, ExternalLink, Copy, CheckCircle2,
+  TrendingUp, Sparkles, Layers
 } from 'lucide-react';
 import { CoinIcon } from './StandardUserDashboard';
 import { useToast } from '../context/ToastContext';
@@ -87,9 +88,15 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
   const [lockedUSDT, setLockedUSDT] = useState<number>(0);
   const [activeInvestments, setActiveInvestments] = useState<any[]>([]);
   const [activeCopyContracts, setActiveCopyContracts] = useState<UserCopyTrade[]>([]);
+  const [totalCopyContractsCount, setTotalCopyContractsCount] = useState<number>(0);
+  const [copyTradesLoaded, setCopyTradesLoaded] = useState<boolean>(false);
+  const [hasCopyTradeTx, setHasCopyTradeTx] = useState<boolean>(false);
   const [showActiveContractWarningModal, setShowActiveContractWarningModal] = useState<boolean>(false);
   const [pendingWithdrawType, setPendingWithdrawType] = useState<'crypto' | 'p2p' | null>(null);
   const [cryptoPrices, setCryptoPrices] = useState<Record<string, CryptoPrice>>({});
+
+  // Account eligibility check: User must have participated in at least one copy trading contract
+  const hasHadCopyContract = totalCopyContractsCount > 0 || ((profile?.lockedCopyTradeCapital || 0) > 0) || hasCopyTradeTx;
 
   // In-flow Address Binding States
   const [bindAddressInput, setBindAddressInput] = useState<string>('');
@@ -207,8 +214,27 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
         return stat === 'ACTIVE';
       });
       setActiveCopyContracts(activeContracts);
+      setTotalCopyContractsCount(allTrades.length);
+      setCopyTradesLoaded(true);
     }, (err) => {
       console.error('Error listening to copy trades:', err);
+      setCopyTradesLoaded(true);
+    });
+
+    // 4. One-time check for historical copy trade transactions as an extra fallback
+    const txCol = collection(db, 'transactions');
+    const txQuery = query(txCol, where('userId', '==', user.uid));
+    getDocs(txQuery).then((snap) => {
+      const found = snap.docs.some(d => {
+        const data = d.data();
+        const t = (data.type || '').toLowerCase();
+        const title = (data.title || '').toLowerCase();
+        const msg = (data.paymentMessage || '').toLowerCase();
+        return t.includes('copy_trade') || title.includes('copy trade') || msg.includes('copy trade');
+      });
+      if (found) setHasCopyTradeTx(true);
+    }).catch((err) => {
+      console.error('Error checking copy trade transactions:', err);
     });
 
     // 4. One-time fetch for static networks, prices, and merchants
@@ -398,6 +424,11 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
 
   // Pre-flight check and modal prompt for Crypto Withdrawal
   const handleInitiateCryptoWithdrawal = async () => {
+    if (copyTradesLoaded && !hasHadCopyContract) {
+      setError('Withdrawal restricted: You must activate at least one Copy Trading contract before you can withdraw funds.');
+      return;
+    }
+
     const coinSym = selectedCoin ? selectedCoin.id.toUpperCase() : 'USDT';
     const isUSDT = coinSym === 'USDT';
 
@@ -487,6 +518,11 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
 
   // Submit Crypto Withdrawal Execution
   const executeCryptoWithdrawSubmit = async (feePercentToApply: number) => {
+    if (copyTradesLoaded && !hasHadCopyContract) {
+      setError('Withdrawal restricted: You must activate at least one Copy Trading contract before you can withdraw funds.');
+      return;
+    }
+
     const usdVal = parseFloat(amountUSD);
     const coinSym = selectedCoin ? selectedCoin.id.toUpperCase() : 'USDT';
     const price = getCoinPrice(coinSym);
@@ -566,6 +602,11 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
 
   // Pre-flight check and modal prompt for P2P Withdrawal
   const handleInitiateP2PWithdrawal = async () => {
+    if (copyTradesLoaded && !hasHadCopyContract) {
+      setError('Withdrawal restricted: You must activate at least one Copy Trading contract before you can withdraw funds.');
+      return;
+    }
+
     if (profile && !profile.withdrawalEnabled) {
       setError('Your withdrawal permission is currently suspended.');
       return;
@@ -608,6 +649,11 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
 
   // Submit P2P Withdrawal Execution (User releases Escrow upon receiving payment)
   const executeP2PSellRelease = async (feePercentToApply: number) => {
+    if (copyTradesLoaded && !hasHadCopyContract) {
+      setError('Withdrawal restricted: You must activate at least one Copy Trading contract before you can withdraw funds.');
+      return;
+    }
+
     setSubmitting(true);
     setError(null);
 
@@ -676,6 +722,10 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
         <button 
           id="withdraw-back-btn"
           onClick={() => {
+            if (!hasHadCopyContract) {
+              onBack();
+              return;
+            }
             if (method === 'selection' || method === 'crypto_coin_select') onBack();
             else if (method === 'bind_address') {
               if (selectedCoin) setMethod('crypto_coin_select');
@@ -691,21 +741,29 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
         </button>
         <div>
           <h2 className="text-lg font-black tracking-tight text-zinc-800">
-            {(method === 'selection' || method === 'crypto_coin_select') && 'Select Coin to Withdraw'}
-            {method === 'bind_address' && 'Bind USDT BEP20 Address'}
-            {method === 'crypto' && 'Crypto Withdrawal Details'}
-            {method === 'crypto_pin_confirm' && 'Verify Security PIN'}
+            {!hasHadCopyContract ? 'Withdrawal Verification' : (
+              <>
+                {(method === 'selection' || method === 'crypto_coin_select') && 'Select Coin to Withdraw'}
+                {method === 'bind_address' && 'Bind USDT BEP20 Address'}
+                {method === 'crypto' && 'Crypto Withdrawal Details'}
+                {method === 'crypto_pin_confirm' && 'Verify Security PIN'}
+              </>
+            )}
           </h2>
           <p className="text-xs text-zinc-500">
-            {(method === 'selection' || method === 'crypto_coin_select') && 'Select a coin from your available asset holdings to withdraw'}
-            {method === 'bind_address' && 'USDT BEP20 (BNB Smart Chain) verified destination wallet'}
-            {method === 'crypto' && `Configure network and destination for ${selectedCoin ? formatCoinName(selectedCoin.tokenName) : ''}`}
-            {method === 'crypto_pin_confirm' && 'Enter your 4-digit PIN to authorize withdrawal'}
+            {!hasHadCopyContract ? 'Copy Trading contract activation required' : (
+              <>
+                {(method === 'selection' || method === 'crypto_coin_select') && 'Select a coin from your available asset holdings to withdraw'}
+                {method === 'bind_address' && 'USDT BEP20 (BNB Smart Chain) verified destination wallet'}
+                {method === 'crypto' && `Configure network and destination for ${selectedCoin ? formatCoinName(selectedCoin.tokenName) : ''}`}
+                {method === 'crypto_pin_confirm' && 'Enter your 4-digit PIN to authorize withdrawal'}
+              </>
+            )}
           </p>
         </div>
       </div>
 
-      {profile && !profile.withdrawalEnabled && (
+      {hasHadCopyContract && profile && !profile.withdrawalEnabled && (
         <div id="withdrawal-disabled-alert" className="p-3.5 mb-5 bg-red-50 border border-red-200 text-red-800 rounded-xl text-xs flex items-start gap-2.5">
           <ShieldAlert size={16} className="mt-0.5 shrink-0" strokeWidth={2.5} />
           <span>
@@ -715,7 +773,7 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
       )}
 
       {/* Alert banner if user has NOT configured a Wallet Security PIN */}
-      {profile && !profile.walletPassword && (
+      {hasHadCopyContract && profile && !profile.walletPassword && (
         <div id="missing-pin-top-banner" className="p-4 mb-5 bg-amber-50 border border-amber-200 text-zinc-800 rounded-2xl text-xs space-y-3 shadow-sm">
           <div className="flex items-start gap-3">
             <div className="p-2 rounded-xl bg-amber-500/20 text-amber-600 shrink-0">
@@ -742,7 +800,7 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
       )}
 
       {/* Alert banner if user has NOT bound their BEP20 withdrawal address */}
-      {profile && profile.walletPassword && !profile.bep20WithdrawalAddress && method !== 'bind_address' && (
+      {hasHadCopyContract && profile && profile.walletPassword && !profile.bep20WithdrawalAddress && method !== 'bind_address' && (
         <div id="missing-bep20-address-banner" className="p-4 mb-5 bg-amber-50/90 border border-amber-300 text-zinc-800 rounded-2xl text-xs space-y-3 shadow-sm">
           <div className="flex items-start gap-3">
             <div className="p-2 rounded-xl bg-amber-500/20 text-amber-700 shrink-0">
@@ -820,14 +878,123 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
 
 
 
-      {loading && (
+      {(loading || !copyTradesLoaded) && (
         <div className="flex flex-col items-center justify-center min-h-[250px] gap-3">
           <RefreshCw size={24} className="text-amber-500 animate-spin" />
-          <span className="text-xs text-zinc-500 font-medium">Loading settings...</span>
+          <span className="text-xs text-zinc-500 font-medium">Checking withdrawal eligibility...</span>
         </div>
       )}
 
-      {!loading && (
+      {!loading && copyTradesLoaded && !hasHadCopyContract && (
+        <div id="copy-trade-required-card" className="space-y-4 animate-in fade-in duration-200">
+          <div className="bg-white border border-amber-200/80 rounded-3xl p-5 sm:p-6 shadow-xl space-y-5 text-left relative overflow-hidden">
+            {/* Top decorative accent */}
+            <div className="flex items-center gap-3.5 pb-4 border-b border-zinc-100">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500 to-amber-400 text-white flex items-center justify-center shadow-lg shadow-amber-500/25 shrink-0">
+                <Lock size={22} className="text-white" strokeWidth={2.5} />
+              </div>
+              <div className="min-w-0">
+                <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300/70 inline-block mb-1">
+                  SECURITY POLICY ENFORCEMENT
+                </span>
+                <h3 className="text-base font-black text-zinc-900 leading-snug">Copy Trading Contract Required</h3>
+                <p className="text-xs text-zinc-500 font-medium mt-0.5">Turnover activation required to withdraw</p>
+              </div>
+            </div>
+
+            {/* Explanation callout */}
+            <div className="p-4 bg-amber-50/80 border border-amber-200/80 rounded-2xl space-y-2">
+              <p className="text-xs font-semibold text-amber-950 leading-relaxed">
+                To prevent pass-through wash transactions and protect ecosystem liquidity, <strong>withdrawals are restricted for newly deposited funds</strong> until you have activated at least one Copy Trading contract.
+              </p>
+            </div>
+
+            {/* Account Status Card */}
+            <div className="bg-zinc-50 border border-zinc-200/80 rounded-2xl p-4 space-y-3 text-xs">
+              <div className="flex justify-between items-center pb-2 border-b border-zinc-200/60">
+                <span className="text-zinc-500 font-medium">Wallet Balance</span>
+                <span className="font-mono font-black text-zinc-900 text-sm">
+                  ${(profile?.balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD
+                </span>
+              </div>
+              <div className="flex justify-between items-center pb-2 border-b border-zinc-200/60">
+                <span className="text-zinc-500 font-medium">Copy Trading Contracts</span>
+                <span className="font-bold text-amber-600 bg-amber-100/70 px-2 py-0.5 rounded-md text-[11px]">
+                  0 Contracts Executed
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-zinc-500 font-medium">Withdrawal Status</span>
+                <span className="font-bold text-red-600 bg-red-100/70 px-2 py-0.5 rounded-md text-[11px] flex items-center gap-1">
+                  <Lock size={11} /> Locked
+                </span>
+              </div>
+            </div>
+
+            {/* Step-by-Step Instructions */}
+            <div className="space-y-2.5 pt-1">
+              <h4 className="text-xs font-black uppercase tracking-wider text-zinc-600">How to Unlock Withdrawals</h4>
+              
+              <div className="space-y-2 text-xs">
+                <div className="flex items-start gap-2.5 p-2.5 bg-zinc-50/70 border border-zinc-200/60 rounded-xl">
+                  <span className="w-5 h-5 rounded-full bg-amber-500 text-white font-black text-[10px] flex items-center justify-center shrink-0 mt-0.5">1</span>
+                  <div>
+                    <span className="font-bold text-zinc-900 block">Select a Verified Expert Trader</span>
+                    <span className="text-[11px] text-zinc-500 leading-snug">Explore vetted copy trading leads with verified performance and win rates.</span>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-2.5 p-2.5 bg-zinc-50/70 border border-zinc-200/60 rounded-xl">
+                  <span className="w-5 h-5 rounded-full bg-amber-500 text-white font-black text-[10px] flex items-center justify-center shrink-0 mt-0.5">2</span>
+                  <div>
+                    <span className="font-bold text-zinc-900 block">Allocate Trade Capital</span>
+                    <span className="text-[11px] text-zinc-500 leading-snug">Transfer wallet funds to your Trade Balance and start copying daily market signals.</span>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-2.5 p-2.5 bg-zinc-50/70 border border-zinc-200/60 rounded-xl">
+                  <span className="w-5 h-5 rounded-full bg-emerald-600 text-white font-black text-[10px] flex items-center justify-center shrink-0 mt-0.5">3</span>
+                  <div>
+                    <span className="font-bold text-zinc-900 block">Instant Withdrawal Access</span>
+                    <span className="text-[11px] text-zinc-500 leading-snug">Once you have participated in copy trading, your account is permanently unlocked for withdrawals.</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="space-y-2.5 pt-2">
+              <button
+                type="button"
+                id="copy-trade-required-explore-btn"
+                onClick={() => {
+                  if (onViewContract) {
+                    onViewContract();
+                  } else {
+                    onBack();
+                  }
+                }}
+                className="w-full flex items-center justify-center gap-2 py-3.5 bg-gradient-to-r from-amber-500 via-amber-600 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-2xl text-xs font-black transition-all shadow-md shadow-amber-500/20 cursor-pointer uppercase tracking-wider active:scale-[0.99]"
+              >
+                <TrendingUp size={16} />
+                <span>Explore Copy Traders</span>
+                <ArrowRight size={16} />
+              </button>
+
+              <button
+                type="button"
+                id="copy-trade-required-back-btn"
+                onClick={onBack}
+                className="w-full py-3 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 rounded-2xl text-xs font-bold transition-all cursor-pointer text-center"
+              >
+                Back to Dashboard
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!loading && copyTradesLoaded && hasHadCopyContract && (
         <>
           {/* Crypto Coin Select Panel (Default Withdrawal Screen - filtered by user asset holdings) */}
           {(method === 'selection' || method === 'crypto_coin_select') && (() => {
