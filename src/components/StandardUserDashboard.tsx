@@ -1640,6 +1640,7 @@ export default function StandardUserDashboard({
       case 'internal_send': return 'Internal Send';
       case 'internal_receive': return 'Internal Receive';
       case 'copy_trade_payout': return 'Copy Trade Payout';
+      case 'copy_trade_upgrade': return 'Expert Contract Upgrade';
       case 'trade_balance_transfer_in': return 'Copy Trade Transfer In';
       case 'trade_balance_transfer_out': return 'Copy Trade Transfer Out';
       case 'invested': return 'Trade Signal';
@@ -2467,7 +2468,9 @@ export default function StandardUserDashboard({
         userId: user.uid,
         userEmail: user.email || '',
         type: 'copy_trade_upgrade',
+        title: 'Expert Contract Upgrade',
         amount: parseFloat(newCapital.toFixed(2)),
+        isCredit: null,
         status: 'APPROVED',
         createdAt: new Date(),
         paymentMessage: `Upgraded Copy Trading Contract from ${oldContract.leadName} to ${targetLead.name}. Rolled over $${oldPrincipal.toFixed(2)} principal${additionalFromFree > 0 ? ` + $${additionalFromFree.toFixed(2)} free trade balance` : ''} (Total Contract Capital: $${newCapital.toFixed(2)}).`

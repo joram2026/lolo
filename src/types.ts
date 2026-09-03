@@ -63,6 +63,7 @@ export interface Transaction {
   userId: string;
   userEmail: string;
   type: TransactionType;
+  title?: string;
   amount: number; // in USD
   localAmount?: number; // in shillings/local currency
   status: TransactionStatus;
@@ -77,6 +78,7 @@ export interface Transaction {
   feePercent?: number; // e.g. 15 or 50
   feeAmount?: number;  // fee in USD (e.g. 15% standard or 50% early)
   netAmount?: number;  // amount user actually receives (e.g. 85% or 50%)
+  isCredit?: boolean | null;
   aiAudit?: {
     isValid: boolean;
     confidence: number;

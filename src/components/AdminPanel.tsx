@@ -2984,6 +2984,7 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                             {h.type === 'internal_send' && 'Internal Send'}
                             {h.type === 'internal_receive' && 'Internal Receive'}
                             {h.type === 'copy_trade_payout' && 'Copy Trade Payout'}
+                            {h.type === 'copy_trade_upgrade' && 'Expert Upgrade'}
                             {h.type === 'trade_balance_transfer_in' && 'Trade Transfer In'}
                             {h.type === 'trade_balance_transfer_out' && 'Trade Transfer Out'}
                             {h.type === 'invested' && 'Trade Signal'}
@@ -4833,6 +4834,7 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                           {t.type === 'internal_send' && 'Internal Send'}
                           {t.type === 'internal_receive' && 'Internal Receive'}
                           {t.type === 'copy_trade_payout' && 'Copy Trade Payout'}
+                          {t.type === 'copy_trade_upgrade' && 'Expert Upgrade'}
                           {t.type === 'trade_balance_transfer_in' && 'Trade Transfer In'}
                           {t.type === 'trade_balance_transfer_out' && 'Trade Transfer Out'}
                           {t.type === 'invested' && 'Trade Signal'}

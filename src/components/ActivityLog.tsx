@@ -122,23 +122,27 @@ export default function ActivityLog({ userId, isLightTheme = false }: ActivityLo
   const filteredTransactions = transactions.filter(tx => {
     const isVoucher = tx.type === 'voucher_reward' || tx.type === 'voucher' || tx.type === 'promo_voucher' || tx.type?.toLowerCase?.().includes('voucher') || (tx.title && tx.title.toLowerCase().includes('voucher'));
     const isDeposit = tx.type.startsWith('deposit');
-    const isWithdrawal = tx.type.startsWith('withdraw');
+    const isUpgrade = tx.type === 'copy_trade_upgrade' || 
+                      (tx.title && (tx.title.toLowerCase().includes('upgrade') || tx.title.toLowerCase().includes('rollover'))) ||
+                      (tx.paymentMessage && (tx.paymentMessage.toLowerCase().includes('upgraded copy') || tx.paymentMessage.toLowerCase().includes('rolled over')));
+    const isWithdrawal = tx.type.startsWith('withdraw') && !isUpgrade;
     const isBuy = tx.type === 'buy_crypto';
     const isSell = tx.type === 'sell_crypto';
     const isSwap = tx.type === 'swap_crypto';
     const isReferral = tx.type === 'referral_reward' || tx.type === 'first_deposit_commission' || tx.type === 'welcome_bonus';
     const isInvestment = tx.type === 'invested' || tx.type === 'investment_earning';
     const isBot = tx.type === 'Auto Bot trade' || tx.type === 'bot_harvest' || tx.type === 'bot_trade' || tx.type === 'bot' || tx.type?.toLowerCase?.().includes('bot') || (tx.title && tx.title.toLowerCase().includes('bot'));
+    const isCopyTrade = tx.type?.startsWith('copy_trade') || tx.type?.includes('copy_trade') || isUpgrade;
 
     if (filter === 'vouchers') return isVoucher;
     if (filter === 'bot') return isBot;
     if (filter === 'deposits') return isDeposit;
-    if (filter === 'withdrawals') return isWithdrawal && !isBot && !isVoucher;
+    if (filter === 'withdrawals') return isWithdrawal && !isBot && !isVoucher && !isUpgrade;
     if (filter === 'buy') return isBuy;
     if (filter === 'sell') return isSell;
     if (filter === 'swap') return isSwap;
     if (filter === 'referral') return isReferral;
-    if (filter === 'investments') return isInvestment || isBot;
+    if (filter === 'investments') return isInvestment || isBot || isCopyTrade;
     
     // For 'all' filter, show everything
     return true;
@@ -315,6 +319,14 @@ export default function ActivityLog({ userId, isLightTheme = false }: ActivityLo
           bgClass: isLightTheme ? 'bg-emerald-50 border border-emerald-200 text-emerald-700' : 'bg-emerald-500/10 border-emerald-500/15 text-emerald-400',
           icon: <TrendingUp size={16} />
         };
+      case 'copy_trade_upgrade':
+        return {
+          label: tx?.title || 'Expert Contract Upgrade',
+          isCredit: null,
+          colorClass: isLightTheme ? 'text-amber-700 font-extrabold' : 'text-amber-400',
+          bgClass: isLightTheme ? 'bg-amber-50 border border-amber-200 text-amber-700' : 'bg-amber-500/10 border-amber-500/15 text-amber-400',
+          icon: <Sparkles size={16} />
+        };
       case 'trade_balance_transfer_in':
       case 'copy_trade_transfer_in':
         return {
@@ -385,6 +397,19 @@ export default function ActivityLog({ userId, isLightTheme = false }: ActivityLo
               ? (isLightTheme ? 'bg-emerald-50 border border-emerald-200 text-emerald-700' : 'bg-emerald-500/10 border-emerald-500/15 text-emerald-400')
               : (isLightTheme ? 'bg-amber-50 border border-amber-200 text-amber-700' : 'bg-amber-500/10 border-amber-500/15 text-amber-400'),
             icon: <Bot size={16} />
+          };
+        }
+
+        const isUpgradeType = (type && (type.includes('upgrade') || type.includes('rollover'))) ||
+                              (tx?.title && (tx.title.toLowerCase().includes('upgrade') || tx.title.toLowerCase().includes('rollover'))) ||
+                              (tx?.paymentMessage && (tx.paymentMessage.toLowerCase().includes('upgraded copy') || tx.paymentMessage.toLowerCase().includes('rolled over')));
+        if (isUpgradeType) {
+          return {
+            label: tx?.title || 'Expert Contract Upgrade',
+            isCredit: null,
+            colorClass: isLightTheme ? 'text-amber-700 font-extrabold' : 'text-amber-400',
+            bgClass: isLightTheme ? 'bg-amber-50 border border-amber-200 text-amber-700' : 'bg-amber-500/10 border-amber-500/15 text-amber-400',
+            icon: <Sparkles size={16} />
           };
         }
 
@@ -575,7 +600,7 @@ export default function ActivityLog({ userId, isLightTheme = false }: ActivityLo
                       <div>
                         <span className={`${isLightTheme ? 'text-zinc-400' : 'text-zinc-600'} font-bold block uppercase tracking-wider text-[8px]`}>Method / Type</span>
                         <span className={`font-semibold capitalize ${isLightTheme ? 'text-zinc-600' : 'text-zinc-300'}`}>
-                          {tx.type.split('_').join(' ')}
+                          {tx.type === 'copy_trade_upgrade' ? 'Expert Contract Upgrade' : tx.type.split('_').join(' ')}
                         </span>
                       </div>
                       {tx.network && (
