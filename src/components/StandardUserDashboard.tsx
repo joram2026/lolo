@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import { db } from '../firebase';
 import { doc, getDoc, onSnapshot, collection, query, where, getDocs, updateDoc, addDoc, serverTimestamp } from 'firebase/firestore';
 import { UserAccount, Transaction, CryptoPrice, ArbitrageConfig, CopyTraderLead, UserCopyTrade, InAppAd } from '../types';
-import { DEFAULT_COPY_LEADS, getLeadDailyProfitRange, getLeadSignalProfitRange } from '../data/copyTraders';
+import { DEFAULT_COPY_LEADS, getLeadDailyProfitRange } from '../data/copyTraders';
 import { DEFAULT_IN_APP_ADS } from '../data/defaultAds';
 import { InAppAdPopupModal } from './InAppAdPopupModal';
 import { useToast } from '../context/ToastContext';
@@ -5942,10 +5942,15 @@ export default function StandardUserDashboard({
                                   </div>
 
                                   <div className="text-right shrink-0">
-                                    <span className={`text-xs font-black font-mono ${
-                                      isExecuted ? 'text-zinc-400 line-through' : isLightTheme ? 'text-emerald-700' : 'text-emerald-400'
+                                    <span className={`text-[10.5px] font-black font-mono block ${
+                                      isExecuted ? 'text-zinc-400' : isLightTheme ? 'text-zinc-800' : 'text-zinc-200'
                                     }`}>
-                                      {getLeadSignalProfitRange(selectedLeadForCopy, selectedLeadForCopy.signals?.length || 2)}
+                                      {selectedLeadForCopy.tradingPairs?.[idx % (selectedLeadForCopy.tradingPairs.length || 1)] || 'BTC/USDT'}
+                                    </span>
+                                    <span className={`text-[8.5px] font-bold uppercase tracking-wider block mt-0.5 ${
+                                      isExecuted ? 'text-zinc-400' : isActive ? 'text-emerald-600 dark:text-emerald-400 font-black' : 'text-zinc-500'
+                                    }`}>
+                                      {isExecuted ? 'Executed' : isActive ? 'In Window' : 'Scheduled'}
                                     </span>
                                   </div>
                                 </div>
@@ -6063,12 +6068,21 @@ export default function StandardUserDashboard({
                                       </div>
 
                                       <div className="text-right shrink-0">
-                                        <span className={`text-xs font-black font-mono ${
-                                          isExecuted 
-                                            ? 'text-zinc-400 line-through' 
-                                            : isLightTheme ? 'text-amber-700' : 'text-amber-400'
+                                        <span className={`text-[10.5px] font-black font-mono block ${
+                                          isExecuted ? 'text-zinc-400' : isLightTheme ? 'text-zinc-800' : 'text-zinc-200'
                                         }`}>
-                                          +{(es.profitRate ?? 3.5).toFixed(2)}%
+                                          {selectedLeadForCopy.tradingPairs?.[(idx + 1) % (selectedLeadForCopy.tradingPairs.length || 1)] || 'ETH/USDT'}
+                                        </span>
+                                        <span className={`text-[8.5px] font-bold uppercase tracking-wider block mt-0.5 ${
+                                          isExecuted 
+                                            ? 'text-zinc-400' 
+                                            : !extraEligibility.eligible 
+                                            ? 'text-amber-600 dark:text-amber-400 font-bold' 
+                                            : isActive 
+                                            ? 'text-emerald-600 dark:text-emerald-400 font-black' 
+                                            : 'text-zinc-500'
+                                        }`}>
+                                          {isExecuted ? 'Executed' : !extraEligibility.eligible ? 'Locked' : isActive ? 'In Window' : 'VIP Signal'}
                                         </span>
                                       </div>
                                     </div>
@@ -6331,7 +6345,7 @@ export default function StandardUserDashboard({
                             <div className="flex justify-between items-center text-xs border-t border-zinc-200/80 dark:border-slate-800 pt-1.5">
                               <span className={`font-bold ${isLightTheme ? 'text-zinc-800' : 'text-zinc-300'}`}>Est. Net Profit:</span>
                               <span className="font-black font-mono text-emerald-700 dark:text-emerald-400">
-                                +${net.toFixed(2)} USD (+{rate.toFixed(2)}%)
+                                +${net.toFixed(2)} USD
                               </span>
                             </div>
                           </div>
