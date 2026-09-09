@@ -2,9 +2,23 @@ import { CopyTraderLead } from '../types';
 
 /**
  * Formats an expert lead's daily profit rate as an attractive, encouraging rate range for user front-end displays (e.g. "2% - 6%").
+ * If the lead has a custom `displayProfitRange` set by the admin, that is used directly.
  * The underlying backend rate is maintained unchanged for actual trade signal calculations.
  */
-export function getLeadDailyProfitRange(rate?: number): string {
+export function getLeadDailyProfitRange(leadOrRate?: CopyTraderLead | number | null, customRange?: string): string {
+  if (typeof leadOrRate === 'object' && leadOrRate !== null) {
+    if (leadOrRate.displayProfitRange && leadOrRate.displayProfitRange.trim()) {
+      return leadOrRate.displayProfitRange.trim();
+    }
+    return computeDefaultDailyRange(leadOrRate.dayProfitRate);
+  }
+  if (customRange && customRange.trim()) {
+    return customRange.trim();
+  }
+  return computeDefaultDailyRange(typeof leadOrRate === 'number' ? leadOrRate : undefined);
+}
+
+function computeDefaultDailyRange(rate?: number): string {
   const base = Number(rate ?? 2.0);
   
   if (base >= 1.9 && base <= 2.1) {
@@ -32,9 +46,35 @@ export function getLeadDailyProfitRange(rate?: number): string {
  * Formats the profit range for individual regular signals based on the daily range split across regular daily signals.
  * e.g., for 2% - 6% daily across 2 signals -> "1% - 3%"
  */
-export function getLeadSignalProfitRange(rate?: number, signalCount: number = 2): string {
-  const base = Number(rate ?? 2.0);
+export function getLeadSignalProfitRange(leadOrRate?: CopyTraderLead | number | null, signalCount: number = 2): string {
+  let displayRange: string | undefined;
+  let baseRate: number | undefined;
+
+  if (typeof leadOrRate === 'object' && leadOrRate !== null) {
+    displayRange = leadOrRate.displayProfitRange;
+    baseRate = leadOrRate.dayProfitRate;
+  } else if (typeof leadOrRate === 'number') {
+    baseRate = leadOrRate;
+  }
+
   const count = Math.max(1, signalCount);
+
+  // If there's an explicit custom range like "2% - 6%", parse and split proportionally across regular signals
+  if (displayRange && displayRange.trim()) {
+    const match = displayRange.match(/([0-9]+(?:\.[0-9]+)?)\s*%\s*-\s*([0-9]+(?:\.[0-9]+)?)\s*%/);
+    if (match) {
+      const minVal = parseFloat(match[1]);
+      const maxVal = parseFloat(match[2]);
+      if (!isNaN(minVal) && !isNaN(maxVal)) {
+        const minPerSig = Number((minVal / count).toFixed(1));
+        const maxPerSig = Number((maxVal / count).toFixed(1));
+        return `${minPerSig}% - ${maxPerSig}%`;
+      }
+    }
+    return displayRange.trim();
+  }
+
+  const base = Number(baseRate ?? 2.0);
   
   if (base >= 1.9 && base <= 2.1 && count === 2) {
     return '1% - 3%';
@@ -68,6 +108,7 @@ export const DEFAULT_COPY_LEADS: CopyTraderLead[] = [
     maxCapital: 10000,
     analysisCommission: 10,
     dayProfitRate: 2.0,
+    displayProfitRange: '2% - 6%',
     contractDurationDays: 30,
     tradingPairs: ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'XRP/USDT'],
     signals: [
@@ -88,6 +129,7 @@ export const DEFAULT_COPY_LEADS: CopyTraderLead[] = [
     maxCapital: 15000,
     analysisCommission: 12,
     dayProfitRate: 2.4,
+    displayProfitRange: '2.5% - 6.5%',
     contractDurationDays: 30,
     tradingPairs: ['ETH/USDT', 'BTC/USDT', 'BNB/USDT', 'SOL/USDT'],
     signals: [
@@ -108,6 +150,7 @@ export const DEFAULT_COPY_LEADS: CopyTraderLead[] = [
     maxCapital: 8000,
     analysisCommission: 8,
     dayProfitRate: 1.8,
+    displayProfitRange: '1.8% - 5.5%',
     contractDurationDays: 30,
     tradingPairs: ['BTC/USDT', 'SOL/USDT', 'DOGE/USDT', 'XRP/USDT'],
     signals: [
@@ -128,6 +171,7 @@ export const DEFAULT_COPY_LEADS: CopyTraderLead[] = [
     maxCapital: 12000,
     analysisCommission: 10,
     dayProfitRate: 2.2,
+    displayProfitRange: '2.2% - 6.2%',
     contractDurationDays: 30,
     tradingPairs: ['BTC/USDT', 'ETH/USDT', 'USDC/USDT', 'SOL/USDT'],
     signals: [

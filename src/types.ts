@@ -203,6 +203,7 @@ export interface CopyTraderLead {
   maxCapital?: number; // e.g. 10000
   analysisCommission?: number; // % e.g. 10
   dayProfitRate?: number; // % e.g. 2.0 (split equally across regular daily signals)
+  displayProfitRange?: string; // e.g. "2% - 6%" (custom editable display range shown to users on front-end)
   contractDurationDays?: number; // e.g. 30 (excluding Sundays)
   tradingPairs?: string[]; // e.g. ["BTC/USDT", "ETH/USDT", "SOL/USDT"]
   signals?: SignalSchedule[]; // list of regular signals per day with time and code

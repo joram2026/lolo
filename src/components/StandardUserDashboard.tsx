@@ -5746,7 +5746,7 @@ export default function StandardUserDashboard({
                                 )}
                               </div>
                               <p className={`text-[11px] font-medium mt-0.5 ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>
-                                Yield: <strong className="text-emerald-500 font-mono">{getLeadDailyProfitRange(selectedLeadForCopy.dayProfitRate)}/d</strong> • Fee: <strong className="text-amber-500 font-mono">{selectedLeadForCopy.analysisCommission ?? 10}%</strong> • {selectedLeadForCopy.tradingPairs?.slice(0, 2).join(', ') || 'BTC/USDT'}
+                                Yield: <strong className="text-emerald-500 font-mono">{getLeadDailyProfitRange(selectedLeadForCopy)}/d</strong> • Fee: <strong className="text-amber-500 font-mono">{selectedLeadForCopy.analysisCommission ?? 10}%</strong> • {selectedLeadForCopy.tradingPairs?.slice(0, 2).join(', ') || 'BTC/USDT'}
                               </p>
                             </div>
                           </div>
@@ -5874,7 +5874,7 @@ export default function StandardUserDashboard({
                         <div className={`p-2.5 rounded-xl border ${isLightTheme ? 'bg-emerald-50/90 border-emerald-200' : 'bg-emerald-500/10 border-emerald-500/20'}`}>
                           <span className={`text-[8.5px] font-black uppercase tracking-wider block ${isLightTheme ? 'text-emerald-900' : 'text-emerald-400'}`}>Daily Yield</span>
                           <span className={`font-black font-mono text-xs sm:text-sm mt-0.5 block ${isLightTheme ? 'text-emerald-700' : 'text-emerald-300'}`}>
-                            {getLeadDailyProfitRange(selectedLeadForCopy.dayProfitRate)}
+                            {getLeadDailyProfitRange(selectedLeadForCopy)}
                           </span>
                         </div>
                       </div>
@@ -5945,7 +5945,7 @@ export default function StandardUserDashboard({
                                     <span className={`text-xs font-black font-mono ${
                                       isExecuted ? 'text-zinc-400 line-through' : isLightTheme ? 'text-emerald-700' : 'text-emerald-400'
                                     }`}>
-                                      {getLeadSignalProfitRange(selectedLeadForCopy.dayProfitRate, selectedLeadForCopy.signals?.length || 2)}
+                                      {getLeadSignalProfitRange(selectedLeadForCopy, selectedLeadForCopy.signals?.length || 2)}
                                     </span>
                                   </div>
                                 </div>
@@ -6721,7 +6721,7 @@ export default function StandardUserDashboard({
                                     : 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/20'
                                 }`}>
                                   <span>Rate:</span>
-                                  <span className="font-bold">{getLeadDailyProfitRange(lead.dayProfitRate)}</span>
+                                  <span className="font-bold">{getLeadDailyProfitRange(lead)}</span>
                                 </span>
                               </div>
                             </div>
@@ -7843,7 +7843,7 @@ export default function StandardUserDashboard({
                       Yield / Day
                     </span>
                     <span className="text-sm font-black font-mono text-emerald-700 dark:text-emerald-400">
-                      {getLeadDailyProfitRange(lead?.dayProfitRate)}
+                      {getLeadDailyProfitRange(lead)}
                     </span>
                   </div>
                 </div>
@@ -8102,7 +8102,7 @@ export default function StandardUserDashboard({
                         </div>
                         <div className="text-right shrink-0">
                           <span className="text-xs font-black font-mono text-emerald-700 dark:text-emerald-400 block">
-                            {getLeadDailyProfitRange(target.dayProfitRate)}
+                            {getLeadDailyProfitRange(target)}
                           </span>
                           <span className="text-[10px] font-bold text-amber-800 dark:text-amber-400 flex items-center gap-0.5 justify-end">
                             Upgrade &rarr;

@@ -133,6 +133,9 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
   const [editingLead, setEditingLead] = useState<CopyTraderLead | null>(null);
   const [isAddLeadModalOpen, setIsAddLeadModalOpen] = useState(false);
   const [isSavingLead, setIsSavingLead] = useState(false);
+  const [quickRangeLead, setQuickRangeLead] = useState<CopyTraderLead | null>(null);
+  const [quickRangeValue, setQuickRangeValue] = useState<string>('');
+  const [isSavingQuickRange, setIsSavingQuickRange] = useState(false);
   const [leadForm, setLeadForm] = useState<{
     name: string;
     photoUrl: string;
@@ -143,6 +146,7 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
     maxCapital: string;
     analysisCommission: string;
     dayProfitRate: string;
+    displayProfitRange: string;
     contractDurationDays: string;
     tradingPairs: string;
     riskLevel: string;
@@ -158,6 +162,7 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
     maxCapital: '10000',
     analysisCommission: '10',
     dayProfitRate: '2.0',
+    displayProfitRange: '2% - 6%',
     contractDurationDays: '30',
     tradingPairs: 'BTC/USDT, ETH/USDT, SOL/USDT, XRP/USDT',
     riskLevel: 'Low Risk',
@@ -1782,6 +1787,7 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
       maxCapital: '10000',
       analysisCommission: '10',
       dayProfitRate: '2.0',
+      displayProfitRange: '2% - 6%',
       contractDurationDays: '30',
       tradingPairs: 'BTC/USDT, ETH/USDT, SOL/USDT, XRP/USDT',
       riskLevel: 'Low Risk',
@@ -1828,6 +1834,7 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
       maxCapital: (lead.maxCapital ?? 10000).toString(),
       analysisCommission: (lead.analysisCommission ?? 10).toString(),
       dayProfitRate: (lead.dayProfitRate ?? 2.0).toString(),
+      displayProfitRange: lead.displayProfitRange || getLeadDailyProfitRange(lead),
       contractDurationDays: (lead.contractDurationDays ?? 30).toString(),
       tradingPairs: lead.tradingPairs ? lead.tradingPairs.join(', ') : 'BTC/USDT, ETH/USDT, SOL/USDT, XRP/USDT',
       riskLevel: lead.riskLevel || 'Low Risk',
@@ -1952,6 +1959,7 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
         maxCapital: parseFloat(leadForm.maxCapital) || 10000,
         analysisCommission: parseFloat(leadForm.analysisCommission) || 10,
         dayProfitRate: parseFloat(leadForm.dayProfitRate) || 2.0,
+        displayProfitRange: leadForm.displayProfitRange.trim() || getLeadDailyProfitRange(parseFloat(leadForm.dayProfitRate) || 2.0),
         contractDurationDays: parseInt(leadForm.contractDurationDays) || 30,
         tradingPairs: pairs,
         signals: sanitizedSignals,
@@ -1981,6 +1989,33 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
       showFeedback('error', 'Failed to save Copy Trader Lead: ' + err.message);
     } finally {
       setIsSavingLead(false);
+    }
+  };
+
+  const handleOpenQuickEditRange = (lead: CopyTraderLead) => {
+    setQuickRangeLead(lead);
+    setQuickRangeValue(lead.displayProfitRange || getLeadDailyProfitRange(lead));
+  };
+
+  const handleSaveQuickRange = async () => {
+    if (!quickRangeLead) return;
+    setIsSavingQuickRange(true);
+    try {
+      const finalRange = quickRangeValue.trim() || getLeadDailyProfitRange(quickRangeLead);
+      await setDoc(doc(db, 'copy_trader_leads', quickRangeLead.id), {
+        displayProfitRange: finalRange,
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+
+      setCopyLeadsList(prev => prev.map(l => l.id === quickRangeLead.id ? { ...l, displayProfitRange: finalRange } : l));
+      showFeedback('success', `Profit range for "${quickRangeLead.name}" updated to "${finalRange}".`);
+      setQuickRangeLead(null);
+      await loadAllData(true);
+    } catch (err: any) {
+      console.error(err);
+      showFeedback('error', 'Failed to update profit range: ' + err.message);
+    } finally {
+      setIsSavingQuickRange(false);
     }
   };
 
@@ -3630,7 +3665,17 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                             <span>•</span>
                             <span>Min: ${lead.minCapital ?? 50}</span>
                             <span>•</span>
-                            <span className="text-emerald-400 font-bold">1-Day Rate: {lead.dayProfitRate ?? 2.0}% <span className="text-zinc-400 text-[10px] font-normal">({getLeadDailyProfitRange(lead.dayProfitRate)} shown to users)</span></span>
+                            <span className="text-emerald-400 font-bold">1-Day Rate: {lead.dayProfitRate ?? 2.0}%</span>
+                            <span>•</span>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenQuickEditRange(lead)}
+                              title="Click to edit display range shown to users"
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 font-bold text-[10px] transition-colors cursor-pointer group"
+                            >
+                              <span>Display Range: {getLeadDailyProfitRange(lead)}</span>
+                              <Edit size={9} className="opacity-60 group-hover:opacity-100" />
+                            </button>
                           </div>
                           <p className="text-[11px] text-zinc-400 line-clamp-2 leading-snug">
                             {lead.description}
@@ -3639,6 +3684,13 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                       </div>
 
                       <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-900">
+                        <button
+                          onClick={() => handleOpenQuickEditRange(lead)}
+                          className="flex items-center gap-1 px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 font-bold text-[10px] rounded-lg border border-emerald-500/20 transition-colors cursor-pointer"
+                        >
+                          <TrendingUp size={12} />
+                          <span>Edit Range</span>
+                        </button>
                         <button
                           onClick={() => handleOpenEditLead(lead)}
                           className="flex items-center gap-1 px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 font-bold text-[10px] rounded-lg border border-zinc-800 transition-colors cursor-pointer"
@@ -5063,7 +5115,7 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
 
                 <div className="space-y-1">
                   <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">
-                    1 Day Profit Rate (%) * <span className="text-emerald-400 font-mono font-normal normal-case">({getLeadDailyProfitRange(parseFloat(leadForm.dayProfitRate) || 2.0)} shown to users)</span>
+                    1 Day Profit Rate (%) * <span className="text-zinc-500 font-mono font-normal normal-case">(Backend Rate)</span>
                   </label>
                   <input
                     type="number"
@@ -5085,6 +5137,55 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                     className="w-full p-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-white focus:outline-none focus:border-emerald-500 font-mono"
                   />
                 </div>
+              </div>
+
+              {/* Display Profit Range Customizer */}
+              <div className="p-3.5 bg-zinc-950 border border-emerald-500/30 rounded-2xl space-y-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <label className="text-[10px] font-black uppercase text-emerald-400 tracking-wider flex items-center gap-1.5">
+                    <TrendingUp size={13} />
+                    <span>Display Profit Rate Range (Shown to Users) *</span>
+                  </label>
+                  <span className="text-[10px] font-mono text-zinc-400">
+                    Preview: <strong className="text-emerald-400">{leadForm.displayProfitRange || getLeadDailyProfitRange(parseFloat(leadForm.dayProfitRate) || 2.0)}</strong>
+                  </span>
+                </div>
+
+                <input
+                  type="text"
+                  placeholder="e.g. 2% - 6% or 2.5% - 6.5%"
+                  value={leadForm.displayProfitRange}
+                  onChange={(e) => setLeadForm({ ...leadForm, displayProfitRange: e.target.value })}
+                  className="w-full p-2.5 bg-zinc-900 border border-zinc-800 rounded-xl text-xs text-emerald-400 font-mono font-bold focus:outline-none focus:border-emerald-500"
+                />
+
+                <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                  <span className="text-[9px] text-zinc-500 font-medium">Quick presets:</span>
+                  {['2% - 6%', '2.5% - 6.5%', '1.8% - 5.5%', '2.2% - 6.2%', '3% - 8%'].map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setLeadForm({ ...leadForm, displayProfitRange: preset })}
+                      className={`px-2 py-0.5 rounded text-[9.5px] font-mono border cursor-pointer transition-colors ${
+                        leadForm.displayProfitRange === preset
+                          ? 'bg-emerald-500/25 text-emerald-300 border-emerald-500/50 font-bold'
+                          : 'bg-zinc-900 hover:bg-zinc-850 text-zinc-300 border-zinc-800'
+                      }`}
+                    >
+                      {preset}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setLeadForm({ ...leadForm, displayProfitRange: getLeadDailyProfitRange(parseFloat(leadForm.dayProfitRate) || 2.0) })}
+                    className="px-2 py-0.5 rounded bg-emerald-500/10 hover:bg-emerald-500/20 text-[9.5px] font-mono text-emerald-400 border border-emerald-500/20 cursor-pointer transition-colors ml-auto"
+                  >
+                    Auto-Calculate
+                  </button>
+                </div>
+                <p className="text-[10px] text-zinc-400 leading-tight">
+                  This custom range is shown to users across expert badges, copy trade cards, and yield projections. The backend 1-Day Profit Rate above is preserved for actual automated trade signal execution.
+                </p>
               </div>
 
               <div className="space-y-1">
@@ -5312,6 +5413,117 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                   </>
                 ) : (
                   <span>Save Lead Trader</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Quick Edit Profit Range Modal */}
+      {quickRangeLead && (
+        <div id="quick-range-modal-overlay" className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 animate-fade-in">
+          <div className="relative max-w-md w-full bg-zinc-900 border border-emerald-500/30 rounded-3xl p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400">
+                  <TrendingUp size={18} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-white uppercase tracking-wider">
+                    Edit Profit Rate Range
+                  </h3>
+                  <p className="text-[11px] text-zinc-400">
+                    Lead Expert: <strong className="text-zinc-200">{quickRangeLead.name}</strong>
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setQuickRangeLead(null)}
+                className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div className="p-3 rounded-xl bg-zinc-950 border border-zinc-800 text-[11px] space-y-1 font-mono">
+                <div className="flex justify-between text-zinc-400">
+                  <span>Backend 1-Day Rate:</span>
+                  <span className="text-emerald-400 font-bold">{quickRangeLead.dayProfitRate ?? 2.0}%</span>
+                </div>
+                <div className="flex justify-between text-zinc-400">
+                  <span>Current User Range:</span>
+                  <span className="text-amber-400 font-bold">{getLeadDailyProfitRange(quickRangeLead)}</span>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">
+                  New Display Range (e.g. 2% - 6%) *
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. 2% - 6% or 2.5% - 6.5%"
+                  value={quickRangeValue}
+                  onChange={(e) => setQuickRangeValue(e.target.value)}
+                  className="w-full p-3 bg-zinc-950 border border-zinc-800 rounded-xl text-sm text-emerald-400 font-mono font-bold focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <span className="text-[9px] text-zinc-500 font-medium block">Quick presets:</span>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {['2% - 6%', '2.5% - 6.5%', '1.8% - 5.5%', '2.2% - 6.2%', '3% - 8%'].map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setQuickRangeValue(preset)}
+                      className={`px-2.5 py-1 rounded-lg text-[10px] font-mono border cursor-pointer transition-colors ${
+                        quickRangeValue === preset
+                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 font-bold'
+                          : 'bg-zinc-950 hover:bg-zinc-850 text-zinc-300 border-zinc-800'
+                      }`}
+                    >
+                      {preset}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setQuickRangeValue(getLeadDailyProfitRange(quickRangeLead.dayProfitRate ?? 2.0))}
+                    className="px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-[10px] font-mono text-emerald-400 border border-emerald-500/20 cursor-pointer transition-colors ml-auto"
+                  >
+                    Auto-Calculate
+                  </button>
+                </div>
+              </div>
+
+              <p className="text-[10px] text-zinc-500 leading-tight">
+                This range is instantly visible to all users across their dashboard, rollover modal, and expert cards. The underlying backend rate ({quickRangeLead.dayProfitRate ?? 2.0}%) remains intact for signal calculations.
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-zinc-800">
+              <button
+                type="button"
+                onClick={() => setQuickRangeLead(null)}
+                className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold text-xs rounded-xl transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isSavingQuickRange}
+                onClick={handleSaveQuickRange}
+                className="px-5 py-2 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-black text-xs rounded-xl transition-colors cursor-pointer flex items-center gap-1.5"
+              >
+                {isSavingQuickRange ? (
+                  <>
+                    <Loader size={12} className="animate-spin" />
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <span>Save Range</span>
                 )}
               </button>
             </div>

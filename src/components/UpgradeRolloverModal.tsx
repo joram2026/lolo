@@ -216,7 +216,7 @@ export const UpgradeRolloverModal: React.FC<UpgradeRolloverModalProps> = ({
                       {targetLead.name}
                     </h5>
                     <p className="text-[10px] font-mono font-bold text-emerald-700 dark:text-emerald-400">
-                      {getLeadDailyProfitRange(targetLead.dayProfitRate)}/day (Min ${targetMin})
+                      {getLeadDailyProfitRange(targetLead)}/day (Min ${targetMin})
                     </p>
                   </div>
                 </div>
@@ -273,7 +273,7 @@ export const UpgradeRolloverModal: React.FC<UpgradeRolloverModalProps> = ({
                             </div>
                           </div>
                           <span className="text-[10px] font-mono font-black text-emerald-700 dark:text-emerald-400 shrink-0">
-                            {getLeadDailyProfitRange(lead.dayProfitRate)}
+                            {getLeadDailyProfitRange(lead)}
                           </span>
                         </div>
                       );
