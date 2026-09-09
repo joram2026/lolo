@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { CopyTraderLead, UserCopyTrade } from '../types';
 import { ExpertAvatar } from './ExpertAvatar';
+import { getLeadDailyProfitRange } from '../data/copyTraders';
 import { 
   X, ArrowRight, Sparkles, Lock, Unlock, ShieldCheck, 
   AlertCircle, CheckCircle2, ChevronRight, Zap, RefreshCw 
@@ -215,7 +216,7 @@ export const UpgradeRolloverModal: React.FC<UpgradeRolloverModalProps> = ({
                       {targetLead.name}
                     </h5>
                     <p className="text-[10px] font-mono font-bold text-emerald-700 dark:text-emerald-400">
-                      +{targetLead.dayProfitRate ?? 2.0}%/day (Min ${targetMin})
+                      {getLeadDailyProfitRange(targetLead.dayProfitRate)}/day (Min ${targetMin})
                     </p>
                   </div>
                 </div>
@@ -272,7 +273,7 @@ export const UpgradeRolloverModal: React.FC<UpgradeRolloverModalProps> = ({
                             </div>
                           </div>
                           <span className="text-[10px] font-mono font-black text-emerald-700 dark:text-emerald-400 shrink-0">
-                            +{lead.dayProfitRate ?? 2.0}%
+                            {getLeadDailyProfitRange(lead.dayProfitRate)}
                           </span>
                         </div>
                       );

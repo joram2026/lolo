@@ -7,7 +7,7 @@ import {
   setDoc, query, orderBy, serverTimestamp, writeBatch, getDoc 
 } from 'firebase/firestore';
 import { UserAccount, Transaction, CryptoNetwork, P2PMerchant, CryptoPrice, ArbitrageConfig, BotTemplate, DepositBonusTier, ReferralDepositConfig, CopyTraderLead, PromoCode, PromoCodeRewardType, InAppAd } from '../types';
-import { DEFAULT_COPY_LEADS } from '../data/copyTraders';
+import { DEFAULT_COPY_LEADS, getLeadDailyProfitRange } from '../data/copyTraders';
 import { DEFAULT_IN_APP_ADS } from '../data/defaultAds';
 import { fetchLivePriceFromBinance, fetchAllLivePrices, syncLiveCryptoPrices } from '../utils/cryptoApi';
 import { seedDefaultPromoCodesIfEmpty } from '../utils/voucherService';
@@ -3630,7 +3630,7 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                             <span>•</span>
                             <span>Min: ${lead.minCapital ?? 50}</span>
                             <span>•</span>
-                            <span className="text-emerald-400 font-bold">1-Day Rate: {lead.dayProfitRate ?? 2.0}%</span>
+                            <span className="text-emerald-400 font-bold">1-Day Rate: {lead.dayProfitRate ?? 2.0}% <span className="text-zinc-400 text-[10px] font-normal">({getLeadDailyProfitRange(lead.dayProfitRate)} shown to users)</span></span>
                           </div>
                           <p className="text-[11px] text-zinc-400 line-clamp-2 leading-snug">
                             {lead.description}
@@ -5062,7 +5062,9 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">1 Day Profit Rate (%) *</label>
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">
+                    1 Day Profit Rate (%) * <span className="text-emerald-400 font-mono font-normal normal-case">({getLeadDailyProfitRange(parseFloat(leadForm.dayProfitRate) || 2.0)} shown to users)</span>
+                  </label>
                   <input
                     type="number"
                     step="0.1"

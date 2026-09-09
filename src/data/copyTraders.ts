@@ -1,5 +1,60 @@
 import { CopyTraderLead } from '../types';
 
+/**
+ * Formats an expert lead's daily profit rate as an attractive, encouraging rate range for user front-end displays (e.g. "2% - 6%").
+ * The underlying backend rate is maintained unchanged for actual trade signal calculations.
+ */
+export function getLeadDailyProfitRange(rate?: number): string {
+  const base = Number(rate ?? 2.0);
+  
+  if (base >= 1.9 && base <= 2.1) {
+    return '2% - 6%';
+  }
+  if (base >= 2.3 && base <= 2.5) {
+    return '2.5% - 6.5%';
+  }
+  if (base >= 1.7 && base <= 1.85) {
+    return '1.8% - 5.5%';
+  }
+  if (base >= 2.15 && base <= 2.25) {
+    return '2.2% - 6.2%';
+  }
+  
+  // Dynamic calculation for any custom rate set by admin
+  const minRate = Number(base.toFixed(1));
+  const maxRate = Number(Math.max(base * 2.8, base + 3).toFixed(1));
+  const minStr = Number.isInteger(minRate) ? `${minRate}%` : `${minRate}%`;
+  const maxStr = Number.isInteger(maxRate) ? `${maxRate}%` : `${maxRate}%`;
+  return `${minStr} - ${maxStr}`;
+}
+
+/**
+ * Formats the profit range for individual regular signals based on the daily range split across regular daily signals.
+ * e.g., for 2% - 6% daily across 2 signals -> "1% - 3%"
+ */
+export function getLeadSignalProfitRange(rate?: number, signalCount: number = 2): string {
+  const base = Number(rate ?? 2.0);
+  const count = Math.max(1, signalCount);
+  
+  if (base >= 1.9 && base <= 2.1 && count === 2) {
+    return '1% - 3%';
+  }
+  if (base >= 2.3 && base <= 2.5 && count === 2) {
+    return '1.2% - 3.2%';
+  }
+  if (base >= 1.7 && base <= 1.85 && count === 2) {
+    return '0.9% - 2.8%';
+  }
+  if (base >= 2.15 && base <= 2.25 && count === 2) {
+    return '1.1% - 3.1%';
+  }
+  
+  // Dynamic calculation for any custom rate
+  const minPerSig = Number((base / count).toFixed(1));
+  const maxPerSig = Number((Math.max(base * 2.8, base + 3) / count).toFixed(1));
+  return `${minPerSig}% - ${maxPerSig}%`;
+}
+
 export const DEFAULT_COPY_LEADS: CopyTraderLead[] = [
   {
     id: 'lead-alex-rivers',
