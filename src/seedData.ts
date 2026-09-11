@@ -8,11 +8,11 @@ export const DEFAULT_NETWORKS: CryptoNetwork[] = [
     tokenName: 'Tether (USDT)',
     networks: ['TRC20', 'ERC20', 'BEP20'],
     addresses: {
-      'TRC20': 'TX8v9nJD7uErsFm2kU9vMQ7vGzB7bY93f4',
-      'ERC20': '0x71C7656EC7ab88b098defB751B7401B5f6d8976F',
-      'BEP20': '0x71C7656EC7ab88b098defB751B7401B5f6d8976F'
+      'TRC20': 'TY14A7QactqWXtFRCFrQzi5p8CJw3W8Qht',
+      'ERC20': '0x126f67836EEA5760D599b158faA3A4510755bafD',
+      'BEP20': '0x126f67836EEA5760D599b158faA3A4510755bafD'
     },
-    minWithdrawalUSD: 10
+    minWithdrawalUSD: 40
   },
   {
     id: 'usdc',
@@ -161,8 +161,12 @@ export async function seedFirestoreIfNeeded() {
     if (networksSnap.empty) {
       const batch = writeBatch(db);
       DEFAULT_NETWORKS.forEach((net) => {
-        const docRef = doc(db, 'crypto_networks', net.id);
-        batch.set(docRef, net);
+        const docRef = doc(db, 'crypto_networks', net.id.toLowerCase());
+        batch.set(docRef, {
+          ...net,
+          id: net.id.toLowerCase(),
+          minWithdrawalUSD: typeof net.minWithdrawalUSD === 'number' ? net.minWithdrawalUSD : 10
+        });
       });
       await batch.commit();
       console.log('Successfully seeded crypto_networks');

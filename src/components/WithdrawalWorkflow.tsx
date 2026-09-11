@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { collection, addDoc, getDoc, getDocs, doc, updateDoc, runTransaction, serverTimestamp, query, where, onSnapshot } from 'firebase/firestore';
 import { CryptoNetwork, P2PMerchant, UserAccount, Transaction, CryptoPrice, UserCopyTrade } from '../types';
-import { DEFAULT_MERCHANTS } from '../seedData';
+import { DEFAULT_MERCHANTS, DEFAULT_NETWORKS } from '../seedData';
 import { 
   ArrowLeft, Send, Users, ShieldAlert, ChevronRight, Check, 
   HelpCircle, AlertCircle, RefreshCw, Star, ArrowUpRight, DollarSign, Lock,
@@ -253,9 +253,30 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
 
         const netCol = collection(db, 'crypto_networks');
         const netSnap = await getDocs(netCol);
-        const netList = netSnap.docs.map(doc => doc.data() as CryptoNetwork);
+        let netList = netSnap.docs.map(doc => {
+          const d = doc.data();
+          return {
+            id: (d.id || doc.id).toLowerCase(),
+            tokenName: d.tokenName || doc.id.toUpperCase(),
+            networks: Array.isArray(d.networks) ? d.networks : [],
+            addresses: d.addresses && typeof d.addresses === 'object' ? d.addresses : {},
+            minWithdrawalUSD: typeof d.minWithdrawalUSD === 'number' && !isNaN(d.minWithdrawalUSD) ? d.minWithdrawalUSD : 10
+          } as CryptoNetwork;
+        });
+
+        if (netList.length === 0) {
+          netList = [...DEFAULT_NETWORKS];
+        }
+
         const order = ['usdt', 'usdc', 'btc', 'eth', 'sol', 'bnb', 'xrp', 'wld', 'trx', 'doge'];
-        netList.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
+        netList.sort((a, b) => {
+          const indexA = order.indexOf(a.id);
+          const indexB = order.indexOf(b.id);
+          if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+          if (indexA !== -1) return -1;
+          if (indexB !== -1) return 1;
+          return a.id.localeCompare(b.id);
+        });
         setNetworks(netList);
         if (netList.length > 0) {
           setSelectedCoin(netList[0]);

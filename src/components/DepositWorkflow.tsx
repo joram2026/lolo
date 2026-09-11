@@ -262,15 +262,21 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
 
         const netCol = collection(db, 'crypto_networks');
         const netSnap = await getDocs(netCol);
-        let netList = netSnap.docs.map(doc => doc.data() as CryptoNetwork);
-
-        // Merge with DEFAULT_NETWORKS to ensure all assets are available
-        const existingIds = new Set(netList.map(n => n.id.toLowerCase()));
-        DEFAULT_NETWORKS.forEach(def => {
-          if (!existingIds.has(def.id.toLowerCase())) {
-            netList.push(def);
-          }
+        let netList = netSnap.docs.map(doc => {
+          const d = doc.data();
+          return {
+            id: (d.id || doc.id).toLowerCase(),
+            tokenName: d.tokenName || doc.id.toUpperCase(),
+            networks: Array.isArray(d.networks) ? d.networks : [],
+            addresses: d.addresses && typeof d.addresses === 'object' ? d.addresses : {},
+            minWithdrawalUSD: typeof d.minWithdrawalUSD === 'number' && !isNaN(d.minWithdrawalUSD) ? d.minWithdrawalUSD : 10
+          } as CryptoNetwork;
         });
+
+        // Only fallback to defaults if Firestore has no records at all
+        if (netList.length === 0) {
+          netList = [...DEFAULT_NETWORKS];
+        }
 
         const order = ['usdt', 'usdc', 'btc', 'eth', 'sol', 'bnb', 'xrp', 'wld', 'trx', 'doge'];
         netList.sort((a, b) => {

@@ -9,6 +9,7 @@ import {
 import { UserAccount, Transaction, CryptoNetwork, P2PMerchant, CryptoPrice, ArbitrageConfig, BotTemplate, DepositBonusTier, ReferralDepositConfig, CopyTraderLead, PromoCode, PromoCodeRewardType, InAppAd } from '../types';
 import { DEFAULT_COPY_LEADS, getLeadDailyProfitRange } from '../data/copyTraders';
 import { DEFAULT_IN_APP_ADS } from '../data/defaultAds';
+import { DEFAULT_NETWORKS } from '../seedData';
 import { fetchLivePriceFromBinance, fetchAllLivePrices, syncLiveCryptoPrices } from '../utils/cryptoApi';
 import { seedDefaultPromoCodesIfEmpty } from '../utils/voucherService';
 import { ExpertAvatar } from './ExpertAvatar';
@@ -298,115 +299,46 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
 
       // Fetch Crypto Networks
       const netSnap = await getDocs(collection(db, 'crypto_networks'));
-      let netList = netSnap.docs.map(d => d.data() as CryptoNetwork);
+      let netList = netSnap.docs.map(d => {
+        const data = d.data();
+        return {
+          id: (data.id || d.id).toLowerCase(),
+          tokenName: data.tokenName || d.id.toUpperCase(),
+          networks: Array.isArray(data.networks) ? data.networks : [],
+          addresses: data.addresses && typeof data.addresses === 'object' ? data.addresses : {},
+          minWithdrawalUSD: typeof data.minWithdrawalUSD === 'number' && !isNaN(data.minWithdrawalUSD) ? data.minWithdrawalUSD : 10
+        } as CryptoNetwork;
+      });
 
-      const requiredCoins = ['usdt', 'usdc', 'btc', 'eth', 'sol', 'bnb', 'xrp', 'wld', 'trx', 'doge'];
-      const defaultNetworksInfo: Record<string, CryptoNetwork> = {
-        usdt: {
-          id: 'usdt',
-          tokenName: 'Tether (USDT)',
-          networks: ['TRC20', 'ERC20', 'BEP20'],
-          addresses: {
-            'TRC20': 'TX8v9nJD7uErsFm2kU9vMQ7vGzB7bY93f4',
-            'ERC20': '0x71C7656EC7ab88b098defB751B7401B5f6d8976F',
-            'BEP20': '0x71C7656EC7ab88b098defB751B7401B5f6d8976F'
-          }
-        },
-        usdc: {
-          id: 'usdc',
-          tokenName: 'USD Coin (USDC)',
-          networks: ['ERC20', 'SOLANA', 'TRC20'],
-          addresses: {
-            'ERC20': '0x95F7a1b8D14E5D466f2C09C726f19DE6D178e24C',
-            'SOLANA': 'EPjFW3dpCY3UF296M6ac3yvLCFM3TXrSM2tmc5M96fGP',
-            'TRC20': 'THP5Y2Z7vT3uQ9vM5Zg7bX99f36r3qJvU8'
-          }
-        },
-        btc: {
-          id: 'btc',
-          tokenName: 'Bitcoin (BTC)',
-          networks: ['BTC', 'BEP20'],
-          addresses: {
-            'BTC': '1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa',
-            'BEP20': '0x71C7656EC7ab88b098defB751B7401B5f6d8976F'
-          }
-        },
-        eth: {
-          id: 'eth',
-          tokenName: 'Ethereum (ETH)',
-          networks: ['ERC20', 'BEP20'],
-          addresses: {
-            'ERC20': '0x71C7656EC7ab88b098defB751B7401B5f6d8976F',
-            'BEP20': '0x71C7656EC7ab88b098defB751B7401B5f6d8976F'
-          }
-        },
-        sol: {
-          id: 'sol',
-          tokenName: 'Solana (SOL)',
-          networks: ['SOLANA', 'BEP20'],
-          addresses: {
-            'SOLANA': 'EPjFW3dpCY3UF296M6ac3yvLCFM3TXrSM2tmc5M96fGP',
-            'BEP20': '0x71C7656EC7ab88b098defB751B7401B5f6d8976F'
-          }
-        },
-        bnb: {
-          id: 'bnb',
-          tokenName: 'Binance Coin (BNB)',
-          networks: ['BEP20', 'BSC'],
-          addresses: {
-            'BEP20': '0x71C7656EC7ab88b098defB751B7401B5f6d8976F',
-            'BSC': '0x71C7656EC7ab88b098defB751B7401B5f6d8976F'
-          }
-        },
-        xrp: {
-          id: 'xrp',
-          tokenName: 'XRP (XRP)',
-          networks: ['XRP'],
-          addresses: {
-            'XRP': 'rEb8TK3gBgWvdv8KAcrBgv1vt7gBpt7A8y'
-          }
-        },
-        wld: {
-          id: 'wld',
-          tokenName: 'World Coin (WLD)',
-          networks: ['OPTIMISM', 'ERC20'],
-          addresses: {
-            'OPTIMISM': '0x71C7656EC7ab88b098defB751B7401B5f6d8976F',
-            'ERC20': '0x71C7656EC7ab88b098defB751B7401B5f6d8976F'
-          }
-        },
-        trx: {
-          id: 'trx',
-          tokenName: 'Tron (TRX)',
-          networks: ['TRC20'],
-          addresses: {
-            'TRC20': 'TX8v9nJD7uErsFm2kU9vMQ7vGzB7bY93f4'
-          }
-        },
-        doge: {
-          id: 'doge',
-          tokenName: 'DOGE Coin (DOGE)',
-          networks: ['DOGE'],
-          addresses: {
-            'DOGE': 'DJpx5LhE4W8pksYV1QW9vQYy4W8pksYV1Q'
-          }
-        }
-      };
-
-      const missingCoins = requiredCoins.filter(id => !netList.some(n => n.id === id));
-      if (missingCoins.length > 0) {
+      // Only seed initial default networks if the collection in Firestore is completely empty (first time deployment)
+      if (netList.length === 0) {
         const batch = writeBatch(db);
-        missingCoins.forEach((id) => {
-          const net = defaultNetworksInfo[id];
-          batch.set(doc(db, 'crypto_networks', id), net);
-          netList.push(net);
+        const seededList: CryptoNetwork[] = [];
+        DEFAULT_NETWORKS.forEach((net) => {
+          const cleanNet: CryptoNetwork = {
+            id: net.id.toLowerCase(),
+            tokenName: net.tokenName,
+            networks: net.networks,
+            addresses: net.addresses,
+            minWithdrawalUSD: typeof net.minWithdrawalUSD === 'number' ? net.minWithdrawalUSD : 10
+          };
+          batch.set(doc(db, 'crypto_networks', cleanNet.id), cleanNet);
+          seededList.push(cleanNet);
         });
         await batch.commit();
+        netList = seededList;
       }
 
-      // Filter and sort to only include these 8 supported coins in the networks list
-      netList = netList.filter(n => requiredCoins.includes(n.id));
-      netList.sort((a, b) => requiredCoins.indexOf(a.id) - requiredCoins.indexOf(b.id));
+      // Sort with major currencies first, preserving all user/admin configured coins
+      const order = ['usdt', 'usdc', 'btc', 'eth', 'sol', 'bnb', 'xrp', 'wld', 'trx', 'doge'];
+      netList.sort((a, b) => {
+        const indexA = order.indexOf(a.id);
+        const indexB = order.indexOf(b.id);
+        if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+        if (indexA !== -1) return -1;
+        if (indexB !== -1) return 1;
+        return a.id.localeCompare(b.id);
+      });
       setNetworks(netList);
 
       // Fetch Merchants
@@ -4414,15 +4346,38 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                       ) : (
                         coinNetworks.map((cn, idx) => (
                           <div key={idx} className="flex gap-2 items-center bg-zinc-900 p-2 rounded-lg border border-zinc-850 text-[11px]">
-                            <div className="flex-1 min-w-0">
-                              <span className="font-bold text-emerald-400 font-mono uppercase shrink-0 block">{cn.network}</span>
+                            <div 
+                              className="flex-1 min-w-0 cursor-pointer"
+                              title="Click to edit network address"
+                              onClick={() => {
+                                setNewNetworkName(cn.network);
+                                setNewNetworkAddress(cn.address);
+                              }}
+                            >
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-bold text-emerald-400 font-mono uppercase shrink-0 block">{cn.network}</span>
+                                <span className="text-[9px] text-zinc-500 font-sans hover:text-emerald-300">(Click to edit)</span>
+                              </div>
                               <span className="text-zinc-400 font-mono truncate block text-[10px] select-all">{cn.address}</span>
                             </div>
+                            <button
+                              id={`edit-network-idx-${idx}`}
+                              type="button"
+                              onClick={() => {
+                                setNewNetworkName(cn.network);
+                                setNewNetworkAddress(cn.address);
+                              }}
+                              className="text-zinc-400 hover:text-emerald-400 p-1 shrink-0 bg-zinc-950 border border-zinc-800 rounded"
+                              title="Edit address"
+                            >
+                              <Edit size={11} />
+                            </button>
                             <button
                               id={`remove-network-idx-${idx}`}
                               type="button"
                               onClick={() => handleRemoveNetworkFromCoin(idx)}
                               className="text-red-400 hover:text-red-300 p-1 shrink-0 bg-zinc-950 border border-red-950 rounded"
+                              title="Remove network"
                             >
                               <X size={11} />
                             </button>
