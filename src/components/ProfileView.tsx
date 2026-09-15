@@ -2200,8 +2200,8 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                           </button>
                         </div>
 
-                        {/* 1-Click Restore Alert */}
-                        {!deferredPrompt && (
+                        {/* 1-Click Restore Alert - Shown for Android users if prompt is unavailable */}
+                        {!deferredPrompt && deviceTab === 'android' && (
                           <div className="bg-emerald-50 border border-emerald-200/70 p-3.5 rounded-xl flex items-start gap-3 text-xs text-emerald-800 leading-normal font-medium shadow-sm animate-fade-in">
                             <div className="p-1.5 bg-emerald-100 text-emerald-600 rounded-lg animate-pulse shrink-0">
                               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
@@ -2210,7 +2210,9 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                             </div>
                             <div className="space-y-1.5 flex-1 text-left">
                               <strong className="text-emerald-950 text-[12px] block font-black">🔄 Just uninstalled Morex?</strong>
-                            
+                              <p className="text-[11px] text-emerald-900 leading-relaxed">
+                                Tap reload to reactivate the instant 1-click Chrome installation prompt.
+                              </p>
                               <button
                                 onClick={() => window.location.reload()}
                                 className="mt-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-[10px] font-bold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
@@ -2243,35 +2245,120 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                           </button>
                         </div>
 
-      
-
-                        {/* Legacy APK Fallback Option */}
-                        <div className="border-t border-zinc-200/80 pt-4 mt-2">
-                          <div className="bg-gradient-to-br from-zinc-900 to-slate-950 text-white rounded-xl p-3.5 shadow-md border border-zinc-800/80 hover:border-emerald-500/30 transition-all duration-300 relative overflow-hidden group">
-                            {/* Subtle Background Glow Accent on Hover */}
-                            <div className="absolute -right-10 -bottom-10 w-24 h-24 bg-emerald-500/10 rounded-full blur-xl group-hover:bg-emerald-500/20 transition-all duration-500 pointer-events-none"></div>
-                            
-                            <div className="flex items-center justify-between gap-3 relative z-10">
-                              <div className="space-y-1 text-left">
-                              
-                                <h4 className="text-[11px] font-black text-zinc-100 tracking-tight">
-                                  Click to Install 
-                                </h4>
-                                <p className="text-[9px] text-zinc-400 font-medium leading-relaxed max-w-[160px]">
-                                  Secure, direct android package package.
-                                </p>
+                        {/* Step-by-Step Instructions Based on Selected Device */}
+                        {deviceTab === 'ios' && (
+                          <div className="bg-white border border-zinc-200/90 rounded-xl p-3.5 space-y-3 shadow-xs animate-fade-in text-left">
+                            <div className="flex items-center gap-2 border-b border-zinc-100 pb-2">
+                              <div className="w-6 h-6 rounded-lg bg-zinc-900 text-white flex items-center justify-center font-bold text-xs">
+                                
                               </div>
-                              
-                              <button
-                                onClick={startApkDownload}
-                                className="px-3.5 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 active:scale-95 text-white text-[10px] font-black rounded-lg transition-all flex items-center gap-1.5 cursor-pointer shadow-lg shadow-emerald-950/40 border border-emerald-400/20"
-                              >
-                                <Download size={12} className="stroke-[2.5]" />
-                                <span>Download</span>
-                              </button>
+                              <div>
+                                <h4 className="text-[12px] font-black text-zinc-900">How to Install on iPhone & iPad</h4>
+                                <p className="text-[10px] text-zinc-500 font-medium">Apple installs Progressive Web Apps via Safari in 4 simple steps</p>
+                              </div>
+                            </div>
+
+                            <ol className="space-y-2.5 text-[11px] text-zinc-700">
+                              <li className="flex items-start gap-2.5">
+                                <span className="w-5 h-5 rounded-full bg-zinc-100 border border-zinc-200 text-zinc-800 font-bold flex items-center justify-center text-[10px] shrink-0 mt-0.5">1</span>
+                                <div className="space-y-0.5">
+                                  <p className="font-bold text-zinc-900">Open in Safari</p>
+                                  <p className="text-zinc-500 text-[10px] leading-relaxed">Make sure you are viewing this page in the default <strong>Apple Safari</strong> browser on your iPhone.</p>
+                                </div>
+                              </li>
+
+                              <li className="flex items-start gap-2.5">
+                                <span className="w-5 h-5 rounded-full bg-zinc-100 border border-zinc-200 text-zinc-800 font-bold flex items-center justify-center text-[10px] shrink-0 mt-0.5">2</span>
+                                <div className="space-y-0.5">
+                                  <p className="font-bold text-zinc-900 flex items-center gap-1.5">
+                                    Tap the Share Button
+                                    <span className="inline-flex items-center justify-center px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded border border-blue-200 text-[9px] font-bold">
+                                      <Share2 size={10} className="inline mr-0.5" /> Share
+                                    </span>
+                                  </p>
+                                  <p className="text-zinc-500 text-[10px] leading-relaxed">Located at the bottom toolbar of Safari (the square icon with an upward arrow).</p>
+                                </div>
+                              </li>
+
+                              <li className="flex items-start gap-2.5">
+                                <span className="w-5 h-5 rounded-full bg-zinc-100 border border-zinc-200 text-zinc-800 font-bold flex items-center justify-center text-[10px] shrink-0 mt-0.5">3</span>
+                                <div className="space-y-0.5">
+                                  <p className="font-bold text-zinc-900 flex items-center gap-1.5">
+                                    Select "Add to Home Screen"
+                                    <span className="inline-flex items-center justify-center px-1.5 py-0.5 bg-zinc-100 text-zinc-700 rounded border border-zinc-200 text-[9px] font-bold">
+                                      <Plus size={10} className="inline mr-0.5" /> Add
+                                    </span>
+                                  </p>
+                                  <p className="text-zinc-500 text-[10px] leading-relaxed">Scroll down the share sheet menu options until you see <strong>"Add to Home Screen"</strong> and tap it.</p>
+                                </div>
+                              </li>
+
+                              <li className="flex items-start gap-2.5">
+                                <span className="w-5 h-5 rounded-full bg-emerald-100 border border-emerald-200 text-emerald-800 font-bold flex items-center justify-center text-[10px] shrink-0 mt-0.5">4</span>
+                                <div className="space-y-0.5">
+                                  <p className="font-bold text-emerald-950">Tap "Add" in Top-Right</p>
+                                  <p className="text-zinc-500 text-[10px] leading-relaxed">Confirm by tapping <strong>Add</strong> in the top right corner. Morex will now sit on your home screen like any native iOS app!</p>
+                                </div>
+                              </li>
+                            </ol>
+
+                            <div className="p-2.5 bg-amber-50/80 border border-amber-200/70 rounded-lg text-[10px] text-amber-900 leading-snug">
+                              <strong>💡 iOS Note:</strong> Apple does not use <code>.apk</code> files (which are Android-only). Following the 4 Safari steps above gives you full native app performance on your iPhone.
                             </div>
                           </div>
-                        </div>
+                        )}
+
+                        {deviceTab === 'android' && (
+                          <div className="bg-white border border-zinc-200/90 rounded-xl p-3 space-y-2.5 shadow-xs animate-fade-in text-left">
+                            <div className="flex items-center gap-2 border-b border-zinc-100 pb-1.5">
+                              <span className="text-xs">🤖</span>
+                              <h4 className="text-[11px] font-black text-zinc-900">Android Installation</h4>
+                            </div>
+                            <p className="text-[10px] text-zinc-600 leading-relaxed">
+                              Tap the green <strong>"Install App"</strong> button above for instant 1-click install via Chrome, or use the direct APK package below.
+                            </p>
+                          </div>
+                        )}
+
+                        {deviceTab === 'desktop' && (
+                          <div className="bg-white border border-zinc-200/90 rounded-xl p-3 space-y-2.5 shadow-xs animate-fade-in text-left">
+                            <div className="flex items-center gap-2 border-b border-zinc-100 pb-1.5">
+                              <Laptop size={14} className="text-zinc-700" />
+                              <h4 className="text-[11px] font-black text-zinc-900">Desktop / PC Installation</h4>
+                            </div>
+                            <p className="text-[10px] text-zinc-600 leading-relaxed">
+                              In Google Chrome, Brave, or Microsoft Edge on your computer, click the <strong>Install icon</strong> in your browser's top address bar (or click <strong>⋮ Menu → "Install Morex..."</strong>).
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Android APK Fallback Option - Only highlighted for Android */}
+                        {deviceTab === 'android' && (
+                          <div className="border-t border-zinc-200/80 pt-3 mt-2">
+                            <div className="bg-gradient-to-br from-zinc-900 to-slate-950 text-white rounded-xl p-3.5 shadow-md border border-zinc-800/80 hover:border-emerald-500/30 transition-all duration-300 relative overflow-hidden group">
+                              <div className="absolute -right-10 -bottom-10 w-24 h-24 bg-emerald-500/10 rounded-full blur-xl group-hover:bg-emerald-500/20 transition-all duration-500 pointer-events-none"></div>
+                              
+                              <div className="flex items-center justify-between gap-3 relative z-10">
+                                <div className="space-y-1 text-left">
+                                  <h4 className="text-[11px] font-black text-zinc-100 tracking-tight">
+                                    Direct Android APK File
+                                  </h4>
+                                  <p className="text-[9px] text-zinc-400 font-medium leading-relaxed max-w-[160px]">
+                                    Secure, direct Android standalone package.
+                                  </p>
+                                </div>
+                                
+                                <button
+                                  onClick={startApkDownload}
+                                  className="px-3.5 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 active:scale-95 text-white text-[10px] font-black rounded-lg transition-all flex items-center gap-1.5 cursor-pointer shadow-lg shadow-emerald-950/40 border border-emerald-400/20"
+                                >
+                                  <Download size={12} className="stroke-[2.5]" />
+                                  <span>Download APK</span>
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
 
                       </div>
                     )}
