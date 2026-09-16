@@ -9,7 +9,8 @@ import {
   Smartphone, Copy, CheckCircle2, QrCode, Power, Lock, ShieldAlert,
   ChevronRight, ChevronDown, ChevronUp, HelpCircle, Send, Download, Laptop,
   Gamepad2, LayoutGrid, Clapperboard, BookOpen, Star, Share2, Plus, 
-  Search, MoreVertical, Info, ShieldCheck, X, Zap, Tag, Wallet
+  Search, MoreVertical, Info, ShieldCheck, X, Zap, Tag, Wallet,
+  Users, UserPlus
 } from 'lucide-react';
 import VouchersView from './VouchersView';
 
@@ -133,7 +134,10 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
 
   // Referral list states
   const [referredUsers, setReferredUsers] = useState<any[]>([]);
+  const [level2ReferredUsers, setLevel2ReferredUsers] = useState<any[]>([]);
   const [loadingReferred, setLoadingReferred] = useState(false);
+  const [loadingLevel2, setLoadingLevel2] = useState(false);
+  const [referralLevelTab, setReferralLevelTab] = useState<'l1' | 'l2'>('l1');
   const [refConfig, setRefConfig] = useState<ReferralDepositConfig | null>(null);
   const [firstDepositCommissions, setFirstDepositCommissions] = useState<any[]>([]);
   const [loadingCommissions, setLoadingCommissions] = useState(false);
@@ -352,31 +356,95 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
 
     async function fetchReferredUsers() {
       setLoadingReferred(true);
+      setLoadingLevel2(true);
       try {
+        // 1. Fetch Level 1 (Direct) Referrals
         const q = query(
           collection(db, 'users'),
           where('referralSource', '==', code)
         );
         const querySnapshot = await getDocs(q);
         const list: any[] = [];
+        const l1Map = new Map<string, { displayName: string; phone: string; uid: string; uniqueCode: string }>();
+
         querySnapshot.forEach((docSnap) => {
           const uData = docSnap.data();
-          list.push({
+          const userCode = (uData.uniqueCode || '').trim();
+          const item = {
             uid: docSnap.id,
             displayName: uData.displayName || 'Anonymous User',
             email: uData.email || '',
             phone: uData.phone || uData.phoneNumber || '',
             hasMadeFirstDeposit: uData.hasMadeFirstDeposit || false,
-            createdAt: uData.createdAt ? uData.createdAt.toDate() : new Date(),
-          });
+            createdAt: uData.createdAt?.toDate ? uData.createdAt.toDate() : (uData.createdAt ? new Date(uData.createdAt) : new Date()),
+            uniqueCode: userCode,
+          };
+          list.push(item);
+          if (userCode) {
+            l1Map.set(userCode.toUpperCase(), {
+              displayName: item.displayName,
+              phone: item.phone,
+              uid: item.uid,
+              uniqueCode: userCode,
+            });
+          }
         });
-        // Sort by registration date descending
+
+        // Sort Level 1 by registration date descending
         list.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
         setReferredUsers(list);
+        setLoadingReferred(false);
+
+        // 2. Fetch Level 2 Referrals (users invited by Level 1 referrals)
+        const l1Codes = Array.from(l1Map.keys());
+        if (l1Codes.length === 0) {
+          setLevel2ReferredUsers([]);
+          setLoadingLevel2(false);
+          return;
+        }
+
+        // Firestore supports up to 30 values in an 'in' filter
+        const chunks: string[][] = [];
+        for (let i = 0; i < l1Codes.length; i += 30) {
+          chunks.push(l1Codes.slice(i, i + 30));
+        }
+
+        const l2List: any[] = [];
+        const l2Snapshots = await Promise.all(
+          chunks.map(chunk =>
+            getDocs(query(collection(db, 'users'), where('referralSource', 'in', chunk)))
+          )
+        );
+
+        l2Snapshots.forEach((snap) => {
+          snap.forEach((docSnap) => {
+            const uData = docSnap.data();
+            const refSource = (uData.referralSource || '').trim().toUpperCase();
+            const parentReferrer = l1Map.get(refSource);
+
+            l2List.push({
+              uid: docSnap.id,
+              displayName: uData.displayName || 'Anonymous User',
+              email: uData.email || '',
+              phone: uData.phone || uData.phoneNumber || '',
+              hasMadeFirstDeposit: uData.hasMadeFirstDeposit || false,
+              createdAt: uData.createdAt?.toDate ? uData.createdAt.toDate() : (uData.createdAt ? new Date(uData.createdAt) : new Date()),
+              uniqueCode: uData.uniqueCode || '',
+              referredByCode: refSource,
+              referredByName: parentReferrer?.displayName || 'Level 1 Member',
+              referredByPhone: parentReferrer?.phone || '',
+            });
+          });
+        });
+
+        // Sort Level 2 by registration date descending
+        l2List.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+        setLevel2ReferredUsers(l2List);
       } catch (err) {
         console.error('Error fetching referred users:', err);
       } finally {
         setLoadingReferred(false);
+        setLoadingLevel2(false);
       }
     }
 
@@ -720,8 +788,12 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                   <p className="text-[11px] text-zinc-500 mt-0.5 leading-tight">Invite friends and track your referral list</p>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-zinc-100 border border-zinc-200 text-zinc-550">
-                    {referredUsers.length}
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-zinc-100 border border-zinc-200 text-zinc-650 font-mono">
+                    {referredUsers.length + level2ReferredUsers.length > 0 
+                      ? (level2ReferredUsers.length > 0 
+                          ? `${referredUsers.length} + ${level2ReferredUsers.length}` 
+                          : `${referredUsers.length}`)
+                      : '0'}
                   </span>
                   <ChevronRight size={16} className="text-zinc-400 group-hover:text-zinc-600 transition-colors shrink-0" />
                 </div>
@@ -1180,13 +1252,43 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
 
                   <div className="bg-white border border-zinc-200 shadow-xs rounded-2xl p-3.5 sm:p-4 flex flex-col justify-between min-h-[92px]">
                     <div>
-                      <span className="text-[9px] sm:text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider block">Successful Invites</span>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[9px] sm:text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider block">Total Network</span>
+                        <span className="text-[9px] font-bold text-amber-600 bg-amber-50 border border-amber-200/50 px-1.5 py-0.2 rounded-md font-mono">
+                          2 Levels
+                        </span>
+                      </div>
                       <div className="mt-1 flex items-baseline gap-1">
-                        <span className="text-xl sm:text-2xl font-black text-zinc-900 font-mono">{referredUsers.length}</span>
-                        <span className="text-[10px] sm:text-xs text-zinc-400 font-bold ml-1">friends</span>
+                        <span className="text-xl sm:text-2xl font-black text-zinc-900 font-mono">
+                          {referredUsers.length + level2ReferredUsers.length}
+                        </span>
+                        <span className="text-[10px] sm:text-xs text-zinc-400 font-bold ml-1">members</span>
                       </div>
                     </div>
-                    <p className="text-[9px] sm:text-[10px] text-zinc-400 mt-2 font-medium">Keep growing your network!</p>
+                    <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() => setReferralLevelTab('l1')}
+                        className={`text-[8.5px] sm:text-[9.5px] font-bold px-2 py-0.5 rounded-md border transition-all cursor-pointer font-mono ${
+                          referralLevelTab === 'l1'
+                            ? 'bg-amber-100 text-amber-900 border-amber-300 shadow-xs'
+                            : 'bg-zinc-50 text-zinc-600 border-zinc-200 hover:bg-zinc-100'
+                        }`}
+                      >
+                        L1: {referredUsers.length}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setReferralLevelTab('l2')}
+                        className={`text-[8.5px] sm:text-[9.5px] font-bold px-2 py-0.5 rounded-md border transition-all cursor-pointer font-mono ${
+                          referralLevelTab === 'l2'
+                            ? 'bg-emerald-100 text-emerald-900 border-emerald-300 shadow-xs'
+                            : 'bg-zinc-50 text-zinc-600 border-zinc-200 hover:bg-zinc-100'
+                        }`}
+                      >
+                        L2: {level2ReferredUsers.length}
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
@@ -1331,54 +1433,201 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                 )}
               </div>
 
-              {/* Referred Users List */}
-              <div className="space-y-2 border-t border-zinc-100 pt-3">
-                <div className="flex justify-between items-center text-[9px] sm:text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider">
-                  <span>Your Referred Friends ({referredUsers.length})</span>
-                  {loadingReferred && <span className="text-zinc-400 animate-pulse font-normal lowercase">fetching...</span>}
+              {/* Referred Network - Level 1 & Level 2 Tabs */}
+              <div className="space-y-3 border-t border-zinc-100 pt-3">
+                {/* Tab Controls */}
+                <div className="flex bg-zinc-100 p-1 rounded-xl gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setReferralLevelTab('l1')}
+                    className={`flex-1 py-2 px-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                      referralLevelTab === 'l1'
+                        ? 'bg-white text-zinc-900 shadow-xs'
+                        : 'text-zinc-500 hover:text-zinc-700'
+                    }`}
+                  >
+                    <Users size={14} className={referralLevelTab === 'l1' ? 'text-amber-500' : ''} />
+                    <span>Level 1 (Direct)</span>
+                    <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold ${
+                      referralLevelTab === 'l1' ? 'bg-amber-100 text-amber-800' : 'bg-zinc-200 text-zinc-600'
+                    }`}>
+                      {referredUsers.length}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setReferralLevelTab('l2')}
+                    className={`flex-1 py-2 px-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                      referralLevelTab === 'l2'
+                        ? 'bg-white text-zinc-900 shadow-xs'
+                        : 'text-zinc-500 hover:text-zinc-700'
+                    }`}
+                  >
+                    <UserPlus size={14} className={referralLevelTab === 'l2' ? 'text-emerald-500' : ''} />
+                    <span>Level 2 (Indirect)</span>
+                    <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold ${
+                      referralLevelTab === 'l2' ? 'bg-emerald-100 text-emerald-800' : 'bg-zinc-200 text-zinc-600'
+                    }`}>
+                      {level2ReferredUsers.length}
+                    </span>
+                  </button>
                 </div>
 
-                {loadingReferred ? (
-                  <div className="text-center py-4 text-xs text-zinc-500">
-                    Loading referred users...
+                {/* Level 1 Content */}
+                {referralLevelTab === 'l1' && (
+                  <div className="space-y-2 animate-fade-in">
+                    <div className="flex justify-between items-center text-[9px] sm:text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider">
+                      <span>Direct Friends Invited By You ({referredUsers.length})</span>
+                      {loadingReferred && <span className="text-zinc-400 animate-pulse font-normal lowercase">fetching...</span>}
+                    </div>
+
+                    {loadingReferred ? (
+                      <div className="text-center py-6 text-xs text-zinc-500">
+                        <div className="w-5 h-5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+                        Loading Level 1 referrals...
+                      </div>
+                    ) : referredUsers.length === 0 ? (
+                      <div className="text-center py-6 bg-zinc-50/70 border border-dashed border-zinc-200 rounded-xl text-xs text-zinc-400">
+                        No friends have joined using your code yet. Share your referral link above!
+                      </div>
+                    ) : (
+                      <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
+                        {referredUsers.map((refUser) => {
+                          const userCodeUpper = (refUser.uniqueCode || '').toUpperCase();
+                          const l2Count = userCodeUpper 
+                            ? level2ReferredUsers.filter(u => (u.referredByCode || '').toUpperCase() === userCodeUpper).length 
+                            : 0;
+
+                          return (
+                            <div 
+                              key={refUser.uid} 
+                              className="flex flex-col sm:flex-row sm:items-center justify-between bg-zinc-50/80 border border-zinc-200/90 p-2.5 rounded-xl text-xs gap-1.5 hover:border-zinc-300 transition-colors"
+                            >
+                              <div className="space-y-0.5 text-left">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <p className="font-extrabold text-zinc-800 truncate max-w-[180px]">
+                                    {refUser.displayName}
+                                  </p>
+                                  <span className="text-[8px] bg-amber-100 text-amber-900 border border-amber-200/60 font-black px-1.5 py-0.2 rounded font-mono">
+                                    L1
+                                  </span>
+                                  {l2Count > 0 && (
+                                    <span 
+                                      onClick={() => setReferralLevelTab('l2')}
+                                      className="text-[9px] bg-emerald-50 text-emerald-700 border border-emerald-200/70 font-bold px-1.5 py-0.2 rounded flex items-center gap-1 cursor-pointer hover:bg-emerald-100 transition-colors"
+                                      title="Has referred Level 2 friends"
+                                    >
+                                      👥 {l2Count} L2 invite{l2Count === 1 ? '' : 's'}
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-[11px] text-zinc-600 font-mono font-medium">
+                                  {refUser.phone ? refUser.phone : (refUser.email || 'No phone provided')}
+                                </p>
+                              </div>
+                              <div className="text-left sm:text-right flex flex-row sm:flex-col items-center sm:items-end justify-between sm:justify-start gap-1">
+                                <p className="text-[10px] text-zinc-400 font-mono">
+                                  Joined {refUser.createdAt.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                                </p>
+                                {refUser.hasMadeFirstDeposit ? (
+                                  <span className="text-[9px] bg-emerald-100 text-emerald-800 font-extrabold px-2 py-0.5 rounded-full flex items-center gap-1">
+                                    ✓ First Deposit Done
+                                  </span>
+                                ) : (
+                                  <span className="text-[9px] bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-full">
+                                    Pending 1st Deposit
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
-                ) : referredUsers.length === 0 ? (
-                  <div className="text-center py-6 bg-zinc-50/70 border border-dashed border-zinc-200 rounded-xl text-xs text-zinc-400">
-                    No friends have joined using your code yet.
-                  </div>
-                ) : (
-                  <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
-                    {referredUsers.map((refUser) => {
-                      return (
-                        <div 
-                          key={refUser.uid} 
-                          className="flex flex-col sm:flex-row sm:items-center justify-between bg-zinc-50/80 border border-zinc-200/90 p-2.5 rounded-xl text-xs gap-1.5 hover:border-zinc-300 transition-colors"
-                        >
-                          <div className="space-y-0.5 text-left">
-                            <p className="font-extrabold text-zinc-800 truncate max-w-[180px]">
-                              {refUser.displayName}
-                            </p>
-                            <p className="text-[11px] text-zinc-600 font-mono font-medium">
-                              {refUser.phone ? refUser.phone : 'No phone provided'}
-                            </p>
-                          </div>
-                          <div className="text-left sm:text-right flex flex-row sm:flex-col items-center sm:items-end justify-between sm:justify-start gap-1">
-                            <p className="text-[10px] text-zinc-400 font-mono">
-                              Joined {refUser.createdAt.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-                            </p>
-                            {refUser.hasMadeFirstDeposit ? (
-                              <span className="text-[9px] bg-emerald-100 text-emerald-800 font-extrabold px-2 py-0.5 rounded-full flex items-center gap-1">
-                                ✓ First Deposit Done
-                              </span>
-                            ) : (
-                              <span className="text-[9px] bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-full">
-                                Pending 1st Deposit
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
+                )}
+
+                {/* Level 2 Content */}
+                {referralLevelTab === 'l2' && (
+                  <div className="space-y-2.5 animate-fade-in text-left">
+                    {/* Level 2 Explanation Banner */}
+                    <div className="bg-emerald-50/70 border border-emerald-200/70 rounded-xl p-2.5 sm:p-3 text-[10px] sm:text-[11px] text-emerald-950 space-y-1">
+                      <div className="flex items-center gap-1.5 font-bold text-emerald-900">
+                        <UserPlus size={13} className="text-emerald-600" />
+                        <span>Level 2 Referral Network</span>
+                      </div>
+                      <p className="text-emerald-800 leading-relaxed text-[10px]">
+                        These are users referred by your direct Level 1 referrals. Track who invited them and their deposit verification status below.
+                      </p>
+                    </div>
+
+                    <div className="flex justify-between items-center text-[9px] sm:text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider">
+                      <span>Indirect Referrals ({level2ReferredUsers.length})</span>
+                      {loadingLevel2 && <span className="text-zinc-400 animate-pulse font-normal lowercase">fetching...</span>}
+                    </div>
+
+                    {loadingLevel2 ? (
+                      <div className="text-center py-6 text-xs text-zinc-500">
+                        <div className="w-5 h-5 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+                        Loading Level 2 referrals...
+                      </div>
+                    ) : level2ReferredUsers.length === 0 ? (
+                      <div className="text-center py-6 bg-zinc-50/70 border border-dashed border-zinc-200 rounded-xl text-xs text-zinc-500 space-y-1">
+                        <p className="font-bold text-zinc-700">No Level 2 referrals yet</p>
+                        <p className="text-[11px] text-zinc-400 max-w-xs mx-auto">
+                          When your direct referrals invite friends using their personal link, they will appear right here!
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
+                        {level2ReferredUsers.map((refUser) => {
+                          return (
+                            <div 
+                              key={refUser.uid} 
+                              className="flex flex-col sm:flex-row sm:items-center justify-between bg-zinc-50/80 border border-zinc-200/90 p-2.5 rounded-xl text-xs gap-2 hover:border-zinc-300 transition-colors"
+                            >
+                              <div className="space-y-1 text-left">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <p className="font-extrabold text-zinc-800 truncate max-w-[170px]">
+                                    {refUser.displayName}
+                                  </p>
+                                  <span className="text-[8px] bg-emerald-100 text-emerald-900 border border-emerald-200/60 font-black px-1.5 py-0.2 rounded font-mono">
+                                    L2
+                                  </span>
+                                </div>
+                                <p className="text-[11px] text-zinc-600 font-mono font-medium">
+                                  {refUser.phone ? refUser.phone : (refUser.email || 'No phone provided')}
+                                </p>
+                                {/* Referred By Tag */}
+                                <div className="inline-flex items-center gap-1 text-[9.5px] bg-amber-500/10 border border-amber-500/25 px-2 py-0.5 rounded-md text-amber-900">
+                                  <span className="font-medium text-amber-700">Referred by:</span>
+                                  <span className="font-bold truncate max-w-[110px]">{refUser.referredByName}</span>
+                                  {refUser.referredByCode && (
+                                    <span className="text-[8.5px] text-zinc-400 font-mono">({refUser.referredByCode})</span>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="text-left sm:text-right flex flex-row sm:flex-col items-center sm:items-end justify-between sm:justify-start gap-1">
+                                <p className="text-[10px] text-zinc-400 font-mono">
+                                  Joined {refUser.createdAt.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                                </p>
+                                {refUser.hasMadeFirstDeposit ? (
+                                  <span className="text-[9px] bg-emerald-100 text-emerald-800 font-extrabold px-2 py-0.5 rounded-full flex items-center gap-1">
+                                    ✓ First Deposit Done
+                                  </span>
+                                ) : (
+                                  <span className="text-[9px] bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-full">
+                                    Pending 1st Deposit
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
