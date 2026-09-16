@@ -13,6 +13,7 @@ import { doc, setDoc, serverTimestamp, getDoc, collection, query, where, getDocs
 import { Shield, Mail, Lock, User, Phone, Sparkles, AlertCircle, RefreshCw, Eye, EyeOff, Globe, ChevronDown, Check, TrendingUp, Zap, Award, ArrowUpRight, Activity, DollarSign, Users, Percent, CheckCircle, ArrowLeft, KeyRound, CheckCheck, Headphones, Handshake } from 'lucide-react';
 import { validateEmailAddress } from '../utils/emailValidation';
 import { sendEmailOtp, verifyEmailOtp } from '../utils/otpService';
+import { SUPPORTED_COUNTRIES } from '../utils/timezones';
 
 interface AuthPageProps {
   onSuccess: () => void;
@@ -49,13 +50,7 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
   const [resendCooldown, setResendCooldown] = useState(0);
   const [emailSuggestion, setEmailSuggestion] = useState<string | null>(null);
 
-  const COUNTRIES = [
-    { code: 'Kenya', name: 'Kenya', flag: '🇰🇪', dialCode: '+254' },
-    { code: 'Uganda', name: 'Uganda', flag: '🇺🇬', dialCode: '+256' },
-    { code: 'Nigeria', name: 'Nigeria', flag: '🇳🇬', dialCode: '+234' },
-    { code: 'Ghana', name: 'Ghana', flag: '🇬🇭', dialCode: '+233' },
-    { code: 'South Africa', name: 'South Africa', flag: '🇿🇦', dialCode: '+27' },
-  ];
+  const COUNTRIES = SUPPORTED_COUNTRIES;
   const [referral, setReferral] = useState(() => localStorage.getItem('pending_referral_code') || '');
   const referralNotifiedRef = React.useRef(false);
   const toast = useToast();

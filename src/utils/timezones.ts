@@ -5,6 +5,39 @@ export interface TimezoneInfo {
   label: string;
 }
 
+export interface SupportedCountry {
+  code: string;
+  name: string;
+  flag: string;
+  dialCode: string;
+}
+
+export const SUPPORTED_COUNTRIES: SupportedCountry[] = [
+  { code: 'Kenya', name: 'Kenya', flag: '🇰🇪', dialCode: '+254' },
+  { code: 'Uganda', name: 'Uganda', flag: '🇺🇬', dialCode: '+256' },
+  { code: 'Nigeria', name: 'Nigeria', flag: '🇳🇬', dialCode: '+234' },
+  { code: 'Ghana', name: 'Ghana', flag: '🇬🇭', dialCode: '+233' },
+  { code: 'South Africa', name: 'South Africa', flag: '🇿🇦', dialCode: '+27' },
+  { code: 'UAE', name: 'United Arab Emirates (UAE)', flag: '🇦🇪', dialCode: '+971' },
+];
+
+export const getCountryDetails = (countryStr?: string): SupportedCountry => {
+  if (!countryStr) return SUPPORTED_COUNTRIES[0];
+  const normalized = countryStr.trim().toLowerCase();
+  const found = SUPPORTED_COUNTRIES.find(
+    c => c.code.toLowerCase() === normalized || 
+         c.name.toLowerCase() === normalized ||
+         (normalized.includes('uae') && c.code === 'UAE') ||
+         (normalized.includes('emirates') && c.code === 'UAE')
+  );
+  return found || {
+    code: countryStr,
+    name: countryStr,
+    flag: '🌐',
+    dialCode: '+',
+  };
+};
+
 export const COUNTRY_TIMEZONE_MAP: Record<string, TimezoneInfo> = {
   'kenya': { timeZone: 'Africa/Nairobi', code: 'EAT', flag: '🇰🇪', label: 'Kenya' },
   'ke': { timeZone: 'Africa/Nairobi', code: 'EAT', flag: '🇰🇪', label: 'Kenya' },
@@ -33,7 +66,9 @@ export const COUNTRY_TIMEZONE_MAP: Record<string, TimezoneInfo> = {
   'canada': { timeZone: 'America/Toronto', code: 'EST', flag: '🇨🇦', label: 'Canada' },
   'ca': { timeZone: 'America/Toronto', code: 'EST', flag: '🇨🇦', label: 'Canada' },
   'united arab emirates': { timeZone: 'Asia/Dubai', code: 'GST', flag: '🇦🇪', label: 'UAE' },
+  'united arab emirates (uae)': { timeZone: 'Asia/Dubai', code: 'GST', flag: '🇦🇪', label: 'UAE' },
   'uae': { timeZone: 'Asia/Dubai', code: 'GST', flag: '🇦🇪', label: 'UAE' },
+  'dubai': { timeZone: 'Asia/Dubai', code: 'GST', flag: '🇦🇪', label: 'UAE' },
   'ae': { timeZone: 'Asia/Dubai', code: 'GST', flag: '🇦🇪', label: 'UAE' },
   'india': { timeZone: 'Asia/Kolkata', code: 'IST', flag: '🇮🇳', label: 'India' },
   'in': { timeZone: 'Asia/Kolkata', code: 'IST', flag: '🇮🇳', label: 'India' },
@@ -49,6 +84,9 @@ export const getUserTimezoneInfo = (userCountry?: string): TimezoneInfo => {
   const normalized = (userCountry || '').trim().toLowerCase();
   if (normalized && COUNTRY_TIMEZONE_MAP[normalized]) {
     return COUNTRY_TIMEZONE_MAP[normalized];
+  }
+  if (normalized.includes('uae') || normalized.includes('emirates') || normalized.includes('dubai')) {
+    return COUNTRY_TIMEZONE_MAP['uae'];
   }
 
   // Detect system timezone as fallback

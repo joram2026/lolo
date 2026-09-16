@@ -10,9 +10,10 @@ import {
   ChevronRight, ChevronDown, ChevronUp, HelpCircle, Send, Download, Laptop,
   Gamepad2, LayoutGrid, Clapperboard, BookOpen, Star, Share2, Plus, 
   Search, MoreVertical, Info, ShieldCheck, X, Zap, Tag, Wallet,
-  Users, UserPlus
+  Users, UserPlus, Globe
 } from 'lucide-react';
 import VouchersView from './VouchersView';
+import { SUPPORTED_COUNTRIES, getCountryDetails } from '../utils/timezones';
 
 interface ProfileViewProps {
   user: any;
@@ -24,6 +25,8 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
   const [profile, setProfile] = useState<UserAccount | null>(null);
   const [displayName, setDisplayName] = useState('');
   const [phone, setPhone] = useState('');
+  const [country, setCountry] = useState('Kenya');
+  const [isCountryOpen, setIsCountryOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [messageState, setMessageState] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -340,6 +343,7 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
           setProfile(data);
           setDisplayName(data.displayName || user.displayName || '');
           setPhone(data.phone || (data as any).phoneNumber || '');
+          setCountry(data.country || 'Kenya');
         }
       } catch (err) {
         console.error('Error fetching profile:', err);
@@ -462,17 +466,18 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
         await updateProfile(auth.currentUser!, { displayName });
       }
 
-      // 2. Update Firestore document with displayName and phone
+      // 2. Update Firestore document with displayName, phone and country
       const docRef = doc(db, 'users', user.uid);
       const updatedPhone = phone.trim();
       await updateDoc(docRef, {
         displayName: displayName.trim(),
         phone: updatedPhone,
-        phoneNumber: updatedPhone
+        phoneNumber: updatedPhone,
+        country: country
       });
 
-      setProfile(prev => prev ? { ...prev, displayName: displayName.trim(), phone: updatedPhone } : null);
-      setMessage({ type: 'success', text: 'Profile & phone number updated successfully!' });
+      setProfile(prev => prev ? { ...prev, displayName: displayName.trim(), phone: updatedPhone, country: country } : null);
+      setMessage({ type: 'success', text: 'Profile details & country updated successfully!' });
       // Clear message after 3 seconds
       setTimeout(() => setMessage(null), 3000);
     } catch (err: any) {
@@ -743,12 +748,18 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
               <div className="flex-1 min-w-0">
                 <h3 className="text-sm font-bold text-zinc-800 truncate">{displayName || 'Anonymous User'}</h3>
                 <p className="text-[11px] text-zinc-500 font-mono truncate">{user.email}</p>
-                {phone && (
-                  <p className="text-[10px] text-amber-600 font-mono font-medium truncate flex items-center gap-1 mt-0.5">
-                    <Smartphone size={10} />
-                    {phone}
-                  </p>
-                )}
+                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                  {phone && (
+                    <p className="text-[10px] text-amber-600 font-mono font-medium truncate flex items-center gap-1">
+                      <Smartphone size={10} />
+                      {phone}
+                    </p>
+                  )}
+                  <span className="text-[10px] text-zinc-600 font-semibold flex items-center gap-1 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                    <span>{getCountryDetails(country).flag}</span>
+                    <span>{getCountryDetails(country).name}</span>
+                  </span>
+                </div>
               </div>
               <div className="bg-emerald-50 border border-emerald-100 text-emerald-600 text-[10px] px-2.5 py-1 rounded-full font-bold flex items-center gap-1 shrink-0">
                 <Shield size={10} />
@@ -995,8 +1006,11 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
                 <span className="font-mono text-amber-600 font-bold select-all tracking-wider text-sm">{(profile as any)?.uniqueCode || '-----'}</span>
               </div>
               <div className="flex justify-between items-center text-xs border-t border-zinc-100 pt-2.5">
-                <span className="text-zinc-500">Country</span>
-                <span className="font-bold text-zinc-700">{profile?.country || 'Kenya'}</span>
+                <span className="text-zinc-500">Country of Residence</span>
+                <span className="font-bold text-zinc-700 flex items-center gap-1.5">
+                  <span className="text-sm leading-none">{getCountryDetails(country).flag}</span>
+                  <span>{getCountryDetails(country).name}</span>
+                </span>
               </div>
               <div className="flex justify-between items-center text-xs border-t border-zinc-100 pt-2.5">
                 <span className="text-zinc-500">Wallet Status</span>
@@ -1024,21 +1038,94 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
               />
             </div>
 
+            {/* Country of Residence Selector */}
+            <div className="space-y-1.5 text-left relative">
+              <label htmlFor="profile-country-trigger" className="text-xs font-semibold text-zinc-650 flex items-center gap-1.5">
+                <Globe size={14} className="text-amber-500" />
+                Country of Residence
+              </label>
+              
+              <button
+                id="profile-country-trigger"
+                type="button"
+                onClick={() => setIsCountryOpen(!isCountryOpen)}
+                className="w-full px-4 py-3 bg-zinc-50 hover:bg-zinc-100/90 border border-zinc-200 rounded-xl text-sm flex items-center justify-between transition-all focus:outline-none focus:ring-1 focus:ring-amber-500 text-zinc-800 font-medium cursor-pointer shadow-xs active:scale-[0.99]"
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <span className="text-base leading-none shrink-0">{getCountryDetails(country).flag}</span>
+                  <span className="font-semibold text-zinc-800 truncate">{getCountryDetails(country).name}</span>
+                  <span className="text-[11px] bg-zinc-200/80 text-zinc-700 font-bold font-mono px-2 py-0.5 rounded shrink-0">
+                    {getCountryDetails(country).dialCode}
+                  </span>
+                </div>
+                <ChevronDown size={16} className={`text-zinc-400 shrink-0 transition-transform duration-200 ${isCountryOpen ? 'rotate-180 text-amber-500' : ''}`} />
+              </button>
+
+              {/* Country selection dropdown menu */}
+              {isCountryOpen && (
+                <>
+                  <div 
+                    className="fixed inset-0 z-40" 
+                    onClick={() => setIsCountryOpen(false)} 
+                  />
+                  
+                  <div className="absolute left-0 right-0 top-full mt-1.5 z-50 bg-white border border-amber-200/80 rounded-2xl shadow-xl p-1.5 space-y-1 animate-in fade-in zoom-in-95 duration-150 max-h-60 overflow-y-auto">
+                    {SUPPORTED_COUNTRIES.map((c) => {
+                      const isSelected = country === c.code || (c.code === 'UAE' && (country === 'UAE' || country === 'United Arab Emirates'));
+                      return (
+                        <button
+                          key={c.code}
+                          id={`profile-country-opt-${c.code.toLowerCase().replace(/\s+/g, '-')}`}
+                          type="button"
+                          onClick={() => {
+                            setCountry(c.code);
+                            setIsCountryOpen(false);
+                          }}
+                          className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs transition-all cursor-pointer ${
+                            isSelected 
+                              ? 'bg-amber-500/10 border border-amber-500/30 text-amber-950 font-bold shadow-xs' 
+                              : 'hover:bg-amber-50/60 text-zinc-700 font-medium border border-transparent'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <span className="text-base leading-none">{c.flag}</span>
+                            <span>{c.name}</span>
+                            <span className="text-[10px] font-mono text-zinc-500 font-semibold">
+                              ({c.dialCode})
+                            </span>
+                          </div>
+                          {isSelected && <Check size={14} className="text-amber-600 shrink-0 stroke-[3]" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
+
             {/* Phone Number Input */}
             <div className="space-y-1.5 text-left">
-              <label className="text-xs font-semibold text-zinc-650 flex items-center gap-1.5">
-                <Smartphone size={14} className="text-amber-500" />
-                Phone Number
+              <label htmlFor="profile-phone-number" className="text-xs font-semibold text-zinc-650 flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <Smartphone size={14} className="text-amber-500" />
+                  Phone Number
+                </span>
+                <span className="text-[10.5px] font-mono text-zinc-500 flex items-center gap-1 font-semibold">
+                  <span>{getCountryDetails(country).flag}</span>
+                  <span>{getCountryDetails(country).dialCode}</span>
+                </span>
               </label>
               <input
                 id="profile-phone-number"
                 type="tel"
-                placeholder="e.g. +254 700 000000"
+                placeholder={`e.g. ${getCountryDetails(country).dialCode} 50 123 4567`}
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 placeholder-zinc-400 text-zinc-800 font-mono"
               />
-              <p className="text-[10px] text-zinc-500">Update your phone number for transaction verification and contact.</p>
+              <p className="text-[10px] text-zinc-500">
+                Registered phone for transaction alerts & SMS verification ({getCountryDetails(country).name}).
+              </p>
             </div>
 
             {/* Submit Button */}
