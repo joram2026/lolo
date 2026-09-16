@@ -171,7 +171,7 @@ export const UpgradeRolloverModal: React.FC<UpgradeRolloverModalProps> = ({
                       {oldContract.leadName}
                     </h5>
                     <p className={`text-[10px] font-mono font-bold ${isLightTheme ? 'text-amber-800' : 'text-amber-400'}`}>
-                      Locked: ${oldPrincipal.toFixed(2)}
+                      Contracted: ${oldPrincipal.toFixed(2)}
                     </p>
                   </div>
                 </div>

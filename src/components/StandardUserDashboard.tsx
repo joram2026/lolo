@@ -1084,8 +1084,8 @@ export default function StandardUserDashboard({
 
     if (amount > freeTransferrable) {
       toast.error(
-        `Cannot transfer out locked contract capital ($${lockedCapital.toFixed(2)}) until the contract duration is complete. Maximum available to transfer out is $${freeTransferrable.toFixed(2)}.`,
-        'Capital Locked'
+        `Cannot transfer out contracted capital ($${lockedCapital.toFixed(2)}) until the contract duration is complete. Maximum movable amount to transfer out is $${freeTransferrable.toFixed(2)}.`,
+        'Contracted Capital'
       );
       return;
     }
@@ -3454,7 +3454,7 @@ export default function StandardUserDashboard({
                     Available: {(holding - getLockedAmount(liveCoin.symbol)).toLocaleString(undefined, {
                       minimumFractionDigits: liveCoin.symbol === 'BTC' || liveCoin.symbol === 'ETH' ? 6 : 2,
                       maximumFractionDigits: liveCoin.symbol === 'BTC' || liveCoin.symbol === 'ETH' ? 8 : 4
-                    })} {liveCoin.symbol} (Locked: {getLockedAmount(liveCoin.symbol).toLocaleString(undefined, {
+                    })} {liveCoin.symbol} (Contracted: {getLockedAmount(liveCoin.symbol).toLocaleString(undefined, {
                       minimumFractionDigits: liveCoin.symbol === 'BTC' || liveCoin.symbol === 'ETH' ? 6 : 2,
                       maximumFractionDigits: liveCoin.symbol === 'BTC' || liveCoin.symbol === 'ETH' ? 8 : 4
                     })})
@@ -4320,7 +4320,7 @@ export default function StandardUserDashboard({
                           <div className={`mt-3 pt-2.5 border-t flex justify-between items-center text-[10px] font-mono ${isLightTheme ? 'border-zinc-200/60' : 'border-slate-700/40'}`}>
                             <div className={`flex items-center gap-1 font-bold ${isLightTheme ? 'text-zinc-500' : 'text-zinc-400'}`}>
                               <Unlock size={11} className={`${isLightTheme ? 'text-emerald-600' : 'text-emerald-400'} shrink-0`} />
-                              <span>Free:</span>
+                              <span>Movable:</span>
                               <span className={`${isLightTheme ? 'text-emerald-600' : 'text-emerald-400'} font-extrabold`}>
                                 {asset.unlockedAmount.toLocaleString(undefined, {
                                   minimumFractionDigits: asset.symbol === 'BTC' || asset.symbol === 'ETH' ? 4 : 2,
@@ -6522,7 +6522,7 @@ export default function StandardUserDashboard({
                             <>
                               <div id="copy-trade-free-transfer-badge" className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-950/70 border border-emerald-400/30 text-emerald-200 text-[10px] font-bold backdrop-blur-xs">
                                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
-                                <span className="text-emerald-100/80">Free:</span>
+                                <span className="text-emerald-100/80">Movable:</span>
                                 <strong className="text-emerald-300 font-mono font-black">
                                   ${freeTransferrable.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                 </strong>
@@ -6530,7 +6530,7 @@ export default function StandardUserDashboard({
 
                               {lockedCapital > 0 && (
                                 <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-950/50 border border-amber-300/30 text-amber-200 text-[10px] font-bold backdrop-blur-xs">
-                                  <span className="text-amber-200/80">Locked:</span>
+                                  <span className="text-amber-200/80">Contracted:</span>
                                   <strong className="text-amber-300 font-mono font-bold">
                                     ${lockedCapital.toFixed(2)}
                                   </strong>
@@ -7603,7 +7603,7 @@ export default function StandardUserDashboard({
                   }`}>
                     <span className={`font-bold flex items-center gap-1.5 ${isLightTheme ? 'text-emerald-800' : 'text-emerald-400'}`}>
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-                      Free to Transfer Out:
+                      Movable to Transfer Out:
                     </span>
                     <span className={`font-extrabold font-mono text-sm ${isLightTheme ? 'text-emerald-800' : 'text-emerald-400'}`}>
                       ${freeTransferrable.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD
