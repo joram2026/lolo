@@ -11,9 +11,10 @@ import {
   serverTimestamp,
   arrayUnion,
   increment,
-  addDoc
+  addDoc,
+  getFirestore
 } from 'firebase/firestore';
-import { db } from '../firebase';
+import { db, app } from '../firebase';
 import { PromoCode, PromoCodeRewardType, UserAccount, VoucherClaim, Transaction } from '../types';
 
 export interface RedemptionResult {
@@ -28,11 +29,30 @@ export interface RedemptionResult {
 }
 
 /**
+ * Returns a valid Firestore instance from the passed db, exported db, or app fallback
+ */
+function getTargetDb(customDb?: any) {
+  if (customDb) return customDb;
+  if (db) return db;
+  try {
+    if (app) return getFirestore(app);
+  } catch (err) {
+    console.warn('Could not acquire Firestore instance:', err);
+  }
+  return null;
+}
+
+/**
  * Seed initial starter promo codes if collection is empty
  */
-export async function seedDefaultPromoCodesIfEmpty(): Promise<void> {
+export async function seedDefaultPromoCodesIfEmpty(customDb?: any): Promise<void> {
   try {
-    const promoCol = collection(db, 'promo_codes');
+    const targetDb = getTargetDb(customDb);
+    if (!targetDb) {
+      console.warn('Firestore database is not initialized yet. Skipping promo code seeding.');
+      return;
+    }
+    const promoCol = collection(targetDb, 'promo_codes');
     const snap = await getDocs(promoCol);
     if (snap.empty) {
       const defaults: Omit<PromoCode, 'id'>[] = [
@@ -95,7 +115,8 @@ export async function seedDefaultPromoCodesIfEmpty(): Promise<void> {
  */
 export async function redeemPromoCode(
   rawCode: string, 
-  user: UserAccount
+  user: UserAccount,
+  customDb?: any
 ): Promise<RedemptionResult> {
   const cleanCode = (rawCode || '').trim().toUpperCase();
   if (!cleanCode) {
@@ -103,8 +124,13 @@ export async function redeemPromoCode(
   }
 
   try {
+    const targetDb = getTargetDb(customDb);
+    if (!targetDb) {
+      return { success: false, message: 'Database connection is temporarily unavailable. Please try again.' };
+    }
+
     // 1. Fetch promo code by code string
-    const promoCol = collection(db, 'promo_codes');
+    const promoCol = collection(targetDb, 'promo_codes');
     const q = query(promoCol, where('code', '==', cleanCode));
     const snap = await getDocs(q);
 
@@ -150,10 +176,10 @@ export async function redeemPromoCode(
     }
 
     // 7. Execute redemption updates
-    const batch = writeBatch(db);
+    const batch = writeBatch(targetDb);
 
     // Update promo code doc: increment count and add user.uid to claimedBy
-    const promoRef = doc(db, 'promo_codes', promo.id);
+    const promoRef = doc(targetDb, 'promo_codes', promo.id);
     batch.update(promoRef, {
       redemptionCount: increment(1),
       claimedBy: arrayUnion(user.uid),
@@ -161,10 +187,10 @@ export async function redeemPromoCode(
     });
 
     // Record voucher claim log
-    const claimCol = collection(db, 'user_voucher_claims');
+    const claimCol = collection(targetDb, 'user_voucher_claims');
     const newClaimRef = doc(claimCol);
     let rewardText = '';
-    const userRef = doc(db, 'users', user.uid);
+    const userRef = doc(targetDb, 'users', user.uid);
     const userUpdates: Record<string, any> = {};
 
     let newBalance = user.balance || 0;
@@ -179,7 +205,7 @@ export async function redeemPromoCode(
       rewardText = `$${amount.toFixed(2)} USD added to Main Balance`;
 
       // Log transaction record for user history
-      const txCol = collection(db, 'transactions');
+      const txCol = collection(targetDb, 'transactions');
       const newTxRef = doc(txCol);
       batch.set(newTxRef, {
         id: newTxRef.id,
@@ -202,7 +228,7 @@ export async function redeemPromoCode(
       rewardText = `$${amount.toFixed(2)} USD added to Copy & Bot Trade Balance`;
 
       // Log transaction record
-      const txCol = collection(db, 'transactions');
+      const txCol = collection(targetDb, 'transactions');
       const newTxRef = doc(txCol);
       batch.set(newTxRef, {
         id: newTxRef.id,

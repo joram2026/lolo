@@ -315,8 +315,9 @@ export interface InAppAd {
 }
 
 export interface WithdrawalConfig {
-  standardFeePercent: number; // Fee % when user has no active contract (default: 15)
-  activeContractFeePercent: number; // Fee % when user has an active contract (default: 50)
+  enableEarlyWithdrawalFee?: boolean; // When false, early withdrawal fees are disabled: system uses normal fees and suppresses the early warning modal (default: true)
+  standardFeePercent: number; // Fee % when user has no active contract or when early fee is disabled (default: 15)
+  activeContractFeePercent: number; // Fee % when user has an active contract and early fee is enabled (default: 50)
   minWithdrawalUSD?: number; // Minimum withdrawal amount in USD (default: 10)
   customNotice?: string; // Optional custom withdrawal terms notice shown to users
   autoEnforceContractWarning?: boolean; // Whether active contract warning modal is shown

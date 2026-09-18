@@ -188,6 +188,7 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
 
   // Withdrawal Fee Configuration state
   const [withdrawalConfig, setWithdrawalConfig] = useState<WithdrawalConfig>({
+    enableEarlyWithdrawalFee: true,
     standardFeePercent: 15,
     activeContractFeePercent: 50,
     minWithdrawalUSD: 10,
@@ -475,6 +476,7 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
       if (withDocSnap.exists()) {
         const withData = withDocSnap.data();
         setWithdrawalConfig({
+          enableEarlyWithdrawalFee: withData.enableEarlyWithdrawalFee !== false,
           standardFeePercent: typeof withData.standardFeePercent === 'number' ? withData.standardFeePercent : 15,
           activeContractFeePercent: typeof withData.activeContractFeePercent === 'number' ? withData.activeContractFeePercent : 50,
           minWithdrawalUSD: typeof withData.minWithdrawalUSD === 'number' ? withData.minWithdrawalUSD : 10,
@@ -484,6 +486,7 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
         });
       } else {
         const defaultWithConfig: WithdrawalConfig = {
+          enableEarlyWithdrawalFee: true,
           standardFeePercent: 15,
           activeContractFeePercent: 50,
           minWithdrawalUSD: 10,
@@ -572,7 +575,7 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
 
       // Fetch Promo Codes
       try {
-        await seedDefaultPromoCodesIfEmpty();
+        await seedDefaultPromoCodesIfEmpty(db);
         const promoSnap = await getDocs(collection(db, 'promo_codes'));
         const pList = promoSnap.docs.map(d => ({ id: d.id, ...d.data() } as PromoCode));
         pList.sort((a, b) => {
@@ -950,6 +953,7 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
       const minWith = Math.max(0, Number(withdrawalConfig.minWithdrawalUSD) || 0);
 
       const payload = {
+        enableEarlyWithdrawalFee: withdrawalConfig.enableEarlyWithdrawalFee !== false,
         standardFeePercent: stdFee,
         activeContractFeePercent: actFee,
         minWithdrawalUSD: minWith,
@@ -960,7 +964,7 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
 
       await setDoc(doc(db, 'settings', 'withdrawal_config'), payload, { merge: true });
       setWithdrawalConfig(prev => ({ ...prev, ...payload }));
-      showFeedback('success', `Withdrawal fee policy saved! Standard: ${stdFee}%, Active Contract: ${actFee}%`);
+      showFeedback('success', `Withdrawal fee policy saved! Early fee: ${withdrawalConfig.enableEarlyWithdrawalFee !== false ? `ON (${actFee}%)` : 'OFF (Using standard fee)'}, Standard: ${stdFee}%`);
     } catch (err: any) {
       console.error('Error saving withdrawal config:', err);
       showFeedback('error', 'Failed to save withdrawal fee rules: ' + err.message);
@@ -3066,12 +3070,25 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                   <div>
                     <div className="flex items-center gap-2">
                       <h3 className="text-xs font-black text-zinc-200 uppercase tracking-wider">Active Withdrawal Fee Rules</h3>
-                      <span className="text-[9px] px-2 py-0.2 bg-emerald-500/10 text-emerald-400 rounded font-bold border border-emerald-500/20">CONFIGURABLE</span>
+                      <span className={`text-[9px] px-2 py-0.2 rounded font-bold border ${
+                        withdrawalConfig.enableEarlyWithdrawalFee !== false
+                          ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                          : 'bg-zinc-800 text-zinc-400 border-zinc-700'
+                      }`}>
+                        {withdrawalConfig.enableEarlyWithdrawalFee !== false ? 'EARLY FEE: ON' : 'EARLY FEE: OFF'}
+                      </span>
                     </div>
                     <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-[11px] text-zinc-400 mt-1">
-                      <span>Standard (No Contract): <strong className="text-emerald-400 font-mono font-bold">{withdrawalConfig.standardFeePercent}%</strong></span>
+                      <span>Standard Fee: <strong className="text-emerald-400 font-mono font-bold">{withdrawalConfig.standardFeePercent}%</strong></span>
                       <span className="text-zinc-700 hidden sm:inline">•</span>
-                      <span>Active Contract Early: <strong className="text-red-400 font-mono font-bold">{withdrawalConfig.activeContractFeePercent}%</strong></span>
+                      <span>
+                        Active Contract Early Fee: {' '}
+                        {withdrawalConfig.enableEarlyWithdrawalFee !== false ? (
+                          <strong className="text-red-400 font-mono font-bold">{withdrawalConfig.activeContractFeePercent}%</strong>
+                        ) : (
+                          <strong className="text-zinc-500 line-through font-mono font-bold">OFF (Uses {withdrawalConfig.standardFeePercent}%)</strong>
+                        )}
+                      </span>
                       <span className="text-zinc-700 hidden sm:inline">•</span>
                       <span>Min Limit: <strong className="text-zinc-200 font-mono font-bold">${withdrawalConfig.minWithdrawalUSD ?? 10} USD</strong></span>
                     </div>
@@ -4026,6 +4043,62 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                   </div>
                 </div>
 
+                {/* Early Withdrawal Fees Master On/Off Switch */}
+                <div className={`p-4 rounded-2xl border transition-all ${
+                  withdrawalConfig.enableEarlyWithdrawalFee !== false 
+                    ? 'bg-amber-500/10 border-amber-500/30' 
+                    : 'bg-zinc-950 border-zinc-800'
+                }`}>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-black text-white uppercase tracking-wider">Early Withdrawal Fees</span>
+                        <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider ${
+                          withdrawalConfig.enableEarlyWithdrawalFee !== false 
+                            ? 'bg-amber-500 text-zinc-950 shadow-sm' 
+                            : 'bg-zinc-800 text-zinc-400'
+                        }`}>
+                          {withdrawalConfig.enableEarlyWithdrawalFee !== false ? 'STATUS: ON (ENFORCED)' : 'STATUS: OFF (STANDARD FEE ONLY)'}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-zinc-400 leading-relaxed max-w-2xl">
+                        {withdrawalConfig.enableEarlyWithdrawalFee !== false
+                          ? 'When ON: Users withdrawing while holding an active bot or copy contract are charged the Early Exit Fee (' + withdrawalConfig.activeContractFeePercent + '%) and receive the early fee warning modal.'
+                          : 'When OFF: The system completely bypasses early withdrawal penalties. All withdrawals use the Normal/Standard fee (' + withdrawalConfig.standardFeePercent + '%) and users are never shown the Early Withdrawal Fees warning modal.'
+                        }
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-3 shrink-0">
+                      <button
+                        type="button"
+                        id="toggle-early-withdrawal-fee-btn"
+                        onClick={() => setWithdrawalConfig(prev => ({ 
+                          ...prev, 
+                          enableEarlyWithdrawalFee: prev.enableEarlyWithdrawalFee === false ? true : false 
+                        }))}
+                        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-black text-xs transition-all cursor-pointer shadow-md ${
+                          withdrawalConfig.enableEarlyWithdrawalFee !== false
+                            ? 'bg-amber-500 hover:bg-amber-400 text-zinc-950 shadow-amber-500/20'
+                            : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300'
+                        }`}
+                      >
+                        {withdrawalConfig.enableEarlyWithdrawalFee !== false ? (
+                          <>
+                            <ToggleRight size={22} className="text-zinc-950" />
+                            <span>EARLY FEE: ON</span>
+                          </>
+                        ) : (
+                          <>
+                            <ToggleLeft size={22} className="text-zinc-500" />
+                            <span>EARLY FEE: OFF</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Primary Fee Percentage Inputs */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   {/* Standard Fee % */}
@@ -4200,22 +4273,36 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                     </div>
 
                     {/* Active Contract Early Case */}
-                    <div className="p-3 bg-zinc-900/60 rounded-xl border border-red-900/30 space-y-1.5">
+                    <div className={`p-3 rounded-xl border space-y-1.5 transition-colors ${
+                      withdrawalConfig.enableEarlyWithdrawalFee !== false 
+                        ? 'bg-zinc-900/60 border-red-900/30' 
+                        : 'bg-zinc-950/80 border-zinc-800/80 opacity-75'
+                    }`}>
                       <div className="flex justify-between items-center text-[10px]">
-                        <span className="text-red-400 font-bold uppercase">Early (With Active Contract)</span>
-                        <span className="font-mono text-zinc-400">{withdrawalConfig.activeContractFeePercent}% Fee</span>
+                        <span className={`font-bold uppercase ${withdrawalConfig.enableEarlyWithdrawalFee !== false ? 'text-red-400' : 'text-zinc-400'}`}>
+                          With Active Contract {withdrawalConfig.enableEarlyWithdrawalFee === false && '(Disabled)'}
+                        </span>
+                        <span className="font-mono text-zinc-400">
+                          {withdrawalConfig.enableEarlyWithdrawalFee !== false 
+                            ? `${withdrawalConfig.activeContractFeePercent}% Early Fee` 
+                            : `${withdrawalConfig.standardFeePercent}% (Normal Fee Applied)`}
+                        </span>
                       </div>
                       <div className="flex justify-between text-xs text-zinc-300 font-mono">
                         <span className="text-zinc-500">Gross:</span>
                         <span>${previewWithdrawalAmount.toFixed(2)}</span>
                       </div>
-                      <div className="flex justify-between text-xs text-red-400 font-mono">
+                      <div className="flex justify-between text-xs font-mono">
                         <span className="text-zinc-500">Fee Deducted:</span>
-                        <span>-${(previewWithdrawalAmount * (withdrawalConfig.activeContractFeePercent / 100)).toFixed(2)}</span>
+                        <span className={withdrawalConfig.enableEarlyWithdrawalFee !== false ? 'text-red-400' : 'text-emerald-400'}>
+                          -${(previewWithdrawalAmount * ((withdrawalConfig.enableEarlyWithdrawalFee !== false ? withdrawalConfig.activeContractFeePercent : withdrawalConfig.standardFeePercent) / 100)).toFixed(2)}
+                        </span>
                       </div>
-                      <div className="flex justify-between text-xs text-amber-400 font-mono font-bold border-t border-zinc-800/80 pt-1">
-                        <span>User Payout:</span>
-                        <span>${(previewWithdrawalAmount * (1 - withdrawalConfig.activeContractFeePercent / 100)).toFixed(2)}</span>
+                      <div className="flex justify-between text-xs font-mono font-bold border-t border-zinc-800/80 pt-1">
+                        <span className="text-zinc-400">User Payout:</span>
+                        <span className={withdrawalConfig.enableEarlyWithdrawalFee !== false ? 'text-amber-400' : 'text-emerald-400'}>
+                          ${(previewWithdrawalAmount * (1 - (withdrawalConfig.enableEarlyWithdrawalFee !== false ? withdrawalConfig.activeContractFeePercent : withdrawalConfig.standardFeePercent) / 100)).toFixed(2)}
+                        </span>
                       </div>
                     </div>
                   </div>

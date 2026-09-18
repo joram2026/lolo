@@ -52,7 +52,7 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
 
   const COUNTRIES = SUPPORTED_COUNTRIES;
   const [referral, setReferral] = useState(() => localStorage.getItem('pending_referral_code') || '');
-  const referralNotifiedRef = React.useRef(false);
+  const referralNotifiedRef = useRef(false);
   const toast = useToast();
   const [isDraggingSupport, setIsDraggingSupport] = useState(false);
   const dragStartTimeRef = useRef<number>(0);

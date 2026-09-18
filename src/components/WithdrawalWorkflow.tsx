@@ -97,6 +97,7 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
   
   // Dynamic Admin Withdrawal Fee Configuration
   const [withdrawalConfig, setWithdrawalConfig] = useState<WithdrawalConfig>({
+    enableEarlyWithdrawalFee: true,
     standardFeePercent: 15,
     activeContractFeePercent: 50,
     minWithdrawalUSD: 10,
@@ -333,6 +334,7 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
       if (snap.exists()) {
         const data = snap.data();
         setWithdrawalConfig({
+          enableEarlyWithdrawalFee: data.enableEarlyWithdrawalFee !== false,
           standardFeePercent: typeof data.standardFeePercent === 'number' ? data.standardFeePercent : 15,
           activeContractFeePercent: typeof data.activeContractFeePercent === 'number' ? data.activeContractFeePercent : 50,
           minWithdrawalUSD: typeof data.minWithdrawalUSD === 'number' ? data.minWithdrawalUSD : 10,
@@ -540,25 +542,29 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
     }
 
     // Check if user has active copy trading contracts with any expert (both state and live check)
-    try {
-      const copyTradesCol = collection(db, 'user_copy_trades');
-      const copyTradesSnap = await getDocs(query(copyTradesCol, where('userId', '==', user.uid)));
-      const activeContracts = copyTradesSnap.docs
-        .map(d => ({ ...d.data(), id: d.id } as UserCopyTrade))
-        .filter(t => (t.status || '').toString().trim().toUpperCase() === 'ACTIVE');
+    // Only enforce early fee modal if early withdrawal fees are enabled by Admin
+    const isEarlyFeeActive = withdrawalConfig.enableEarlyWithdrawalFee !== false;
+    if (isEarlyFeeActive) {
+      try {
+        const copyTradesCol = collection(db, 'user_copy_trades');
+        const copyTradesSnap = await getDocs(query(copyTradesCol, where('userId', '==', user.uid)));
+        const activeContracts = copyTradesSnap.docs
+          .map(d => ({ ...d.data(), id: d.id } as UserCopyTrade))
+          .filter(t => (t.status || '').toString().trim().toUpperCase() === 'ACTIVE');
 
-      if (activeContracts.length > 0 || activeCopyContracts.length > 0) {
-        setActiveCopyContracts(activeContracts.length > 0 ? activeContracts : activeCopyContracts);
-        setPendingWithdrawType('crypto');
-        setShowActiveContractWarningModal(true);
-        return;
-      }
-    } catch (e) {
-      console.error('Error verifying active contracts:', e);
-      if (activeCopyContracts.length > 0) {
-        setPendingWithdrawType('crypto');
-        setShowActiveContractWarningModal(true);
-        return;
+        if (activeContracts.length > 0 || activeCopyContracts.length > 0) {
+          setActiveCopyContracts(activeContracts.length > 0 ? activeContracts : activeCopyContracts);
+          setPendingWithdrawType('crypto');
+          setShowActiveContractWarningModal(true);
+          return;
+        }
+      } catch (e) {
+        console.error('Error verifying active contracts:', e);
+        if (activeCopyContracts.length > 0) {
+          setPendingWithdrawType('crypto');
+          setShowActiveContractWarningModal(true);
+          return;
+        }
       }
     }
 
@@ -671,25 +677,29 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
     }
 
     // Check if user has active copy trading contracts with any expert (both state and live check)
-    try {
-      const copyTradesCol = collection(db, 'user_copy_trades');
-      const copyTradesSnap = await getDocs(query(copyTradesCol, where('userId', '==', user.uid)));
-      const activeContracts = copyTradesSnap.docs
-        .map(d => ({ ...d.data(), id: d.id } as UserCopyTrade))
-        .filter(t => (t.status || '').toString().trim().toUpperCase() === 'ACTIVE');
+    // Only enforce early fee modal if early withdrawal fees are enabled by Admin
+    const isEarlyFeeActive = withdrawalConfig.enableEarlyWithdrawalFee !== false;
+    if (isEarlyFeeActive) {
+      try {
+        const copyTradesCol = collection(db, 'user_copy_trades');
+        const copyTradesSnap = await getDocs(query(copyTradesCol, where('userId', '==', user.uid)));
+        const activeContracts = copyTradesSnap.docs
+          .map(d => ({ ...d.data(), id: d.id } as UserCopyTrade))
+          .filter(t => (t.status || '').toString().trim().toUpperCase() === 'ACTIVE');
 
-      if (activeContracts.length > 0 || activeCopyContracts.length > 0) {
-        setActiveCopyContracts(activeContracts.length > 0 ? activeContracts : activeCopyContracts);
-        setPendingWithdrawType('p2p');
-        setShowActiveContractWarningModal(true);
-        return;
-      }
-    } catch (e) {
-      console.error('Error verifying active contracts:', e);
-      if (activeCopyContracts.length > 0) {
-        setPendingWithdrawType('p2p');
-        setShowActiveContractWarningModal(true);
-        return;
+        if (activeContracts.length > 0 || activeCopyContracts.length > 0) {
+          setActiveCopyContracts(activeContracts.length > 0 ? activeContracts : activeCopyContracts);
+          setPendingWithdrawType('p2p');
+          setShowActiveContractWarningModal(true);
+          return;
+        }
+      } catch (e) {
+        console.error('Error verifying active contracts:', e);
+        if (activeCopyContracts.length > 0) {
+          setPendingWithdrawType('p2p');
+          setShowActiveContractWarningModal(true);
+          return;
+        }
       }
     }
 
@@ -1547,7 +1557,8 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
           {/* Crypto Enter PIN Final Confirm Screen */}
           {method === 'crypto_pin_confirm' && selectedCoin && (() => {
             const grossVal = parseFloat(amountUSD) || 0;
-            const hasActiveContract = activeCopyContracts.length > 0;
+            const isEarlyFeeActive = withdrawalConfig.enableEarlyWithdrawalFee !== false;
+            const hasActiveContract = isEarlyFeeActive && activeCopyContracts.length > 0;
             const standardFeePct = withdrawalConfig.standardFeePercent ?? 15;
             const activeContractFeePct = withdrawalConfig.activeContractFeePercent ?? 50;
             const applicableFeePct = hasActiveContract ? activeContractFeePct : standardFeePct;
@@ -1897,7 +1908,8 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
           {/* P2P Enter PIN Final Release Screen */}
           {method === 'p2p_pin_confirm' && selectedMerchant && (() => {
             const grossVal = parseFloat(p2pUSDAmount) || 0;
-            const hasActiveContract = activeCopyContracts.length > 0;
+            const isEarlyFeeActive = withdrawalConfig.enableEarlyWithdrawalFee !== false;
+            const hasActiveContract = isEarlyFeeActive && activeCopyContracts.length > 0;
             const rate = selectedMerchant.rate > 1.5 ? selectedMerchant.rate - 1.5 : 0;
             const localGross = grossVal * rate;
 
@@ -2005,7 +2017,7 @@ export default function WithdrawalWorkflow({ user, onBack, onSuccess, onGoToProf
       )}
 
       {/* Active Contract Early Withdrawal Confirmation Modal */}
-      {showActiveContractWarningModal && (() => {
+      {showActiveContractWarningModal && withdrawalConfig.enableEarlyWithdrawalFee !== false && (() => {
         const withdrawGross = pendingWithdrawType === 'crypto' 
           ? (parseFloat(amountUSD) || 0) 
           : (parseFloat(p2pUSDAmount) || 0);

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { InAppAd } from '../types';
 import { 
@@ -17,7 +17,7 @@ export const InAppAdPopupModal: React.FC<InAppAdPopupModalProps> = ({
   onClose,
   onAdAction
 }) => {
-  const [dontShowAgainToday, setDontShowAgainToday] = React.useState(false);
+  const [dontShowAgainToday, setDontShowAgainToday] = useState(false);
 
   if (!ad) return null;
 

@@ -34,7 +34,7 @@ export default function VouchersView({
 
   // Seed default demo promo codes if empty on mount
   useEffect(() => {
-    seedDefaultPromoCodesIfEmpty();
+    seedDefaultPromoCodesIfEmpty(db);
   }, []);
 
   // Fetch claimed vouchers for this user
@@ -80,7 +80,7 @@ export default function VouchersView({
 
     setIsRedeeming(true);
     try {
-      const res = await redeemPromoCode(code, profile);
+      const res = await redeemPromoCode(code, profile, db);
       if (res.success) {
         toast.success(res.message, 'Voucher Claimed! 🎉');
         setPromoCodeInput('');
