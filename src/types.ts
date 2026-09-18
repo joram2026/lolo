@@ -313,3 +313,12 @@ export interface InAppAd {
   createdAt?: any;
   updatedAt?: any;
 }
+
+export interface WithdrawalConfig {
+  standardFeePercent: number; // Fee % when user has no active contract (default: 15)
+  activeContractFeePercent: number; // Fee % when user has an active contract (default: 50)
+  minWithdrawalUSD?: number; // Minimum withdrawal amount in USD (default: 10)
+  customNotice?: string; // Optional custom withdrawal terms notice shown to users
+  autoEnforceContractWarning?: boolean; // Whether active contract warning modal is shown
+  updatedAt?: any;
+}

@@ -6,7 +6,7 @@ import {
   collection, doc, getDocs, updateDoc, deleteDoc, runTransaction, 
   setDoc, query, orderBy, serverTimestamp, writeBatch, getDoc 
 } from 'firebase/firestore';
-import { UserAccount, Transaction, CryptoNetwork, P2PMerchant, CryptoPrice, ArbitrageConfig, BotTemplate, DepositBonusTier, ReferralDepositConfig, CopyTraderLead, PromoCode, PromoCodeRewardType, InAppAd } from '../types';
+import { UserAccount, Transaction, CryptoNetwork, P2PMerchant, CryptoPrice, ArbitrageConfig, BotTemplate, DepositBonusTier, ReferralDepositConfig, CopyTraderLead, PromoCode, PromoCodeRewardType, InAppAd, WithdrawalConfig } from '../types';
 import { DEFAULT_COPY_LEADS, getLeadDailyProfitRange } from '../data/copyTraders';
 import { DEFAULT_IN_APP_ADS } from '../data/defaultAds';
 import { DEFAULT_NETWORKS } from '../seedData';
@@ -17,7 +17,7 @@ import { AdminAdsManager } from './AdminAdsManager';
 import { 
   Users, CheckCircle2, XCircle, Settings, ShieldAlert, Key, 
   Trash2, ToggleLeft, ToggleRight, Loader, ZoomIn, Plus, Edit, Check, Eye, Star, Mail, RefreshCw, X, FileText, Coins, TrendingUp, Bot, Cpu, Smartphone, Phone, Sparkles, ChevronDown, ChevronUp,
-  Search, Award, Flame, UserCheck, Tag, Gift, Copy, Megaphone
+  Search, Award, Flame, UserCheck, Tag, Gift, Copy, Megaphone, Percent, ArrowDownToLine
 } from 'lucide-react';
 
 const STATIC_CRYPTO: Record<string, { name: string; price: number }> = {
@@ -185,6 +185,17 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
     ]
   });
   const [isSavingReferralConfig, setIsSavingReferralConfig] = useState(false);
+
+  // Withdrawal Fee Configuration state
+  const [withdrawalConfig, setWithdrawalConfig] = useState<WithdrawalConfig>({
+    standardFeePercent: 15,
+    activeContractFeePercent: 50,
+    minWithdrawalUSD: 10,
+    customNotice: '',
+    autoEnforceContractWarning: true,
+  });
+  const [isSavingWithdrawalConfig, setIsSavingWithdrawalConfig] = useState(false);
+  const [previewWithdrawalAmount, setPreviewWithdrawalAmount] = useState<number>(100);
 
   // Vouchers & Promo Codes Management States
   const [promoCodesList, setPromoCodesList] = useState<PromoCode[]>([]);
@@ -456,6 +467,31 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
         };
         await setDoc(refDepDocRef, defaultRefDep);
         setReferralConfig(defaultRefDep);
+      }
+
+      // Fetch Withdrawal Fee Config Settings
+      const withDocRef = doc(db, 'settings', 'withdrawal_config');
+      const withDocSnap = await getDoc(withDocRef);
+      if (withDocSnap.exists()) {
+        const withData = withDocSnap.data();
+        setWithdrawalConfig({
+          standardFeePercent: typeof withData.standardFeePercent === 'number' ? withData.standardFeePercent : 15,
+          activeContractFeePercent: typeof withData.activeContractFeePercent === 'number' ? withData.activeContractFeePercent : 50,
+          minWithdrawalUSD: typeof withData.minWithdrawalUSD === 'number' ? withData.minWithdrawalUSD : 10,
+          customNotice: withData.customNotice || '',
+          autoEnforceContractWarning: withData.autoEnforceContractWarning !== false,
+          updatedAt: withData.updatedAt,
+        });
+      } else {
+        const defaultWithConfig: WithdrawalConfig = {
+          standardFeePercent: 15,
+          activeContractFeePercent: 50,
+          minWithdrawalUSD: 10,
+          customNotice: '',
+          autoEnforceContractWarning: true,
+        };
+        await setDoc(withDocRef, defaultWithConfig);
+        setWithdrawalConfig(defaultWithConfig);
       }
 
       // Fetch Bot Templates
@@ -902,6 +938,34 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
       showFeedback('error', 'Failed to save referral settings: ' + err.message);
     } finally {
       setIsSavingReferralConfig(false);
+    }
+  };
+
+  // Save Withdrawal Fee Config Handler
+  const handleSaveWithdrawalConfig = async () => {
+    setIsSavingWithdrawalConfig(true);
+    try {
+      const stdFee = Math.max(0, Math.min(100, Number(withdrawalConfig.standardFeePercent) || 0));
+      const actFee = Math.max(0, Math.min(100, Number(withdrawalConfig.activeContractFeePercent) || 0));
+      const minWith = Math.max(0, Number(withdrawalConfig.minWithdrawalUSD) || 0);
+
+      const payload = {
+        standardFeePercent: stdFee,
+        activeContractFeePercent: actFee,
+        minWithdrawalUSD: minWith,
+        customNotice: withdrawalConfig.customNotice?.trim() || '',
+        autoEnforceContractWarning: withdrawalConfig.autoEnforceContractWarning !== false,
+        updatedAt: serverTimestamp(),
+      };
+
+      await setDoc(doc(db, 'settings', 'withdrawal_config'), payload, { merge: true });
+      setWithdrawalConfig(prev => ({ ...prev, ...payload }));
+      showFeedback('success', `Withdrawal fee policy saved! Standard: ${stdFee}%, Active Contract: ${actFee}%`);
+    } catch (err: any) {
+      console.error('Error saving withdrawal config:', err);
+      showFeedback('error', 'Failed to save withdrawal fee rules: ' + err.message);
+    } finally {
+      setIsSavingWithdrawalConfig(false);
     }
   };
 
@@ -2993,6 +3057,43 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
           {/* 3. Withdrawals Tab */}
           {activeTab === 'withdrawals' && (
             <div className="space-y-4">
+              {/* Quick Fee Rules Policy Banner */}
+              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-lg">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 shrink-0">
+                    <Coins size={20} />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-xs font-black text-zinc-200 uppercase tracking-wider">Active Withdrawal Fee Rules</h3>
+                      <span className="text-[9px] px-2 py-0.2 bg-emerald-500/10 text-emerald-400 rounded font-bold border border-emerald-500/20">CONFIGURABLE</span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-[11px] text-zinc-400 mt-1">
+                      <span>Standard (No Contract): <strong className="text-emerald-400 font-mono font-bold">{withdrawalConfig.standardFeePercent}%</strong></span>
+                      <span className="text-zinc-700 hidden sm:inline">•</span>
+                      <span>Active Contract Early: <strong className="text-red-400 font-mono font-bold">{withdrawalConfig.activeContractFeePercent}%</strong></span>
+                      <span className="text-zinc-700 hidden sm:inline">•</span>
+                      <span>Min Limit: <strong className="text-zinc-200 font-mono font-bold">${withdrawalConfig.minWithdrawalUSD ?? 10} USD</strong></span>
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <button
+                    onClick={() => {
+                      setActiveTab('settings');
+                      setTimeout(() => {
+                        const el = document.getElementById('withdrawal-fee-rules-controller');
+                        if (el) el.scrollIntoView({ behavior: 'smooth' });
+                      }, 100);
+                    }}
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-xl text-xs font-bold transition-all cursor-pointer border border-zinc-700/60"
+                  >
+                    <Settings size={13} className="text-amber-400" />
+                    <span>Manage Fee Rules</span>
+                  </button>
+                </div>
+              </div>
+
               <h2 className="text-sm font-black text-zinc-400 uppercase tracking-wider">Pending Approvals - Withdrawal Queue ({pendingWithdrawals.length})</h2>
 
               <div className="grid gap-3">
@@ -3032,12 +3133,21 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                             <span className="text-sm font-bold text-zinc-300 font-mono">${tx.amount?.toFixed(2)} USD</span>
                           </div>
                           <div>
-                            <span className="text-[9px] text-zinc-500 uppercase font-black block">{tx.feePercent ? `${tx.feePercent}% Fee` : '15% Fee'}</span>
-                            <span className="text-sm font-bold text-red-400 font-mono">-${(tx.feeAmount !== undefined ? tx.feeAmount : tx.amount * 0.15).toFixed(2)} USD</span>
+                            <span className="text-[9px] text-zinc-500 uppercase font-black block">
+                              {tx.feePercent ? `${tx.feePercent}% Fee` : `${withdrawalConfig.standardFeePercent}% Fee`}
+                              {tx.earlyContractWithdrawal && (
+                                <span className="ml-1 text-[8px] text-red-400 bg-red-500/10 px-1 py-0.2 rounded border border-red-500/20 font-mono">EARLY</span>
+                              )}
+                            </span>
+                            <span className="text-sm font-bold text-red-400 font-mono">
+                              -${(tx.feeAmount !== undefined ? tx.feeAmount : tx.amount * ((tx.feePercent || withdrawalConfig.standardFeePercent) / 100)).toFixed(2)} USD
+                            </span>
                           </div>
                           <div className="bg-emerald-950/40 p-1.5 rounded-lg border border-emerald-800/40">
                             <span className="text-[9px] text-emerald-400 uppercase font-black block">Net Payout to Send</span>
-                            <span className="text-sm font-black text-emerald-400 font-mono">${(tx.netAmount !== undefined ? tx.netAmount : tx.amount * 0.85).toFixed(2)} USD</span>
+                            <span className="text-sm font-black text-emerald-400 font-mono">
+                              ${(tx.netAmount !== undefined ? tx.netAmount : tx.amount * (1 - ((tx.feePercent || withdrawalConfig.standardFeePercent) / 100))).toFixed(2)} USD
+                            </span>
                           </div>
                         </div>
 
@@ -3882,6 +3992,232 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                       className="w-full px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-white focus:outline-none focus:ring-1 focus:ring-amber-500"
                     />
                     <p className="text-[9px] text-zinc-500 font-semibold mt-1">Users will see how to buy coins on these specific platforms and transfer/sell them to your platform to pocket the value difference.</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Withdrawal Fee & Active Contract Rules Settings Controller */}
+              <div id="withdrawal-fee-rules-controller" className="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 space-y-5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-800/80 pb-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 shrink-0">
+                      <Percent size={18} />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-xs font-black text-zinc-200 uppercase tracking-wider">Withdrawal Fee & Contract Rules Controller</h3>
+                        <span className="text-[9px] px-2 py-0.5 bg-emerald-500/10 text-emerald-400 font-bold rounded-full border border-emerald-500/20">LIVE SYSTEM POLICY</span>
+                      </div>
+                      <p className="text-[10px] text-zinc-500 font-semibold mt-0.5">
+                        Manage the percentage deducted on user withdrawals. Configure the standard fee and the early withdrawal fee enforced when a user withdraws with an active trading contract.
+                      </p>
+                    </div>
+                  </div>
+                  <div>
+                    <button
+                      id="save-withdrawal-config-btn"
+                      onClick={handleSaveWithdrawalConfig}
+                      disabled={isSavingWithdrawalConfig}
+                      className="flex items-center gap-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-black text-xs rounded-xl transition-colors cursor-pointer disabled:opacity-50 shadow-md shadow-amber-500/10"
+                    >
+                      {isSavingWithdrawalConfig ? <Loader size={12} className="animate-spin" /> : <Check size={12} />}
+                      <span>Save Fee Policy</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Primary Fee Percentage Inputs */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* Standard Fee % */}
+                  <div className="bg-zinc-950 p-4 rounded-2xl border border-zinc-800/80 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-bold text-zinc-300 block">Standard Withdrawal Fee</label>
+                      <span className="text-[9px] px-2 py-0.5 bg-emerald-500/10 text-emerald-400 rounded-md font-bold font-mono">No Contract</span>
+                    </div>
+                    <div className="relative">
+                      <input
+                        id="standard-fee-percent-input"
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.5"
+                        value={withdrawalConfig.standardFeePercent}
+                        onChange={(e) => setWithdrawalConfig({
+                          ...withdrawalConfig,
+                          standardFeePercent: parseFloat(e.target.value) || 0
+                        })}
+                        className="w-full px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-xl text-sm font-bold text-emerald-400 font-mono focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                      />
+                      <span className="absolute right-3 top-2.5 text-xs text-zinc-500 font-mono font-bold">%</span>
+                    </div>
+                    <p className="text-[10px] text-zinc-500 leading-snug">
+                      Applied to normal withdrawals when the user has no active bot or copy trading contract. Default: <strong>15%</strong>.
+                    </p>
+                  </div>
+
+                  {/* Active Contract Early Fee % */}
+                  <div className="bg-zinc-950 p-4 rounded-2xl border border-zinc-800/80 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-bold text-zinc-300 block">Active Contract Early Fee</label>
+                      <span className="text-[9px] px-2 py-0.5 bg-red-500/10 text-red-400 rounded-md font-bold font-mono">With Contract</span>
+                    </div>
+                    <div className="relative">
+                      <input
+                        id="active-contract-fee-percent-input"
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.5"
+                        value={withdrawalConfig.activeContractFeePercent}
+                        onChange={(e) => setWithdrawalConfig({
+                          ...withdrawalConfig,
+                          activeContractFeePercent: parseFloat(e.target.value) || 0
+                        })}
+                        className="w-full px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-xl text-sm font-bold text-red-400 font-mono focus:outline-none focus:ring-1 focus:ring-red-500"
+                      />
+                      <span className="absolute right-3 top-2.5 text-xs text-zinc-500 font-mono font-bold">%</span>
+                    </div>
+                    <p className="text-[10px] text-zinc-500 leading-snug">
+                      Early break fee applied if the user initiates a withdrawal while actively running a contract. Default: <strong>50%</strong>.
+                    </p>
+                  </div>
+
+                  {/* Minimum Withdrawal USD */}
+                  <div className="bg-zinc-950 p-4 rounded-2xl border border-zinc-800/80 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-bold text-zinc-300 block">Default Minimum Withdrawal</label>
+                      <span className="text-[9px] px-2 py-0.5 bg-zinc-800 text-zinc-400 rounded-md font-bold font-mono">Global</span>
+                    </div>
+                    <div className="relative">
+                      <span className="absolute left-3 top-2.5 text-xs text-zinc-500 font-mono font-bold">$</span>
+                      <input
+                        id="min-withdrawal-usd-input"
+                        type="number"
+                        min="1"
+                        step="1"
+                        value={withdrawalConfig.minWithdrawalUSD ?? 10}
+                        onChange={(e) => setWithdrawalConfig({
+                          ...withdrawalConfig,
+                          minWithdrawalUSD: parseFloat(e.target.value) || 0
+                        })}
+                        className="w-full pl-7 pr-3 py-2 bg-zinc-900 border border-zinc-800 rounded-xl text-sm font-bold text-zinc-200 font-mono focus:outline-none focus:ring-1 focus:ring-amber-500"
+                      />
+                    </div>
+                    <p className="text-[10px] text-zinc-500 leading-snug">
+                      Global minimum USD threshold requested. Specific coin networks can also define their own limits.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Quick Presets & Enforce Options */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Preset Buttons */}
+                  <div className="bg-zinc-950/60 p-3.5 rounded-2xl border border-zinc-800/60 space-y-2">
+                    <span className="text-[10px] text-zinc-400 font-black uppercase tracking-wider block">Quick Presets</span>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setWithdrawalConfig(prev => ({ ...prev, standardFeePercent: 15, activeContractFeePercent: 50 }))}
+                        className="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[10px] font-bold rounded-lg transition-colors cursor-pointer border border-zinc-700/50"
+                      >
+                        Default: 15% Std / 50% Contract
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setWithdrawalConfig(prev => ({ ...prev, standardFeePercent: 10, activeContractFeePercent: 30 }))}
+                        className="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[10px] font-bold rounded-lg transition-colors cursor-pointer border border-zinc-700/50"
+                      >
+                        Competitive: 10% Std / 30% Contract
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setWithdrawalConfig(prev => ({ ...prev, standardFeePercent: 20, activeContractFeePercent: 60 }))}
+                        className="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[10px] font-bold rounded-lg transition-colors cursor-pointer border border-zinc-700/50"
+                      >
+                        High Retention: 20% Std / 60% Contract
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Active Contract Modal Enforce Toggle */}
+                  <div className="bg-zinc-950/60 p-3.5 rounded-2xl border border-zinc-800/60 flex items-center justify-between">
+                    <div>
+                      <span className="text-[11px] font-bold text-zinc-300 block">Enforce Active Contract Modal</span>
+                      <p className="text-[10px] text-zinc-500 mt-0.5">
+                        Prompts user with the high fee warning & option to cancel and wait for contract completion.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setWithdrawalConfig(prev => ({ ...prev, autoEnforceContractWarning: !prev.autoEnforceContractWarning }))}
+                      className="cursor-pointer text-amber-500 hover:text-amber-400 transition-colors p-1"
+                    >
+                      {withdrawalConfig.autoEnforceContractWarning !== false ? <ToggleRight size={32} /> : <ToggleLeft size={32} className="text-zinc-600" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Live Simulation Calculator */}
+                <div className="bg-zinc-950 p-4 rounded-2xl border border-zinc-800/80 space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-zinc-900 pb-2">
+                    <div className="flex items-center gap-1.5">
+                      <Coins size={14} className="text-amber-400" />
+                      <span className="text-xs font-black text-zinc-300 uppercase tracking-wider">Live Fee Simulation Calculator</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-zinc-500 font-semibold">Test Amount:</span>
+                      <div className="relative">
+                        <span className="absolute left-2 top-1 text-[10px] text-zinc-500 font-mono font-bold">$</span>
+                        <input
+                          type="number"
+                          value={previewWithdrawalAmount}
+                          onChange={(e) => setPreviewWithdrawalAmount(parseFloat(e.target.value) || 0)}
+                          className="w-24 pl-5 pr-2 py-0.5 bg-zinc-900 border border-zinc-800 rounded text-xs text-white font-mono font-bold focus:outline-none focus:ring-1 focus:ring-amber-500"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                    {/* Standard Case */}
+                    <div className="p-3 bg-zinc-900/60 rounded-xl border border-emerald-900/30 space-y-1.5">
+                      <div className="flex justify-between items-center text-[10px]">
+                        <span className="text-emerald-400 font-bold uppercase">Standard (No Contract)</span>
+                        <span className="font-mono text-zinc-400">{withdrawalConfig.standardFeePercent}% Fee</span>
+                      </div>
+                      <div className="flex justify-between text-xs text-zinc-300 font-mono">
+                        <span className="text-zinc-500">Gross:</span>
+                        <span>${previewWithdrawalAmount.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-xs text-red-400 font-mono">
+                        <span className="text-zinc-500">Fee Deducted:</span>
+                        <span>-${(previewWithdrawalAmount * (withdrawalConfig.standardFeePercent / 100)).toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-xs text-emerald-400 font-mono font-bold border-t border-zinc-800/80 pt-1">
+                        <span>User Payout:</span>
+                        <span>${(previewWithdrawalAmount * (1 - withdrawalConfig.standardFeePercent / 100)).toFixed(2)}</span>
+                      </div>
+                    </div>
+
+                    {/* Active Contract Early Case */}
+                    <div className="p-3 bg-zinc-900/60 rounded-xl border border-red-900/30 space-y-1.5">
+                      <div className="flex justify-between items-center text-[10px]">
+                        <span className="text-red-400 font-bold uppercase">Early (With Active Contract)</span>
+                        <span className="font-mono text-zinc-400">{withdrawalConfig.activeContractFeePercent}% Fee</span>
+                      </div>
+                      <div className="flex justify-between text-xs text-zinc-300 font-mono">
+                        <span className="text-zinc-500">Gross:</span>
+                        <span>${previewWithdrawalAmount.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-xs text-red-400 font-mono">
+                        <span className="text-zinc-500">Fee Deducted:</span>
+                        <span>-${(previewWithdrawalAmount * (withdrawalConfig.activeContractFeePercent / 100)).toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-xs text-amber-400 font-mono font-bold border-t border-zinc-800/80 pt-1">
+                        <span>User Payout:</span>
+                        <span>${(previewWithdrawalAmount * (1 - withdrawalConfig.activeContractFeePercent / 100)).toFixed(2)}</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
