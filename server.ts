@@ -34,10 +34,10 @@ const DISPOSABLE_DOMAINS = new Set([
 
 // Helper to configure nodemailer transporter from environment variables
 function getMailTransporter() {
-  const host = process.env.SMTP_HOST;
-  const port = parseInt(process.env.SMTP_PORT || "587", 10);
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
+  const host = process.env.SMTP_HOST?.trim();
+  const port = parseInt(process.env.SMTP_PORT?.trim() || "587", 10);
+  const user = process.env.SMTP_USER?.trim();
+  const pass = process.env.SMTP_PASS?.trim();
   const secure = process.env.SMTP_SECURE === "true" || port === 465;
 
   if (host && user && pass) {
@@ -49,9 +49,179 @@ function getMailTransporter() {
         user,
         pass,
       },
+      tls: {
+        minVersion: 'TLSv1.2',
+        rejectUnauthorized: false,
+      },
     });
   }
   return null;
+}
+
+/**
+ * Builds an anti-spam compliant, high-deliverability plain text verification email.
+ * Mirrors the HTML version completely to ensure high text-to-HTML ratio and prevent spam classification.
+ */
+function buildOtpEmailPlainText(otpCode: string, greetingName: string, cleanEmail: string): string {
+  const year = new Date().getFullYear();
+  return [
+    "MOREX ACCOUNT VERIFICATION",
+    "==================================================",
+    "",
+    `Hello ${greetingName},`,
+    "",
+    "Thank you for signing up with Morex.",
+    "To complete your registration and secure your account, please enter the following 6-digit verification code:",
+    "",
+    `    VERIFICATION CODE:  ${otpCode}`,
+    "",
+    "• Valid for 10 minutes",
+    "• Single-use only",
+    "",
+    "SECURITY RECOMMENDATIONS:",
+    "- Never share this code with anyone. Morex staff will never ask for your verification code or password.",
+    "- If you did not initiate this request, you can safely ignore this email. No account will be created without this passcode.",
+    "",
+    "==================================================",
+    `This automated security notification was sent to ${cleanEmail}.`,
+    `Morex Financial Technologies · 100 Bishopsgate, London EC2N 4AG, United Kingdom`,
+    `© ${year} Morex. All rights reserved.`
+  ].join("\n");
+}
+
+/**
+ * Builds an anti-spam compliant, responsive table-based HTML email.
+ * Avoids non-standard CSS, CSS gradients, or high-risk financial buzzwords ("Arbitrage", "Yield")
+ * that trigger SpamAssassin, Microsoft Defender, and Gmail spam filters.
+ */
+function buildOtpEmailHtml(otpCode: string, greetingName: string, cleanEmail: string): string {
+  const year = new Date().getFullYear();
+  return `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light" />
+  <meta name="supported-color-schemes" content="light" />
+  <title>Morex Account Verification</title>
+  <!--[if mso]>
+  <noscript>
+    <xml>
+      <o:OfficeDocumentSettings>
+        <o:PixelsPerInch>96</o:PixelsPerInch>
+      </o:OfficeDocumentSettings>
+    </xml>
+  </noscript>
+  <![endif]-->
+</head>
+<body style="margin: 0; padding: 0; width: 100% !important; background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; -webkit-text-size-adjust: none;">
+  <!-- Invisible Preheader snippet for inbox preview -->
+  <div style="display: none; font-size: 1px; color: #ffffff; line-height: 1px; max-height: 0px; max-width: 0px; opacity: 0; overflow: hidden; mso-hide: all;">
+    Your Morex verification passcode is ${otpCode}. Valid for 10 minutes. &#847; &zwnj; &nbsp; &#8199; &shy; &#847; &zwnj; &nbsp; &#8199; &shy; &#847; &zwnj; &nbsp;
+  </div>
+
+  <!-- Outer email container -->
+  <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="background-color: #f8fafc; margin: 0; padding: 36px 12px; width: 100%;">
+    <tr>
+      <td align="center">
+        <!-- Main Card -->
+        <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="max-width: 520px; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);">
+          
+          <!-- Header Banner -->
+          <tr>
+            <td style="padding: 28px 32px 20px 32px; background-color: #0f172a; text-align: center;">
+              <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="margin: 0 auto;">
+                <tr>
+                  <td style="vertical-align: middle;">
+                    <span style="display: inline-block; font-size: 20px; font-weight: 900; letter-spacing: 2px; color: #ffffff; text-transform: uppercase;">
+                      MOREX
+                    </span>
+                  </td>
+                  <td style="vertical-align: middle; padding-left: 8px;">
+                    <span style="display: inline-block; font-size: 10px; font-weight: 700; color: #d97706; background-color: rgba(217, 119, 6, 0.15); border: 1px solid rgba(217, 119, 6, 0.4); border-radius: 4px; padding: 2px 6px; letter-spacing: 1px; text-transform: uppercase;">
+                      SECURITY
+                    </span>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin: 6px 0 0 0; color: #94a3b8; font-size: 11px; font-weight: 500; letter-spacing: 0.5px;">
+                Official Identity Verification Service
+              </p>
+            </td>
+          </tr>
+
+          <!-- Content Body -->
+          <tr>
+            <td style="padding: 32px 32px 28px 32px;">
+              <h1 style="margin: 0 0 16px 0; font-size: 20px; font-weight: 700; color: #0f172a; line-height: 1.3;">
+                Verify your email address
+              </h1>
+              <p style="margin: 0 0 20px 0; font-size: 14px; line-height: 1.6; color: #334155;">
+                Hello <strong>${greetingName}</strong>,
+              </p>
+              <p style="margin: 0 0 24px 0; font-size: 14px; line-height: 1.6; color: #334155;">
+                Thank you for registering with Morex. To complete your account registration and protect your security, please enter this one-time verification passcode:
+              </p>
+
+              <!-- Passcode Box -->
+              <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="margin: 0 0 24px 0;">
+                <tr>
+                  <td align="center" style="background-color: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 20px 16px;">
+                    <div style="font-family: 'Courier New', Courier, Consolas, monospace; font-size: 36px; font-weight: 800; letter-spacing: 8px; color: #0f172a; line-height: 1.2; text-indent: 8px;">
+                      ${otpCode}
+                    </div>
+                    <div style="margin-top: 8px; font-size: 11px; font-weight: 600; color: #64748b; letter-spacing: 0.5px; text-transform: uppercase;">
+                      Expires in 10 minutes &bull; Single-use only
+                    </div>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Security Warning Box -->
+              <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="margin: 0 0 24px 0;">
+                <tr>
+                  <td style="background-color: #f1f5f9; border-left: 3px solid #d97706; padding: 12px 14px; border-radius: 0 6px 6px 0;">
+                    <p style="margin: 0; font-size: 12px; line-height: 1.5; color: #475569;">
+                      <strong style="color: #0f172a;">Security Notice:</strong> Morex representatives will never contact you asking for your verification code or account password. Never share this code with anyone.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+
+              <p style="margin: 0; font-size: 12px; line-height: 1.5; color: #64748b;">
+                If you did not request this verification code, no action is required and you can safely disregard this email. No account will be activated without this passcode.
+              </p>
+            </td>
+          </tr>
+
+          <!-- Footer Divider -->
+          <tr>
+            <td style="padding: 0 32px;">
+              <div style="border-top: 1px solid #f1f5f9; height: 1px; line-height: 1px;">&nbsp;</div>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding: 20px 32px 28px 32px; background-color: #ffffff; text-align: center;">
+              <p style="margin: 0 0 6px 0; font-size: 11px; line-height: 1.5; color: #94a3b8;">
+                This automated message was sent to <strong style="color: #64748b;">${cleanEmail}</strong> to confirm your email verification request.
+              </p>
+              <p style="margin: 0 0 6px 0; font-size: 11px; line-height: 1.5; color: #94a3b8;">
+                Morex Financial Technologies &bull; 100 Bishopsgate, London EC2N 4AG, United Kingdom
+              </p>
+              <p style="margin: 0; font-size: 10px; color: #cbd5e1;">
+                &copy; ${year} Morex. All rights reserved. Automated security notification.
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
 }
 
 // Clean up expired OTP entries every 5 minutes
@@ -138,52 +308,52 @@ async function startServer() {
       // Attempt to send real email via configured SMTP
       const transporter = getMailTransporter();
       if (transporter) {
-        const fromAddress = process.env.SMTP_FROM || `\"Morex Holdings Security\" <${process.env.SMTP_USER}>`;
-        const greetingName = displayName ? displayName.trim() : "Valued Trader";
+        const mailUser = (process.env.SMTP_USER || '').trim();
+        const mailFromEnv = (process.env.SMTP_FROM || '').trim();
+        const replyToEnv = (process.env.SMTP_REPLY_TO || '').trim();
 
-        const htmlTemplate = `
-          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 540px; margin: 0 auto; padding: 32px 20px; background-color: #fcfbf7; border: 1px solid #f0ede4; border-radius: 20px; color: #1c1917;">
-            <div style="text-align: center; margin-bottom: 24px;">
-              <div style="display: inline-block; background: linear-gradient(135deg, #f59e0b, #d97706); padding: 12px 20px; border-radius: 14px; color: #ffffff; font-weight: 900; font-size: 18px; letter-spacing: 0.5px; box-shadow: 0 4px 12px rgba(217, 119, 6, 0.25);">
-                MOREX HOLDINGS
-              </div>
-              <p style="color: #78716c; font-size: 12px; margin-top: 8px; font-weight: 500;">Secure Arbitrage & Yield Ecosystem</p>
-            </div>
+        let fromAddress = mailFromEnv || mailUser || 'security@morex.app';
+        let fromDisplayName = 'Morex Security';
 
-            <div style="background-color: #ffffff; border: 1px solid #e7e5e4; border-radius: 16px; padding: 28px 24px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);">
-              <h2 style="font-size: 20px; font-weight: 800; color: #0c0a09; margin-top: 0; margin-bottom: 12px;">Verify your email address</h2>
-              <p style="font-size: 14px; line-height: 1.6; color: #44403c; margin-bottom: 24px;">
-                Hello <strong>${greetingName}</strong>,<br>
-                Thank you for joining Morex Holdings. To complete your registration and protect your account, please enter the one-time verification passcode below:
-              </p>
+        // Cleanly parse name and address if formatted as "Name <email@domain>"
+        const nameMatch = fromAddress.match(/^["']?([^"<']+)["']?\s*<([^>]+)>/);
+        if (nameMatch) {
+          fromDisplayName = nameMatch[1].trim();
+          fromAddress = nameMatch[2].trim();
+        }
 
-              <div style="text-align: center; margin: 28px 0; background: #fffbeb; border: 2px dashed #f59e0b; border-radius: 14px; padding: 18px;">
-                <span style="font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace; font-size: 34px; font-weight: 900; letter-spacing: 8px; color: #b45309; display: block;">
-                  ${otpCode}
-                </span>
-                <span style="font-size: 11px; color: #a16207; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-top: 6px; display: block;">
-                  Valid for 10 minutes • Do not share
-                </span>
-              </div>
+        const replyToAddress = replyToEnv || fromAddress;
+        const senderDomain = fromAddress.includes('@') ? fromAddress.split('@')[1] : 'morex.app';
+        const messageId = `<morex.otp.${Date.now()}.${Math.random().toString(36).substring(2, 9)}@${senderDomain}>`;
 
-              <p style="font-size: 12px; line-height: 1.5; color: #78716c; margin-bottom: 0;">
-                If you did not request this verification code, please ignore this email. No account will be created without this passcode.
-              </p>
-            </div>
+        const greetingName = displayName && typeof displayName === 'string' && displayName.trim() 
+          ? displayName.trim() 
+          : "Valued Member";
 
-            <div style="text-align: center; margin-top: 24px; font-size: 11px; color: #a8a29e;">
-              © ${new Date().getFullYear()} Morex Holdings Ltd. All rights reserved. Automated security notification.
-            </div>
-          </div>
-        `;
+        const textContent = buildOtpEmailPlainText(otpCode, greetingName, cleanEmail);
+        const htmlContent = buildOtpEmailHtml(otpCode, greetingName, cleanEmail);
 
         try {
           await transporter.sendMail({
-            from: fromAddress,
+            from: {
+              name: fromDisplayName,
+              address: fromAddress,
+            },
             to: cleanEmail,
-            subject: `${otpCode} is your Morex Holdings verification code`,
-            text: `Your Morex Holdings verification code is ${otpCode}. Valid for 10 minutes.`,
-            html: htmlTemplate,
+            replyTo: replyToAddress,
+            subject: `Your Morex verification code: ${otpCode}`,
+            text: textContent,
+            html: htmlContent,
+            headers: {
+              'Message-ID': messageId,
+              'Date': new Date().toUTCString(),
+              'Auto-Submitted': 'auto-generated',
+              'X-Auto-Response-Suppress': 'All',
+              'X-Priority': '3',
+              'X-Mailer': 'Morex Security Mailer',
+              'X-Entity-Ref-ID': `morex-otp-${cleanEmail}-${Date.now()}`,
+              'Feedback-ID': `otp:verification:morex`,
+            },
           });
 
           return res.json({

@@ -975,6 +975,15 @@ export default function AuthPage({ onSuccess, path, navigate }: AuthPageProps) {
                         Back to Registration Details
                       </button>
                     </div>
+
+                    {/* Delivery & Spam tip banner */}
+                    <div className="bg-amber-50/70 border border-amber-200/60 rounded-xl p-3 text-left flex items-start gap-2.5">
+                      <Mail className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                      <div className="text-[11px] text-zinc-600 leading-relaxed">
+                        <span className="font-semibold text-zinc-800 block">Can't locate the email in your inbox?</span>
+                        Check your <strong>Spam / Junk</strong> or <strong>Promotions</strong> folder. Mark it as <strong>&quot;Not Spam&quot;</strong> or move to Inbox to ensure uninterrupted delivery of future account security alerts.
+                      </div>
+                    </div>
                   </form>
                 </div>
               ) : (
