@@ -87,9 +87,14 @@ export const UpgradeRolloverModal: React.FC<UpgradeRolloverModalProps> = ({
   };
 
   // Other eligible target leads (excluding the old contract's expert)
-  const otherLeads = availableLeads.filter(
-    l => l.id !== oldContract.leadId && l.name !== oldContract.leadName
-  );
+  const otherLeads = availableLeads
+    .filter(l => l.id !== oldContract.leadId && l.name !== oldContract.leadName)
+    .sort((a, b) => {
+      const capA = Number(a.minCapital ?? 50);
+      const capB = Number(b.minCapital ?? 50);
+      if (capA !== capB) return capA - capB;
+      return Number(a.dayProfitRate ?? 0) - Number(b.dayProfitRate ?? 0);
+    });
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">

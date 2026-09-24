@@ -4,9 +4,9 @@ import { sendPasswordResetEmail } from 'firebase/auth';
 import { useToast } from '../context/ToastContext';
 import { 
   collection, doc, getDocs, updateDoc, deleteDoc, runTransaction, 
-  setDoc, query, orderBy, serverTimestamp, writeBatch, getDoc 
+  setDoc, query, orderBy, serverTimestamp, writeBatch, getDoc, Timestamp, addDoc 
 } from 'firebase/firestore';
-import { UserAccount, Transaction, CryptoNetwork, P2PMerchant, CryptoPrice, ArbitrageConfig, BotTemplate, DepositBonusTier, ReferralDepositConfig, CopyTraderLead, PromoCode, PromoCodeRewardType, InAppAd, WithdrawalConfig } from '../types';
+import { UserAccount, Transaction, TransactionStatus, TransactionType, CryptoNetwork, P2PMerchant, CryptoPrice, ArbitrageConfig, BotTemplate, DepositBonusTier, ReferralDepositConfig, CopyTraderLead, PromoCode, PromoCodeRewardType, InAppAd, WithdrawalConfig } from '../types';
 import { DEFAULT_COPY_LEADS, getLeadDailyProfitRange } from '../data/copyTraders';
 import { DEFAULT_IN_APP_ADS } from '../data/defaultAds';
 import { DEFAULT_NETWORKS } from '../seedData';
@@ -17,7 +17,7 @@ import { AdminAdsManager } from './AdminAdsManager';
 import { 
   Users, CheckCircle2, XCircle, Settings, ShieldAlert, Key, 
   Trash2, ToggleLeft, ToggleRight, Loader, ZoomIn, Plus, Edit, Check, Eye, Star, Mail, RefreshCw, X, FileText, Coins, TrendingUp, Bot, Cpu, Smartphone, Phone, Sparkles, ChevronDown, ChevronUp,
-  Search, Award, Flame, UserCheck, Tag, Gift, Copy, Megaphone, Percent, ArrowDownToLine
+  Search, Award, Flame, UserCheck, Tag, Gift, Copy, Megaphone, Percent, ArrowDownToLine, Calendar, DollarSign, Save
 } from 'lucide-react';
 
 const STATIC_CRYPTO: Record<string, { name: string; price: number }> = {
@@ -227,6 +227,26 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
   const [selectedEvidence, setSelectedEvidence] = useState<string | null>(null);
   const [selectedUserHistory, setSelectedUserHistory] = useState<UserAccount | null>(null);
   const [selectedUserTxs, setSelectedUserTxs] = useState<Transaction[]>([]);
+  const [userTxSearch, setUserTxSearch] = useState('');
+
+  // Transaction Editing State
+  const [editingTx, setEditingTx] = useState<Transaction | null>(null);
+  const [txEditForm, setTxEditForm] = useState({
+    amount: '',
+    localAmount: '',
+    status: 'APPROVED' as TransactionStatus,
+    type: 'deposit_crypto' as TransactionType,
+    coinSymbol: 'USDT',
+    coinAmount: '',
+    network: '',
+    address: '',
+    merchantName: '',
+    paymentMessage: '',
+    evidence: '',
+    dateString: '',
+    adjustBalance: false,
+  });
+  const [savingTxEdit, setSavingTxEdit] = useState(false);
 
   // Form States for CRUD Crypto Coins & Networks
   const [editingCoin, setEditingCoin] = useState<CryptoNetwork | null>(null);
@@ -301,12 +321,19 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
           ...data
         } as Transaction;
       });
-      // Sort transactions descending by date
-      tList.sort((a, b) => {
-        const tA = a.createdAt?.seconds || 0;
-        const tB = b.createdAt?.seconds || 0;
-        return tB - tA;
-      });
+      // Sort transactions descending by date (latest first)
+      const getTxTime = (t: any): number => {
+        if (!t) return 0;
+        if (t.seconds) return t.seconds * 1000;
+        if (typeof t.toDate === 'function') return t.toDate().getTime();
+        if (t instanceof Date) return t.getTime();
+        if (typeof t === 'string' || typeof t === 'number') {
+          const parsed = new Date(t).getTime();
+          return isNaN(parsed) ? 0 : parsed;
+        }
+        return 0;
+      };
+      tList.sort((a, b) => getTxTime(b.createdAt) - getTxTime(a.createdAt));
       setTxList(tList);
 
       // Fetch Crypto Networks
@@ -571,6 +598,12 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
         }
         leads = [...DEFAULT_COPY_LEADS];
       }
+      leads.sort((a, b) => {
+        const capA = Number(a.minCapital ?? 50);
+        const capB = Number(b.minCapital ?? 50);
+        if (capA !== capB) return capA - capB;
+        return Number(a.dayProfitRate ?? 0) - Number(b.dayProfitRate ?? 0);
+      });
       setCopyLeadsList(leads);
 
       // Fetch Promo Codes
@@ -780,9 +813,22 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
   };
 
   const handleOpenUserHistory = (u: UserAccount) => {
-    const userTxs = txList.filter(t => t.userId === u.uid);
+    const userTxs = txList.filter(t => t.userId === u.uid || (u.email && t.userEmail?.toLowerCase() === u.email.toLowerCase()));
+    const getTxTime = (t: any): number => {
+      if (!t) return 0;
+      if (t.seconds) return t.seconds * 1000;
+      if (typeof t.toDate === 'function') return t.toDate().getTime();
+      if (t instanceof Date) return t.getTime();
+      if (typeof t === 'string' || typeof t === 'number') {
+        const parsed = new Date(t).getTime();
+        return isNaN(parsed) ? 0 : parsed;
+      }
+      return 0;
+    };
+    userTxs.sort((a, b) => getTxTime(b.createdAt) - getTxTime(a.createdAt));
     setSelectedUserHistory(u);
     setSelectedUserTxs(userTxs);
+    setUserTxSearch('');
   };
 
   const handleDeleteAllTransactions = (uid: string, email: string) => {
@@ -1430,6 +1476,9 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
             await deleteDoc(doc(db, 'transactions', txId));
             showFeedback('success', 'Transaction record deleted permanently.');
           }
+          setSelectedUserTxs(prev => prev.filter(t => t.id !== txId));
+          setTxList(prev => prev.filter(t => t.id !== txId));
+          setEditingTx(prev => prev && prev.id === txId ? null : prev);
           await loadAllData(true);
         } catch (err: any) {
           console.error(err);
@@ -1439,6 +1488,218 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
         }
       }
     });
+  };
+
+  const handleOpenEditTransaction = (tx: Transaction) => {
+    setEditingTx(tx);
+    let dtStr = '';
+    if (tx.createdAt) {
+      try {
+        const d = typeof tx.createdAt?.toDate === 'function' 
+          ? tx.createdAt.toDate() 
+          : (tx.createdAt instanceof Date ? tx.createdAt : new Date(tx.createdAt));
+        if (!isNaN(d.getTime())) {
+          const pad = (n: number) => n.toString().padStart(2, '0');
+          dtStr = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+        }
+      } catch (e) {
+        dtStr = '';
+      }
+    }
+    setTxEditForm({
+      amount: tx.amount !== undefined && tx.amount !== null ? String(tx.amount) : '0',
+      localAmount: tx.localAmount !== undefined && tx.localAmount !== null ? String(tx.localAmount) : '',
+      status: tx.status || 'APPROVED',
+      type: tx.type || 'deposit_crypto',
+      coinSymbol: tx.coinSymbol || 'USDT',
+      coinAmount: tx.coinAmount !== undefined && tx.coinAmount !== null ? String(tx.coinAmount) : '',
+      network: tx.network || '',
+      address: tx.address || '',
+      merchantName: tx.merchantName || '',
+      paymentMessage: tx.paymentMessage || '',
+      evidence: tx.evidence || '',
+      dateString: dtStr,
+      adjustBalance: false,
+    });
+  };
+
+  const handleOpenCreateTransaction = (targetUser: UserAccount) => {
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    const now = new Date();
+    const dtStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+
+    const newTxTemplate: Transaction = {
+      id: 'NEW',
+      userId: targetUser.uid,
+      userEmail: targetUser.email,
+      type: 'deposit_crypto',
+      amount: 10,
+      status: 'APPROVED',
+      createdAt: now,
+      network: 'USDT (TRC20)',
+      address: '',
+      paymentMessage: 'Manual adjustment by Admin',
+    };
+    setEditingTx(newTxTemplate);
+    setTxEditForm({
+      amount: '10',
+      localAmount: '',
+      status: 'APPROVED',
+      type: 'deposit_crypto',
+      coinSymbol: 'USDT',
+      coinAmount: '',
+      network: 'USDT (TRC20)',
+      address: '',
+      merchantName: '',
+      paymentMessage: 'Manual adjustment by Admin',
+      evidence: '',
+      dateString: dtStr,
+      adjustBalance: true,
+    });
+  };
+
+  const handleSaveTransactionEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingTx) return;
+
+    const parsedAmount = parseFloat(txEditForm.amount);
+    if (isNaN(parsedAmount) || parsedAmount < 0) {
+      showFeedback('error', 'Please enter a valid, non-negative dollar amount.');
+      return;
+    }
+
+    setSavingTxEdit(true);
+    try {
+      const isNew = editingTx.id === 'NEW';
+      
+      const payload: any = {
+        userId: editingTx.userId,
+        userEmail: editingTx.userEmail,
+        amount: parsedAmount,
+        status: txEditForm.status,
+        type: txEditForm.type,
+        network: txEditForm.network.trim(),
+        address: txEditForm.address.trim(),
+        merchantName: txEditForm.merchantName.trim(),
+        paymentMessage: txEditForm.paymentMessage.trim(),
+      };
+
+      if (txEditForm.localAmount.trim()) {
+        const parsedLocal = parseFloat(txEditForm.localAmount);
+        if (!isNaN(parsedLocal)) payload.localAmount = parsedLocal;
+      } else {
+        payload.localAmount = null;
+      }
+
+      if (txEditForm.coinSymbol.trim()) {
+        payload.coinSymbol = txEditForm.coinSymbol.trim().toUpperCase();
+      }
+
+      if (txEditForm.coinAmount.trim()) {
+        const parsedCoin = parseFloat(txEditForm.coinAmount);
+        if (!isNaN(parsedCoin)) payload.coinAmount = parsedCoin;
+      } else {
+        payload.coinAmount = null;
+      }
+
+      if (txEditForm.evidence.trim()) {
+        payload.evidence = txEditForm.evidence.trim();
+      }
+
+      if (txEditForm.dateString) {
+        const parsedDate = new Date(txEditForm.dateString);
+        if (!isNaN(parsedDate.getTime())) {
+          payload.createdAt = Timestamp.fromDate(parsedDate);
+        } else {
+          payload.createdAt = isNew ? serverTimestamp() : editingTx.createdAt;
+        }
+      } else {
+        payload.createdAt = isNew ? serverTimestamp() : editingTx.createdAt;
+      }
+
+      // Handle balance adjustment if requested
+      if (txEditForm.adjustBalance && editingTx.userId) {
+        const userRef = doc(db, 'users', editingTx.userId);
+        const userSnap = await getDoc(userRef);
+        if (userSnap.exists()) {
+          const userData = userSnap.data();
+          const currentBal = typeof userData.balance === 'number' ? userData.balance : 0;
+          const currentUsdt = typeof userData.usdtBalance === 'number' ? userData.usdtBalance : 0;
+
+          const isNowApproved = txEditForm.status === 'APPROVED';
+          const isDepositOrCredit = 
+            payload.type.includes('deposit') || 
+            payload.type.includes('bonus') || 
+            payload.type.includes('reward') || 
+            payload.type.includes('commission') ||
+            payload.type === 'internal_receive' ||
+            payload.type === 'investment_earning';
+
+          let balanceDelta = 0;
+
+          if (isNew) {
+            if (isNowApproved) {
+              balanceDelta = isDepositOrCredit ? parsedAmount : -parsedAmount;
+            }
+          } else {
+            const wasApproved = editingTx.status === 'APPROVED';
+            const prevAmount = typeof editingTx.amount === 'number' ? editingTx.amount : 0;
+
+            if (isDepositOrCredit) {
+              const oldCredit = wasApproved ? prevAmount : 0;
+              const newCredit = isNowApproved ? parsedAmount : 0;
+              balanceDelta = newCredit - oldCredit;
+            } else if (payload.type.includes('withdraw') || payload.type === 'internal_send') {
+              const oldDebit = wasApproved ? prevAmount : 0;
+              const newDebit = isNowApproved ? parsedAmount : 0;
+              balanceDelta = -(newDebit - oldDebit);
+            }
+          }
+
+          if (balanceDelta !== 0) {
+            const updatedBal = parseFloat(Math.max(0, currentBal + balanceDelta).toFixed(2));
+            const updatedUsdt = parseFloat(Math.max(0, currentUsdt + balanceDelta).toFixed(2));
+            await updateDoc(userRef, {
+              balance: updatedBal,
+              usdtBalance: updatedUsdt,
+            });
+          }
+        }
+      }
+
+      let finalId = editingTx.id;
+      if (isNew) {
+        const newDocRef = await addDoc(collection(db, 'transactions'), payload);
+        finalId = newDocRef.id;
+        showFeedback('success', `New transaction recorded for ${editingTx.userEmail}.`);
+      } else {
+        const txRef = doc(db, 'transactions', editingTx.id);
+        await updateDoc(txRef, payload);
+        showFeedback('success', `Transaction details updated successfully.`);
+      }
+
+      const savedTx: Transaction = {
+        ...editingTx,
+        ...payload,
+        id: finalId,
+      };
+
+      if (isNew) {
+        setTxList(prev => [savedTx, ...prev]);
+        setSelectedUserTxs(prev => [savedTx, ...prev]);
+      } else {
+        setTxList(prev => prev.map(t => t.id === finalId ? savedTx : t));
+        setSelectedUserTxs(prev => prev.map(t => t.id === finalId ? savedTx : t));
+      }
+
+      setEditingTx(null);
+      await loadAllData(true);
+    } catch (err: any) {
+      console.error('Error saving transaction:', err);
+      showFeedback('error', 'Failed to save transaction: ' + (err.message || 'Unknown error'));
+    } finally {
+      setSavingTxEdit(false);
+    }
   };
 
   // 4. Crypto Stablecoins CRUD Management
@@ -2888,6 +3149,14 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                         {/* Confirmation and Action Block */}
                         <div className="flex justify-end gap-2 pt-2">
                           <button
+                            id={`edit-crypto-deposit-btn-${tx.id}`}
+                            onClick={() => handleOpenEditTransaction(tx)}
+                            className="px-3.5 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-xl text-xs font-bold transition-all border border-zinc-700 flex items-center gap-1 cursor-pointer"
+                          >
+                            <Edit size={12} />
+                            <span>EDIT</span>
+                          </button>
+                          <button
                             id={`decline-crypto-deposit-btn-${tx.id}`}
                             onClick={() => handleDeclineDeposit(tx)}
                             disabled={actioning === tx.id}
@@ -2963,6 +3232,14 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                         )}
 
                         <div className="flex justify-end gap-2 pt-2">
+                          <button
+                            id={`edit-p2p-deposit-btn-${tx.id}`}
+                            onClick={() => handleOpenEditTransaction(tx)}
+                            className="px-3.5 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-xl text-xs font-bold transition-all border border-zinc-700 flex items-center gap-1 cursor-pointer"
+                          >
+                            <Edit size={12} />
+                            <span>EDIT</span>
+                          </button>
                           <button
                             id={`decline-p2p-deposit-btn-${tx.id}`}
                             onClick={() => handleDeclineDeposit(tx)}
@@ -3040,13 +3317,24 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                             </span>
                           </td>
                           <td className="p-3 text-right">
-                            <button
-                              id={`delete-history-tx-${h.id}`}
-                              onClick={() => handleDeleteTransaction(h.id)}
-                              className="text-red-400 hover:text-red-300"
-                            >
-                              <Trash2 size={13} />
-                            </button>
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                id={`edit-history-tx-${h.id}`}
+                                onClick={() => handleOpenEditTransaction(h)}
+                                className="text-zinc-400 hover:text-amber-400 p-1 cursor-pointer transition-colors"
+                                title="Edit transaction details"
+                              >
+                                <Edit size={13} />
+                              </button>
+                              <button
+                                id={`delete-history-tx-${h.id}`}
+                                onClick={() => handleDeleteTransaction(h.id)}
+                                className="text-red-400 hover:text-red-300 p-1 cursor-pointer transition-colors"
+                                title="Delete transaction"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -3176,8 +3464,16 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                         )}
                       </div>
 
-                      {/* Administrative Options: REJECT, DELETE, APPROVE */}
+                      {/* Administrative Options: EDIT, REJECT, DELETE, APPROVE */}
                       <div className="flex justify-end gap-2 pt-2">
+                        <button
+                          id={`edit-withdrawal-btn-${tx.id}`}
+                          onClick={() => handleOpenEditTransaction(tx)}
+                          className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 rounded-xl text-xs font-bold transition-all flex items-center gap-1 cursor-pointer"
+                        >
+                          <Edit size={12} />
+                          <span>EDIT</span>
+                        </button>
                         <button
                           id={`reject-withdrawal-btn-${tx.id}`}
                           onClick={() => handleRejectWithdrawal(tx)}
@@ -3696,7 +3992,12 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {copyLeadsList.map((lead) => (
+                  {[...copyLeadsList].sort((a, b) => {
+                    const capA = Number(a.minCapital ?? 50);
+                    const capB = Number(b.minCapital ?? 50);
+                    if (capA !== capB) return capA - capB;
+                    return Number(a.dayProfitRate ?? 0) - Number(b.dayProfitRate ?? 0);
+                  }).map((lead) => (
                     <div key={lead.id} className="bg-zinc-950 border border-zinc-800/80 rounded-2xl p-4 flex flex-col justify-between space-y-3 relative overflow-hidden">
                       <div className="flex items-start gap-3">
                         <ExpertAvatar 
@@ -5238,66 +5539,144 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
             </div>
 
             {/* Transaction Audit Records List */}
-            <div className="max-h-[40vh] overflow-y-auto space-y-2 pr-1">
-              <div className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider mb-1">Recent Transactions History</div>
-              {selectedUserTxs.length === 0 ? (
-                <div className="text-center py-6 bg-zinc-950/50 rounded-xl border border-zinc-900">
-                  <p className="text-xs text-zinc-500">No transaction records found for this account.</p>
+            <div className="space-y-2">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">
+                    Transactions History ({selectedUserTxs.length})
+                  </span>
+                  <span className="text-[9px] text-zinc-500 font-mono hidden sm:inline">Latest first</span>
                 </div>
-              ) : (
-                selectedUserTxs.map(t => (
-                  <div key={t.id} className="p-3 bg-zinc-950 border border-zinc-900 rounded-xl text-xs flex flex-col sm:flex-row justify-between sm:items-center gap-3">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-zinc-300">
-                          {t.type === 'voucher_reward' && 'Voucher Reward'}
-                          {t.type === 'welcome_bonus' && 'Welcome Bonus'}
-                          {t.type === 'first_deposit_commission' && 'Referral Commission'}
-                          {t.type === 'referral_reward' && 'Referral Reward'}
-                          {t.type === 'deposit_crypto' && 'Crypto Deposit'}
-                          {t.type === 'deposit_p2p' && 'P2P Deposit'}
-                          {t.type === 'withdraw_crypto' && 'Crypto Withdraw'}
-                          {t.type === 'withdraw_p2p' && 'P2P Sell'}
-                          {t.type === 'buy_crypto' && 'Buy Crypto'}
-                          {t.type === 'sell_crypto' && 'Sell Crypto'}
-                          {t.type === 'swap_crypto' && 'Swap/Convert'}
-                          {t.type === 'internal_send' && 'Internal Send'}
-                          {t.type === 'internal_receive' && 'Internal Receive'}
-                          {t.type === 'copy_trade_payout' && 'Copy Trade Payout'}
-                          {t.type === 'copy_trade_upgrade' && 'Expert Upgrade'}
-                          {t.type === 'trade_balance_transfer_in' && 'Trade Transfer In'}
-                          {t.type === 'trade_balance_transfer_out' && 'Trade Transfer Out'}
-                          {t.type === 'invested' && 'Trade Signal'}
-                          {t.type === 'investment_earning' && 'Signal Earning'}
-                        </span>
-                        <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase ${
-                          t.status === 'APPROVED' ? 'bg-emerald-500/10 text-emerald-400' :
-                          t.status === 'PENDING APPROVAL' ? 'bg-amber-500/10 text-amber-400 animate-pulse' : 'bg-red-500/10 text-red-400'
-                        }`}>
-                          {t.status}
-                        </span>
-                      </div>
-                      <div className="text-[10px] text-zinc-500 font-mono">
-                        <span>ID: {t.id} | Date: {formatDate(t.createdAt)}</span>
-                        {t.network && <span className="block text-[9px] text-zinc-400">Network: {t.network} | Address: {t.address}</span>}
-                        {t.merchantName && (
-                          <span className="block text-[9px] text-zinc-400">
-                            {t.type === 'deposit_p2p' || t.type === 'withdraw_p2p' ? 'Merchant: ' : 'Asset: '}
-                            {t.merchantName} {t.localAmount && `(${t.localAmount.toLocaleString()} Shs)`}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <span className="text-sm font-black font-mono text-emerald-400">
-                        {t.coinAmount && t.coinSymbol && t.coinSymbol.toUpperCase() !== 'USDT'
-                          ? `${t.coinAmount} ${t.coinSymbol}`
-                          : `$${t.amount?.toFixed(2)}`}
-                      </span>
-                    </div>
+                <div className="flex items-center gap-2">
+                  <div className="relative">
+                    <Search size={11} className="absolute left-2.5 top-2 text-zinc-500" />
+                    <input
+                      id="search-user-txs-input"
+                      type="text"
+                      placeholder="Filter transactions..."
+                      value={userTxSearch}
+                      onChange={(e) => setUserTxSearch(e.target.value)}
+                      className="bg-zinc-950 border border-zinc-800 rounded-lg pl-7 pr-2 py-1 text-[11px] text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-amber-500 w-36 sm:w-44"
+                    />
                   </div>
-                ))
-              )}
+                  <button
+                    id="add-tx-to-user-btn"
+                    type="button"
+                    onClick={() => handleOpenCreateTransaction(selectedUserHistory)}
+                    className="px-2.5 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer shrink-0"
+                  >
+                    <Plus size={12} />
+                    <span>Record Tx</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="max-h-[42vh] overflow-y-auto space-y-2 pr-1">
+                {(() => {
+                  const filteredTxs = selectedUserTxs.filter(t => {
+                    if (!userTxSearch.trim()) return true;
+                    const q = userTxSearch.toLowerCase();
+                    return (
+                      t.id.toLowerCase().includes(q) ||
+                      t.type.toLowerCase().includes(q) ||
+                      (t.status && t.status.toLowerCase().includes(q)) ||
+                      (t.network && t.network.toLowerCase().includes(q)) ||
+                      (t.address && t.address.toLowerCase().includes(q)) ||
+                      (t.merchantName && t.merchantName.toLowerCase().includes(q)) ||
+                      (t.paymentMessage && t.paymentMessage.toLowerCase().includes(q)) ||
+                      (t.coinSymbol && t.coinSymbol.toLowerCase().includes(q)) ||
+                      String(t.amount).includes(q)
+                    );
+                  });
+
+                  if (filteredTxs.length === 0) {
+                    return (
+                      <div className="text-center py-6 bg-zinc-950/50 rounded-xl border border-zinc-900">
+                        <p className="text-xs text-zinc-500">
+                          {userTxSearch.trim() ? 'No matching transactions found.' : 'No transaction records found for this account.'}
+                        </p>
+                      </div>
+                    );
+                  }
+
+                  return filteredTxs.map(t => (
+                    <div key={t.id} className="p-3 bg-zinc-950 border border-zinc-900 hover:border-zinc-800 rounded-xl text-xs flex flex-col sm:flex-row justify-between sm:items-center gap-3 transition-colors">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-zinc-300">
+                            {t.type === 'voucher_reward' && 'Voucher Reward'}
+                            {t.type === 'welcome_bonus' && 'Welcome Bonus'}
+                            {t.type === 'first_deposit_commission' && 'Referral Commission'}
+                            {t.type === 'referral_reward' && 'Referral Reward'}
+                            {t.type === 'deposit_crypto' && 'Crypto Deposit'}
+                            {t.type === 'deposit_p2p' && 'P2P Deposit'}
+                            {t.type === 'withdraw_crypto' && 'Crypto Withdraw'}
+                            {t.type === 'withdraw_p2p' && 'P2P Sell'}
+                            {t.type === 'buy_crypto' && 'Buy Crypto'}
+                            {t.type === 'sell_crypto' && 'Sell Crypto'}
+                            {t.type === 'swap_crypto' && 'Swap/Convert'}
+                            {t.type === 'internal_send' && 'Internal Send'}
+                            {t.type === 'internal_receive' && 'Internal Receive'}
+                            {t.type === 'copy_trade_payout' && 'Copy Trade Payout'}
+                            {t.type === 'copy_trade_upgrade' && 'Expert Upgrade'}
+                            {t.type === 'trade_balance_transfer_in' && 'Trade Transfer In'}
+                            {t.type === 'trade_balance_transfer_out' && 'Trade Transfer Out'}
+                            {t.type === 'invested' && 'Trade Signal'}
+                            {t.type === 'investment_earning' && 'Signal Earning'}
+                          </span>
+                          <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase ${
+                            t.status === 'APPROVED' ? 'bg-emerald-500/10 text-emerald-400' :
+                            t.status === 'PENDING APPROVAL' ? 'bg-amber-500/10 text-amber-400 animate-pulse' : 'bg-red-500/10 text-red-400'
+                          }`}>
+                            {t.status}
+                          </span>
+                        </div>
+                        <div className="text-[10px] text-zinc-500 font-mono">
+                          <span>ID: {t.id} | Date: {formatDate(t.createdAt)}</span>
+                          {t.network && <span className="block text-[9px] text-zinc-400">Network: {t.network} | Address: {t.address}</span>}
+                          {t.merchantName && (
+                            <span className="block text-[9px] text-zinc-400">
+                              {t.type === 'deposit_p2p' || t.type === 'withdraw_p2p' ? 'Merchant: ' : 'Asset: '}
+                              {t.merchantName} {t.localAmount && `(${t.localAmount.toLocaleString()} Shs)`}
+                            </span>
+                          )}
+                          {t.paymentMessage && (
+                            <span className="block text-[9px] text-zinc-400 italic truncate max-w-sm">Note: {t.paymentMessage}</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center sm:flex-col sm:items-end justify-between gap-2 shrink-0">
+                        <span className="text-sm font-black font-mono text-emerald-400">
+                          {t.coinAmount && t.coinSymbol && t.coinSymbol.toUpperCase() !== 'USDT'
+                            ? `${t.coinAmount} ${t.coinSymbol}`
+                            : `$${t.amount?.toFixed(2)}`}
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            id={`edit-user-tx-btn-${t.id}`}
+                            type="button"
+                            onClick={() => handleOpenEditTransaction(t)}
+                            className="px-2 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer"
+                            title="Edit transaction details"
+                          >
+                            <Edit size={11} />
+                            <span>Edit</span>
+                          </button>
+                          <button
+                            id={`delete-user-tx-btn-${t.id}`}
+                            type="button"
+                            onClick={() => handleDeleteTransaction(t)}
+                            className="p-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg text-[10px] font-bold flex items-center transition-all cursor-pointer"
+                            title="Delete transaction"
+                          >
+                            <Trash2 size={11} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ));
+                })()}
+              </div>
             </div>
             
             {/* Quick Wipe Management Controls */}
@@ -6070,6 +6449,255 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                 >
                   {isSavingPromoCode ? <Loader size={12} className="animate-spin" /> : <Check size={14} />}
                   <span>{editingPromoCode ? 'Save Changes' : 'Create Voucher Code'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit / Create Transaction Modal */}
+      {editingTx && (
+        <div 
+          id="edit-transaction-modal-overlay" 
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm animate-fade-in"
+        >
+          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl max-w-xl w-full p-6 space-y-4 relative shadow-2xl max-h-[90vh] overflow-y-auto">
+            <button
+              id="close-edit-tx-modal-btn"
+              type="button"
+              onClick={() => setEditingTx(null)}
+              className="absolute top-4 right-4 p-1.5 text-zinc-400 hover:text-white rounded-full hover:bg-zinc-800 transition-colors cursor-pointer"
+            >
+              <X size={18} />
+            </button>
+
+            <div className="flex items-center gap-2.5 border-b border-zinc-800 pb-3">
+              <div className="p-2 bg-amber-500/10 text-amber-400 rounded-xl">
+                <Edit size={18} />
+              </div>
+              <div>
+                <h3 className="text-sm font-black text-zinc-100 uppercase tracking-wider">
+                  {editingTx.isNew ? 'Record New Transaction' : 'Edit Transaction Details'}
+                </h3>
+                <p className="text-[10px] text-zinc-400 font-mono">
+                  {editingTx.isNew ? `Account: ${txEditForm.userEmail || txEditForm.userId}` : `Tx ID: ${editingTx.tx?.id || 'N/A'}`}
+                </p>
+              </div>
+            </div>
+
+            <form onSubmit={handleSaveTransactionEdit} className="space-y-4">
+              {/* User Account Info */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">User ID *</label>
+                  <input
+                    type="text"
+                    required
+                    value={txEditForm.userId}
+                    onChange={(e) => setTxEditForm({ ...txEditForm, userId: e.target.value })}
+                    placeholder="User UID"
+                    className="w-full p-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-zinc-200 font-mono focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">User Email</label>
+                  <input
+                    type="email"
+                    value={txEditForm.userEmail}
+                    onChange={(e) => setTxEditForm({ ...txEditForm, userEmail: e.target.value })}
+                    placeholder="user@example.com"
+                    className="w-full p-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-zinc-200 font-mono focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+              </div>
+
+              {/* Type and Status */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Transaction Type *</label>
+                  <select
+                    value={txEditForm.type}
+                    onChange={(e) => setTxEditForm({ ...txEditForm, type: e.target.value as TransactionType })}
+                    className="w-full p-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-zinc-200 focus:outline-none focus:border-amber-500"
+                  >
+                    <option value="deposit_crypto">Crypto Deposit</option>
+                    <option value="deposit_p2p">P2P Deposit</option>
+                    <option value="withdraw_crypto">Crypto Withdraw</option>
+                    <option value="withdraw_p2p">P2P Sell / Withdraw</option>
+                    <option value="buy_crypto">Buy Crypto</option>
+                    <option value="sell_crypto">Sell Crypto</option>
+                    <option value="swap_crypto">Swap / Convert</option>
+                    <option value="internal_send">Internal Send</option>
+                    <option value="internal_receive">Internal Receive</option>
+                    <option value="voucher_reward">Voucher Reward</option>
+                    <option value="welcome_bonus">Welcome Bonus</option>
+                    <option value="first_deposit_commission">Referral Commission</option>
+                    <option value="referral_reward">Referral Reward</option>
+                    <option value="trade_balance_transfer_in">Trade Transfer In</option>
+                    <option value="trade_balance_transfer_out">Trade Transfer Out</option>
+                    <option value="invested">Trade Signal (Invested)</option>
+                    <option value="investment_earning">Signal Earning</option>
+                    <option value="copy_trade_payout">Copy Trade Payout</option>
+                    <option value="copy_trade_upgrade">Expert Upgrade</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Status *</label>
+                  <select
+                    value={txEditForm.status}
+                    onChange={(e) => setTxEditForm({ ...txEditForm, status: e.target.value as TransactionStatus })}
+                    className="w-full p-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-xs font-bold focus:outline-none focus:border-amber-500 text-zinc-200"
+                  >
+                    <option value="APPROVED">APPROVED (Completed)</option>
+                    <option value="PENDING APPROVAL">PENDING APPROVAL</option>
+                    <option value="REJECTED">REJECTED (Declined)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Amount, Coin Amount, Coin Symbol */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Amount ($ USD) *</label>
+                  <input
+                    type="number"
+                    step="any"
+                    min="0"
+                    required
+                    value={txEditForm.amount}
+                    onChange={(e) => setTxEditForm({ ...txEditForm, amount: e.target.value })}
+                    placeholder="0.00"
+                    className="w-full p-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-emerald-400 font-mono font-bold focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Crypto Amount</label>
+                  <input
+                    type="number"
+                    step="any"
+                    min="0"
+                    value={txEditForm.coinAmount}
+                    onChange={(e) => setTxEditForm({ ...txEditForm, coinAmount: e.target.value })}
+                    placeholder="Optional (e.g. 0.05)"
+                    className="w-full p-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-zinc-200 font-mono focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Coin / Asset</label>
+                  <input
+                    type="text"
+                    value={txEditForm.coinSymbol}
+                    onChange={(e) => setTxEditForm({ ...txEditForm, coinSymbol: e.target.value.toUpperCase() })}
+                    placeholder="USDT, BTC, etc."
+                    className="w-full p-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-zinc-200 font-mono font-bold focus:outline-none focus:border-amber-500 uppercase"
+                  />
+                </div>
+              </div>
+
+              {/* Network, Address / Destination */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Network / Chain</label>
+                  <input
+                    type="text"
+                    value={txEditForm.network}
+                    onChange={(e) => setTxEditForm({ ...txEditForm, network: e.target.value })}
+                    placeholder="TRC20, ERC20, BEP20, etc."
+                    className="w-full p-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-zinc-200 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Address / Destination</label>
+                  <input
+                    type="text"
+                    value={txEditForm.address}
+                    onChange={(e) => setTxEditForm({ ...txEditForm, address: e.target.value })}
+                    placeholder="Wallet address or recipient"
+                    className="w-full p-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-zinc-200 font-mono focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+              </div>
+
+              {/* Merchant / Provider & Date */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Merchant / Asset Ref</label>
+                  <input
+                    type="text"
+                    value={txEditForm.merchantName}
+                    onChange={(e) => setTxEditForm({ ...txEditForm, merchantName: e.target.value })}
+                    placeholder="Agent/Merchant name or notes"
+                    className="w-full p-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-zinc-200 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Transaction Date & Time</label>
+                  <input
+                    type="datetime-local"
+                    value={txEditForm.date}
+                    onChange={(e) => setTxEditForm({ ...txEditForm, date: e.target.value })}
+                    className="w-full p-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-zinc-200 font-mono focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+              </div>
+
+              {/* Reference / Note / Memo */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Payment Note / SMS Reference</label>
+                <textarea
+                  rows={2}
+                  value={txEditForm.paymentMessage}
+                  onChange={(e) => setTxEditForm({ ...txEditForm, paymentMessage: e.target.value })}
+                  placeholder="Payment reference code, memo, or transaction details"
+                  className="w-full p-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-zinc-200 focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              {/* Adjust Balance Option */}
+              <div className="p-3 bg-zinc-950/70 border border-zinc-800/80 rounded-2xl flex items-center justify-between gap-3">
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-bold text-zinc-200">Adjust User Account Balance</span>
+                    <span className="px-1.5 py-0.25 rounded text-[9px] font-bold bg-amber-500/10 text-amber-400 uppercase">Optional</span>
+                  </div>
+                  <p className="text-[10px] text-zinc-500 leading-tight">
+                    Automatically credit/debit user's USDT & fiat wallet balances when saving this transaction.
+                  </p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                  <input
+                    type="checkbox"
+                    checked={txEditForm.adjustBalance}
+                    onChange={(e) => setTxEditForm({ ...txEditForm, adjustBalance: e.target.checked })}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-zinc-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
+                </label>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex justify-end gap-2.5 pt-3 border-t border-zinc-800">
+                <button
+                  type="button"
+                  onClick={() => setEditingTx(null)}
+                  className="px-4 py-2 bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 text-zinc-400 hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  id="save-tx-edit-submit-btn"
+                  type="submit"
+                  disabled={savingTxEdit}
+                  className="px-5 py-2 bg-amber-500 hover:bg-amber-400 text-zinc-950 rounded-xl text-xs font-black transition-all cursor-pointer shadow-md shadow-amber-500/10 flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  {savingTxEdit ? <Loader size={13} className="animate-spin" /> : <Check size={14} />}
+                  <span>{savingTxEdit ? 'Saving...' : editingTx.isNew ? 'Create Transaction' : 'Save Changes'}</span>
                 </button>
               </div>
             </form>

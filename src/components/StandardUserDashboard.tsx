@@ -1482,12 +1482,24 @@ export default function StandardUserDashboard({
       if (leads.length === 0) {
         leads = [...DEFAULT_COPY_LEADS];
       }
+      leads.sort((a, b) => {
+        const capA = Number(a.minCapital ?? 50);
+        const capB = Number(b.minCapital ?? 50);
+        if (capA !== capB) return capA - capB;
+        return Number(a.dayProfitRate ?? 0) - Number(b.dayProfitRate ?? 0);
+      });
       setCopyLeads(leads);
       preloadTraderImages(leads.map(l => l.photoUrl));
     }, (err) => {
       console.error("Error fetching copy trader leads:", err);
-      setCopyLeads([...DEFAULT_COPY_LEADS]);
-      preloadTraderImages(DEFAULT_COPY_LEADS.map(l => l.photoUrl));
+      const fallbackLeads = [...DEFAULT_COPY_LEADS].sort((a, b) => {
+        const capA = Number(a.minCapital ?? 50);
+        const capB = Number(b.minCapital ?? 50);
+        if (capA !== capB) return capA - capB;
+        return Number(a.dayProfitRate ?? 0) - Number(b.dayProfitRate ?? 0);
+      });
+      setCopyLeads(fallbackLeads);
+      preloadTraderImages(fallbackLeads.map(l => l.photoUrl));
     });
 
     // Real-time listener for User Copy Trades
@@ -6660,7 +6672,7 @@ export default function StandardUserDashboard({
 
               {/* Copy Trader Leads Section */}
               <div className="space-y-3">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2">
                   <div>
                     <h4 className={`text-xs font-black uppercase tracking-wider ${
                       isLightTheme ? 'text-zinc-900' : 'text-zinc-200'
@@ -6668,10 +6680,22 @@ export default function StandardUserDashboard({
                       Copy Trading Experts ({copyLeads.length})
                     </h4>
                   </div>
+                  <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-md ${
+                    isLightTheme 
+                      ? 'bg-amber-100 text-amber-900 border border-amber-200' 
+                      : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                  }`}>
+                    Sorted by Min Capital (Low to High)
+                  </span>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {copyLeads.map((lead) => {
+                  {[...copyLeads].sort((a, b) => {
+                    const capA = Number(a.minCapital ?? 50);
+                    const capB = Number(b.minCapital ?? 50);
+                    if (capA !== capB) return capA - capB;
+                    return Number(a.dayProfitRate ?? 0) - Number(b.dayProfitRate ?? 0);
+                  }).map((lead) => {
                     const activeContracts = getMergedActiveContracts(userCopyTrades);
                     const isAlreadyCopying = activeContracts.some(t => t.leadId === lead.id || (t.leadName && t.leadName.toLowerCase() === lead.name.toLowerCase()));
 
