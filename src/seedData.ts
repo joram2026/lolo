@@ -6,31 +6,21 @@ export const DEFAULT_NETWORKS: CryptoNetwork[] = [
   {
     id: 'usdt',
     tokenName: 'Tether (USDT)',
-    networks: ['TRC20', 'ERC20', 'BEP20'],
+    networks: ['ERC20', 'BEP20'],
     addresses: {
       'ERC20': '0x126f67836EEA5760D599b158faA3A4510755bafD',
       'BEP20': '0x126f67836EEA5760D599b158faA3A4510755bafD'
     },
     minWithdrawalUSD: 40
   },
-  {
-    id: 'usdc',
-    tokenName: 'USD Coin (USDC)',
-    networks: ['ERC20', 'SOLANA', 'TRC20'],
-    addresses: {
-      'ERC20': '0x95F7a1b8D14E5D466f2C09C726f19DE6D178e24C',
-      'SOLANA': 'EPjFW3dpCY3UF296M6ac3yvLCFM3TXrSM2tmc5M96fGP',
-      'TRC20': 'THP5Y2Z7vT3uQ9vM5Zg7bX99f36r3qJvU8'
-    },
-    minWithdrawalUSD: 10
-  },
+
   {
     id: 'btc',
     tokenName: 'Bitcoin (BTC)',
     networks: ['BTC', 'BEP20'],
     addresses: {
       'BTC': '1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa',
-      'BEP20': '0x71C7656EC7ab88b098defB751B7401B5f6d8976F'
+      'BEP20': '0x126f67836EEA5760D599b158faA3A4510755bafD'
     },
     minWithdrawalUSD: 20
   },
@@ -39,68 +29,12 @@ export const DEFAULT_NETWORKS: CryptoNetwork[] = [
     tokenName: 'Ethereum (ETH)',
     networks: ['ERC20', 'BEP20'],
     addresses: {
-      'ERC20': '0x71C7656EC7ab88b098defB751B7401B5f6d8976F',
-      'BEP20': '0x71C7656EC7ab88b098defB751B7401B5f6d8976F'
+      'ERC20': '0x126f67836EEA5760D599b158faA3A4510755bafD',
+      'BEP20': '0x126f67836EEA5760D599b158faA3A4510755bafD'
     },
     minWithdrawalUSD: 15
   },
-  {
-    id: 'xrp',
-    tokenName: 'XRP (XRP)',
-    networks: ['XRP'],
-    addresses: {
-      'XRP': 'rEb8TK3gBgWvdv8KAcrBgv1vt7gBpt7A8y'
-    },
-    minWithdrawalUSD: 10
-  },
-  {
-    id: 'wld',
-    tokenName: 'World Coin (WLD)',
-    networks: ['OPTIMISM', 'ERC20'],
-    addresses: {
-      'OPTIMISM': '0x71C7656EC7ab88b098defB751B7401B5f6d8976F',
-      'ERC20': '0x71C7656EC7ab88b098defB751B7401B5f6d8976F'
-    },
-    minWithdrawalUSD: 10
-  },
-  {
-    id: 'trx',
-    tokenName: 'Tron (TRX)',
-    networks: ['TRC20'],
-    addresses: {
-      'TRC20': 'TX8v9nJD7uErsFm2kU9vMQ7vGzB7bY93f4'
-    },
-    minWithdrawalUSD: 10
-  },
-  {
-    id: 'doge',
-    tokenName: 'DOGE Coin (DOGE)',
-    networks: ['DOGE'],
-    addresses: {
-      'DOGE': 'DJpx5LhE4W8pksYV1QW9vQYy4W8pksYV1Q'
-    },
-    minWithdrawalUSD: 10
-  },
-  {
-    id: 'sol',
-    tokenName: 'Solana (SOL)',
-    networks: ['SOLANA', 'BEP20'],
-    addresses: {
-      'SOLANA': 'EPjFW3dpCY3UF296M6ac3yvLCFM3TXrSM2tmc5M96fGP',
-      'BEP20': '0x71C7656EC7ab88b098defB751B7401B5f6d8976F'
-    },
-    minWithdrawalUSD: 10
-  },
-  {
-    id: 'bnb',
-    tokenName: 'Binance Coin (BNB)',
-    networks: ['BEP20', 'BSC'],
-    addresses: {
-      'BEP20': '0x71C7656EC7ab88b098defB751B7401B5f6d8976F',
-      'BSC': '0x71C7656EC7ab88b098defB751B7401B5f6d8976F'
-    },
-    minWithdrawalUSD: 10
-  }
+
 ];
 
 export const DEFAULT_MERCHANTS: P2PMerchant[] = [
