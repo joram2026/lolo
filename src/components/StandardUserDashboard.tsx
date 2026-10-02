@@ -11,7 +11,7 @@ import NewsCarousel from './NewsCarousel';
 import ActivityLog from './ActivityLog';
 import { 
   TrendingUp, TrendingDown, ArrowUpRight, ArrowDownLeft, Search, 
-  User, LogOut, ArrowRightLeft, ShieldCheck, Activity, Wallet, 
+  User, LogOut, ArrowRightLeft, ShieldCheck, ShieldAlert, Activity, Wallet, 
   HelpCircle, RefreshCw, Coins, ArrowRight, MessageSquare, AlertCircle,
   History, ArrowLeft, X, ChevronDown, ChevronRight, Check, Lock, Unlock, Eye, EyeOff, Sparkles, BookOpen, Zap, Send,
   Cpu, Play, Pause, Bot, Crown, Gift, ListFilter, CheckCircle, CheckCircle2, Users, Globe, Clock, Headphones, Share2,
@@ -2117,6 +2117,10 @@ export default function StandardUserDashboard({
 
   // Copy Trade Handlers
   const handleOpenCopyModal = (lead: CopyTraderLead) => {
+    if (profile && profile.tradeEnabled === false) {
+      toast.error('Trading is currently paused for your account by the administrator. Please contact support.', 'Trading Paused');
+      return;
+    }
     setActiveTab('earn');
     setSelectedLeadForCopy(lead);
 
@@ -2149,6 +2153,11 @@ export default function StandardUserDashboard({
 
   const handleExecuteCopyTrade = async () => {
     if (!selectedLeadForCopy) return;
+
+    if (profile && profile.tradeEnabled === false) {
+      toast.error('Trading is currently paused for your account by the administrator. Please contact support.', 'Trading Paused');
+      return;
+    }
 
     // 1. Time & Signal Window Check
     const activeSignal = getActiveSignalForLead(selectedLeadForCopy);
@@ -2425,6 +2434,11 @@ export default function StandardUserDashboard({
       return;
     }
 
+    if (profile && profile.tradeEnabled === false) {
+      toast.error('Trading is currently paused for your account by the administrator. Please contact support.', 'Trading Paused');
+      return;
+    }
+
     setIsSubmittingUpgrade(true);
     try {
       // 1. Mark previous active contract as UPGRADED
@@ -2601,6 +2615,10 @@ export default function StandardUserDashboard({
 
   const handleDeployBot = async () => {
     if (!selectedBotTemplate) return;
+    if (profile && profile.tradeEnabled === false) {
+      toast.error('Trading is currently paused for your account by the administrator. Please contact support.', 'Trading Paused');
+      return;
+    }
     const capital = parseFloat(botCapitalInput);
     const minRequired = getTemplateMinCapital(selectedBotTemplate);
     if (isNaN(capital) || capital < minRequired) {
@@ -4388,6 +4406,18 @@ export default function StandardUserDashboard({
                 </div>
               </div>
 
+              {profile && profile.tradeEnabled === false && (
+                <div id="bots-trading-paused-alert" className="p-3.5 sm:p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-300 flex items-start gap-3 shadow-sm animate-fade-in">
+                  <ShieldAlert size={18} className="mt-0.5 shrink-0 text-rose-400" strokeWidth={2.5} />
+                  <div className="space-y-0.5 text-xs">
+                    <strong className="block font-bold text-rose-200">Trading Capabilities Paused</strong>
+                    <span className="text-rose-300/90 leading-relaxed block">
+                      Deploying new trading bots and executing trades is currently paused by the administrator. Contact support for assistance.
+                    </span>
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-6">
                 {/* MAIN HUB MENU: 4 CARDS (Matching Blueprint Layout) */}
                   {botHubView === 'menu' && (
@@ -5709,6 +5739,18 @@ export default function StandardUserDashboard({
                 <div className={`w-full p-4 sm:p-6 rounded-2xl sm:rounded-3xl border shadow-lg space-y-4 ${
                   isLightTheme ? 'bg-white border-zinc-200 text-zinc-900 shadow-slate-900/5' : 'bg-slate-900 border-slate-800 text-white shadow-black/40'
                 }`}>
+                  {profile && profile.tradeEnabled === false && (
+                    <div id="terminal-trading-paused-alert" className="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-300 flex items-start gap-2.5 text-xs animate-fade-in">
+                      <ShieldAlert size={16} className="mt-0.5 shrink-0 text-rose-400" strokeWidth={2.5} />
+                      <div className="space-y-0.5">
+                        <strong className="block font-bold text-rose-200">Trading Paused for Your Account</strong>
+                        <span className="text-rose-300/90 leading-relaxed block">
+                          Your copy trading permissions are currently paused by the administrator. Signal execution and contract creation are temporarily locked.
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Compact Header & Live Signal Window Status */}
                   {(() => {
                     const signalInfo = getLeadSignalWindowCountdown(selectedLeadForCopy);
@@ -6448,19 +6490,27 @@ export default function StandardUserDashboard({
                           const isExtra = Boolean(activeSig?.isExtra) || (selectedLeadForCopy.extraSignals || []).some(es => (es.code || '').toUpperCase() === copySignalCodeInput.trim().toUpperCase());
                           const extraEligibility = isExtra ? getExtraSignalEligibility(selectedLeadForCopy) : null;
                           const isBlockedByLock = isExtra && extraEligibility && !extraEligibility.eligible;
+                          const isTradePaused = profile?.tradeEnabled === false;
 
                           return (
                             <button
                               type="button"
-                              disabled={isSubmittingCopy || isDone || Boolean(isBlockedByLock)}
+                              disabled={isSubmittingCopy || isDone || Boolean(isBlockedByLock) || isTradePaused}
                               onClick={handleExecuteCopyTrade}
                               className={`flex-1 py-2.5 px-3 rounded-xl font-black text-xs shadow-xs border cursor-pointer transition-all flex items-center justify-center gap-1.5 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap ${
-                                isBlockedByLock
+                                isTradePaused
+                                  ? 'bg-rose-950/40 border-rose-800/60 text-rose-300'
+                                  : isBlockedByLock
                                   ? 'bg-zinc-300 dark:bg-slate-800 border-zinc-400 dark:border-slate-700 text-zinc-600 dark:text-zinc-400'
                                   : 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-amber-500/20 border-amber-400'
                               }`}
                             >
-                              {isSubmittingCopy ? (
+                              {isTradePaused ? (
+                                <span className="flex items-center gap-1 text-rose-300">
+                                  <Lock size={13} className="shrink-0 text-rose-400" />
+                                  <span>Trading Paused</span>
+                                </span>
+                              ) : isSubmittingCopy ? (
                                 <RefreshCw size={14} className="animate-spin" />
                               ) : isDone ? (
                                 <span className="flex items-center gap-1">
@@ -6488,6 +6538,17 @@ export default function StandardUserDashboard({
               </div>
             ) : (
               <div className="space-y-5 animate-fade-in">
+              {profile && profile.tradeEnabled === false && (
+                <div id="copy-trade-paused-alert" className="p-3.5 sm:p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-300 flex items-start gap-3 shadow-sm animate-fade-in">
+                  <ShieldAlert size={18} className="mt-0.5 shrink-0 text-rose-400" strokeWidth={2.5} />
+                  <div className="space-y-0.5 text-xs">
+                    <strong className="block font-bold text-rose-200">Copy Trading Suspended / Paused</strong>
+                    <span className="text-rose-300/90 leading-relaxed block">
+                      Your ability to initiate copy trade contracts and execute signals is currently paused by the administrator. Please contact support to reactivate your copy trading access.
+                    </span>
+                  </div>
+                </div>
+              )}
               {/* Interactive Trade Wallet Card at Top (Compact Space-Saving Golden Theme) */}
               <div id="copy-signal-interactive-trade-wallet" className="-mx-1 sm:-mx-2 md:mx-0 p-3.5 sm:p-4 md:p-4.5 rounded-2xl sm:rounded-3xl bg-gradient-to-br from-amber-500 via-amber-500 to-orange-500 text-white shadow-md shadow-amber-500/15 relative overflow-hidden transition-all duration-300 border border-amber-400/40">
                 {/* Subtle light overlay glow */}
@@ -6785,7 +6846,9 @@ export default function StandardUserDashboard({
                           type="button"
                           onClick={() => handleOpenCopyModal(lead)}
                           className={`w-full py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-sm active:scale-[0.98] ${
-                            isAlreadyCopying
+                            profile?.tradeEnabled === false
+                              ? 'bg-rose-950/40 text-rose-300 border border-rose-800/60 shadow-xs hover:bg-rose-900/40'
+                              : isAlreadyCopying
                               ? isLightTheme
                                 ? 'bg-slate-950 hover:bg-slate-900 text-amber-300 border border-slate-800 shadow-slate-950/15'
                                 : 'bg-slate-950 hover:bg-slate-900 text-amber-400 border border-slate-800 shadow-emerald-500/10'
@@ -6794,7 +6857,12 @@ export default function StandardUserDashboard({
                                 : 'bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 shadow-amber-500/20'
                           }`}
                         >
-                          {isAlreadyCopying ? (
+                          {profile?.tradeEnabled === false ? (
+                            <>
+                              <Lock size={14} className="text-rose-400" />
+                              <span>Trading Paused</span>
+                            </>
+                          ) : isAlreadyCopying ? (
                             <>
                               <Zap size={14} className="animate-pulse text-amber-300" />
                               <span>Execute Signal Code</span>
@@ -8113,7 +8181,13 @@ export default function StandardUserDashboard({
                       <button
                         key={target.id}
                         type="button"
-                        onClick={() => setUpgradeModalData({ oldTrade: trade, targetLead: target })}
+                        onClick={() => {
+                          if (profile && profile.tradeEnabled === false) {
+                            toast.error('Trading is currently paused for your account by the administrator. Please contact support.', 'Trading Paused');
+                            return;
+                          }
+                          setUpgradeModalData({ oldTrade: trade, targetLead: target });
+                        }}
                         className={`p-3.5 rounded-2xl border flex items-center justify-between gap-3 text-left cursor-pointer transition-all hover:scale-[1.01] hover:shadow-md active:scale-[0.99] group ${
                           isLightTheme 
                             ? 'bg-amber-50/70 hover:bg-amber-100/90 border-amber-200 text-zinc-900 shadow-2xs' 

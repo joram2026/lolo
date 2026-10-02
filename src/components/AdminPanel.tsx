@@ -702,10 +702,35 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
         withdrawalEnabled: !u.withdrawalEnabled
       });
       showFeedback('success', `User withdrawal permission ${!u.withdrawalEnabled ? 'ENABLED' : 'DISABLED'} successfully.`);
+      if (selectedUserHistory && selectedUserHistory.uid === u.uid) {
+        setSelectedUserHistory(prev => prev ? { ...prev, withdrawalEnabled: !u.withdrawalEnabled } : null);
+      }
       await loadAllData(true);
     } catch (err: any) {
       console.error(err);
       showFeedback('error', 'Failed to update withdrawal permission: ' + err.message);
+    } finally {
+      setActioning(null);
+    }
+  };
+
+  const handleToggleTrading = async (u: UserAccount) => {
+    setActioning(u.uid);
+    try {
+      const isCurrentlyEnabled = u.tradeEnabled !== false;
+      const newStatus = !isCurrentlyEnabled;
+      const userRef = doc(db, 'users', u.uid);
+      await updateDoc(userRef, {
+        tradeEnabled: newStatus
+      });
+      showFeedback('success', `User trading permission ${newStatus ? 'ALLOWED' : 'PAUSED'} successfully.`);
+      if (selectedUserHistory && selectedUserHistory.uid === u.uid) {
+        setSelectedUserHistory(prev => prev ? { ...prev, tradeEnabled: newStatus } : null);
+      }
+      await loadAllData(true);
+    } catch (err: any) {
+      console.error(err);
+      showFeedback('error', 'Failed to update trading permission: ' + err.message);
     } finally {
       setActioning(null);
     }
@@ -2690,6 +2715,9 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                               {!u.withdrawalEnabled && (
                                 <span className="text-[9px] bg-amber-500/10 border border-amber-500/20 text-amber-400 px-1.5 rounded font-semibold uppercase">Withdraw Restricted</span>
                               )}
+                              {u.tradeEnabled === false && (
+                                <span className="text-[9px] bg-rose-500/10 border border-rose-500/20 text-rose-400 px-1.5 rounded font-semibold uppercase">Trading Paused</span>
+                              )}
                               {(() => {
                                 const activeUserInvs = investmentsList.filter(inv => inv.userId === u.uid && inv.status === 'active');
                                 if (activeUserInvs.length > 0) {
@@ -2984,6 +3012,21 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                           >
                             {u.withdrawalEnabled ? <ToggleRight size={14} /> : <ToggleLeft size={14} />}
                             <span>{u.withdrawalEnabled ? 'Withdraw: OK' : 'Withdraw: Lock'}</span>
+                          </button>
+
+                          <button
+                            id={`user-trade-toggle-${u.uid}`}
+                            onClick={() => handleToggleTrading(u)}
+                            disabled={actioning === u.uid}
+                            className={`p-1.5 rounded-lg text-[10px] font-bold flex items-center gap-1 border ${
+                              u.tradeEnabled !== false 
+                                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20' 
+                                : 'bg-rose-950/40 text-rose-400 border-rose-800/60 hover:bg-rose-900/40'
+                            }`}
+                            title={u.tradeEnabled !== false ? "Pause user trading & copy trading permissions" : "Allow user trading & copy trading permissions"}
+                          >
+                            {u.tradeEnabled !== false ? <ToggleRight size={14} /> : <ToggleLeft size={14} />}
+                            <span>{u.tradeEnabled !== false ? 'Trade: OK' : 'Trade: Pause'}</span>
                           </button>
 
                           <button
@@ -5508,6 +5551,37 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                 <p className="text-[10px] text-zinc-500 font-mono mt-0.5">
                   Email: {selectedUserHistory.email} | Phone: {selectedUserHistory.phone || (selectedUserHistory as any).phoneNumber || 'N/A'} | UID: {selectedUserHistory.uid}
                 </p>
+                <div className="flex items-center gap-2 mt-2 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => handleToggleWithdrawal(selectedUserHistory)}
+                    disabled={actioning === selectedUserHistory.uid}
+                    className={`px-2 py-0.5 rounded-lg text-[10px] font-bold flex items-center gap-1 border cursor-pointer ${
+                      selectedUserHistory.withdrawalEnabled 
+                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20' 
+                        : 'bg-slate-800 text-zinc-400 border-slate-700 hover:text-zinc-200'
+                    }`}
+                    title="Toggle withdrawal permission"
+                  >
+                    {selectedUserHistory.withdrawalEnabled ? <ToggleRight size={13} /> : <ToggleLeft size={13} />}
+                    <span>Withdraw: {selectedUserHistory.withdrawalEnabled ? 'Allowed' : 'Restricted'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleToggleTrading(selectedUserHistory)}
+                    disabled={actioning === selectedUserHistory.uid}
+                    className={`px-2 py-0.5 rounded-lg text-[10px] font-bold flex items-center gap-1 border cursor-pointer ${
+                      selectedUserHistory.tradeEnabled !== false 
+                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20' 
+                        : 'bg-rose-950/40 text-rose-400 border-rose-800/60 hover:bg-rose-900/40'
+                    }`}
+                    title="Toggle trading permission"
+                  >
+                    {selectedUserHistory.tradeEnabled !== false ? <ToggleRight size={13} /> : <ToggleLeft size={13} />}
+                    <span>Trading: {selectedUserHistory.tradeEnabled !== false ? 'Allowed' : 'Paused'}</span>
+                  </button>
+                </div>
               </div>
               <button 
                 id="close-history-modal-btn"

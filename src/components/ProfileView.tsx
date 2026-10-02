@@ -1014,9 +1014,16 @@ export default function ProfileView({ user, onBack }: ProfileViewProps) {
               </div>
               <div className="flex justify-between items-center text-xs border-t border-zinc-100 pt-2.5">
                 <span className="text-zinc-500">Wallet Status</span>
-                <span className="font-semibold flex items-center gap-1 text-emerald-600">
+                <span className={`font-semibold flex items-center gap-1 ${profile?.withdrawalEnabled ? 'text-emerald-600' : 'text-rose-600'}`}>
                   <Shield size={12} />
                   {profile?.withdrawalEnabled ? 'Active / Approved' : 'Suspended'}
+                </span>
+              </div>
+              <div className="flex justify-between items-center text-xs border-t border-zinc-100 pt-2.5">
+                <span className="text-zinc-500">Trading Status</span>
+                <span className={`font-semibold flex items-center gap-1 ${profile?.tradeEnabled !== false ? 'text-emerald-600' : 'text-rose-600'}`}>
+                  <Shield size={12} />
+                  {profile?.tradeEnabled !== false ? 'Active / Allowed' : 'Paused'}
                 </span>
               </div>
             </div>

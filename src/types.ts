@@ -14,6 +14,7 @@ export interface UserAccount {
   extraSignalPassUntil?: any; // Firestore Timestamp / ISO Date for referral-earned 24h bonus extra signal passes
   createdAt: any; // Firestore Timestamp
   withdrawalEnabled: boolean;
+  tradeEnabled?: boolean; // When false, trading & copy trading permissions are paused
   walletPassword?: string;
   holdings?: Record<string, number>;
   twoFactorEnabled?: boolean;
