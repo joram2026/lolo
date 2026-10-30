@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { collection, addDoc, getDocs, getDoc, doc, serverTimestamp, onSnapshot } from 'firebase/firestore';
+import { collection, addDoc, getDocs, getDoc, doc, serverTimestamp, onSnapshot, updateDoc } from 'firebase/firestore';
 import { CryptoNetwork, P2PMerchant, Transaction, UserAccount, CryptoPrice, ReferralDepositConfig } from '../types';
 import { DEFAULT_NETWORKS, DEFAULT_MERCHANTS } from '../seedData';
 
@@ -19,7 +19,7 @@ const FALLBACK_PRICES: Record<string, number> = {
 import { 
   ArrowLeft, Coins, Users, CreditCard, ChevronRight, Copy, Check, 
   Upload, Sparkles, MessageSquare, AlertCircle, RefreshCw, Star,
-  Clock, AlertTriangle
+  Clock, AlertTriangle, CheckCircle, CheckCircle2, Zap, Radio, Loader2, ShieldCheck
 } from 'lucide-react';
 import { CoinIcon } from './StandardUserDashboard';
 import { useToast } from '../context/ToastContext';
@@ -100,6 +100,26 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
   const [copied, setCopied] = useState<boolean>(false);
   const [cryptoPrices, setCryptoPrices] = useState<CryptoPrice[]>([]);
 
+  // Automated Gateway States (NOWPayments)
+  const [gatewayPayment, setGatewayPayment] = useState<{
+    paymentId: string;
+    payAddress: string;
+    payAmount: number;
+    payCurrency: string;
+    priceAmount: number;
+    priceCurrency: string;
+    network: string;
+    transactionId?: string;
+    gatewayStatus?: string;
+    actuallyPaid?: number;
+    onChainTxHash?: string;
+  } | null>(null);
+  const [minDepositUSD, setMinDepositUSD] = useState<number>(0);
+  const [isCreatingPayment, setIsCreatingPayment] = useState<boolean>(false);
+  const [livePaymentStatus, setLivePaymentStatus] = useState<string>('waiting');
+  const [isPaymentApproved, setIsPaymentApproved] = useState<boolean>(false);
+  const [showManualUploadFallback, setShowManualUploadFallback] = useState<boolean>(false);
+
   // Trigger Gemini AI image verification
   const runImageAudit = async (base64Image: string) => {
     setAuditing(true);
@@ -177,9 +197,13 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
     return () => clearInterval(interval);
   }, [expiresAt]);
 
-  const saveSession = (newMethod: 'crypto_address' | 'crypto_confirm', customExpiresAt?: number) => {
+  const saveSession = (
+    newMethod: 'crypto_address' | 'crypto_confirm', 
+    customExpiresAt?: number, 
+    customGatewayPayment?: any
+  ) => {
     if (!selectedCoin || !user?.uid) return;
-    const expiry = customExpiresAt || expiresAt || (Date.now() + 15 * 60 * 1000);
+    const expiry = customExpiresAt || expiresAt || (Date.now() + 20 * 60 * 1000);
     if (!expiresAt && !customExpiresAt) {
       setExpiresAt(expiry);
     }
@@ -189,7 +213,8 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
       network: selectedNetwork,
       amount: amountCoin,
       method: newMethod,
-      expiresAt: expiry
+      expiresAt: expiry,
+      gatewayPayment: customGatewayPayment !== undefined ? customGatewayPayment : gatewayPayment
     };
     localStorage.setItem('morex_active_deposit_session', JSON.stringify(session));
   };
@@ -301,6 +326,10 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
                 setSelectedCoin(targetCoin);
                 setSelectedNetwork(savedSession.network);
                 setAmountCoin(savedSession.amount);
+                if (savedSession.gatewayPayment) {
+                  setGatewayPayment(savedSession.gatewayPayment);
+                  setLivePaymentStatus(savedSession.gatewayPayment.gatewayStatus || 'waiting');
+                }
                 setMethod(savedSession.method || 'crypto_address');
                 setExpiresAt(savedSession.expiresAt);
                 sessionLoaded = true;
@@ -435,6 +464,93 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
     }
   }, [amountShillings, selectedMerchant]);
 
+  const [isCheckingStatus, setIsCheckingStatus] = useState<boolean>(false);
+
+  // Dynamically query NOWPayments minimum deposit for selected coin & network
+  useEffect(() => {
+    if (!selectedCoin) return;
+    let isCancelled = false;
+    const fetchMin = async () => {
+      try {
+        const symbol = selectedCoin.id.toLowerCase();
+        const network = selectedNetwork || (selectedCoin.networks && selectedCoin.networks[0]) || '';
+        const res = await fetch(`/api/crypto/nowpayments/min-amount?symbol=${encodeURIComponent(symbol)}&network=${encodeURIComponent(network)}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (!isCancelled && typeof data.minAmountUsd === 'number') {
+            setMinDepositUSD(data.minAmountUsd);
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to query min deposit:', e);
+      }
+    };
+    fetchMin();
+    return () => { isCancelled = true; };
+  }, [selectedCoin, selectedNetwork]);
+
+  // Real-time Firestore transaction listener (detects auto-approval immediately)
+  useEffect(() => {
+    if (!gatewayPayment?.transactionId) return;
+
+    const txDocRef = doc(db, 'transactions', gatewayPayment.transactionId);
+    const unsubscribe = onSnapshot(txDocRef, (snap) => {
+      if (snap.exists()) {
+        const txData = snap.data() as Transaction;
+        if (txData.status === 'APPROVED') {
+          setIsPaymentApproved(true);
+          setLivePaymentStatus('finished');
+          clearSession();
+        } else if (txData.gatewayStatus) {
+          setLivePaymentStatus(txData.gatewayStatus);
+        }
+      }
+    }, (err) => {
+      console.warn('Transaction snapshot listener error:', err);
+    });
+
+    return () => unsubscribe();
+  }, [gatewayPayment?.transactionId]);
+
+  // Polling NOWPayments status endpoint while on crypto_address
+  const checkLiveStatus = async (manual = false) => {
+    if (!gatewayPayment?.paymentId) return;
+    if (manual) setIsCheckingStatus(true);
+    try {
+      const res = await fetch(`/api/crypto/nowpayments/payment-status/${gatewayPayment.paymentId}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.payment) {
+          const status = data.payment.payment_status;
+          setLivePaymentStatus(status);
+          if (status === 'finished' || status === 'confirmed' || status === 'sending') {
+            if (status === 'finished') {
+              setIsPaymentApproved(true);
+              clearSession();
+              if (manual) toast.success('Deposit confirmed & credited to your wallet!', 'Success');
+            } else if (manual) {
+              toast.info('Transaction detected on-chain! Confirming blocks...', 'Confirming');
+            }
+          } else if (manual) {
+            toast.info(`Status: ${status}. Waiting for blockchain transfer...`, 'Awaiting Deposit');
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Status poller error:', e);
+    } finally {
+      if (manual) setIsCheckingStatus(false);
+    }
+  };
+
+  useEffect(() => {
+    if (method !== 'crypto_address' || !gatewayPayment?.paymentId || isPaymentApproved) return;
+    const interval = setInterval(() => {
+      checkLiveStatus(false);
+    }, 6000);
+    return () => clearInterval(interval);
+  }, [method, gatewayPayment?.paymentId, isPaymentApproved]);
+
   // Copy target text to clipboard
   const handleCopy = (text: string) => {
     if (!text) return;
@@ -541,6 +657,7 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
   };
 
   // Submit Crypto Deposit
+  // Submit Crypto Deposit (Manual proof upload fallback)
   const handleCryptoSubmit = async () => {
     const numCoinAmount = parseFloat(amountCoin);
     if (!amountCoin || isNaN(numCoinAmount) || numCoinAmount <= 0) {
@@ -565,31 +682,49 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
       const symbol = currentSymbol;
       const usdVal = calculatedUSDVal;
       
-      const newTx: Omit<Transaction, 'id'> = {
-        userId: user.uid,
-        userEmail: user.email,
-        type: 'deposit_crypto',
-        amount: usdVal,
-        coinSymbol: symbol,
-        coinAmount: numCoinAmount,
-        status: 'PENDING APPROVAL',
-        createdAt: serverTimestamp(),
-        evidence: finalEvidence,
-        network: selectedNetwork,
-        address: selectedCoin?.addresses[selectedNetwork] || '',
-        merchantName: selectedCoin ? formatCoinName(selectedCoin.tokenName) : '',
-        aiAudit: auditResult ? {
-          isValid: auditResult.isValid,
-          confidence: auditResult.confidence,
-          reasons: auditResult.reasons,
-          extractedAmount: auditResult.extractedAmount,
-          extractedSymbol: auditResult.extractedSymbol,
-          extractedTxHash: auditResult.extractedTxHash,
-          extractedNetwork: auditResult.extractedNetwork
-        } : null
-      };
+      if (gatewayPayment?.transactionId) {
+        // Update existing gateway transaction with the uploaded manual proof
+        const existingTxRef = doc(db, 'transactions', gatewayPayment.transactionId);
+        await updateDoc(existingTxRef, {
+          evidence: finalEvidence,
+          aiAudit: auditResult ? {
+            isValid: auditResult.isValid,
+            confidence: auditResult.confidence,
+            reasons: auditResult.reasons,
+            extractedAmount: auditResult.extractedAmount,
+            extractedSymbol: auditResult.extractedSymbol,
+            extractedTxHash: auditResult.extractedTxHash,
+            extractedNetwork: auditResult.extractedNetwork
+          } : null
+        });
+      } else {
+        const newTx: Omit<Transaction, 'id'> = {
+          userId: user.uid,
+          userEmail: user.email,
+          type: 'deposit_crypto',
+          amount: usdVal,
+          coinSymbol: symbol,
+          coinAmount: numCoinAmount,
+          status: 'PENDING APPROVAL',
+          createdAt: serverTimestamp(),
+          evidence: finalEvidence,
+          network: selectedNetwork,
+          address: selectedCoin?.addresses[selectedNetwork] || '',
+          merchantName: selectedCoin ? formatCoinName(selectedCoin.tokenName) : '',
+          aiAudit: auditResult ? {
+            isValid: auditResult.isValid,
+            confidence: auditResult.confidence,
+            reasons: auditResult.reasons,
+            extractedAmount: auditResult.extractedAmount,
+            extractedSymbol: auditResult.extractedSymbol,
+            extractedTxHash: auditResult.extractedTxHash,
+            extractedNetwork: auditResult.extractedNetwork
+          } : null
+        };
 
-      await addDoc(collection(db, 'transactions'), newTx);
+        await addDoc(collection(db, 'transactions'), newTx);
+      }
+
       clearSession();
       onSuccess();
     } catch (err: any) {
@@ -597,6 +732,76 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
       setError(err.message || 'Failed to submit crypto deposit.');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  // Generate automated NOWPayments dynamic invoice
+  const handleCreateGatewayDeposit = async () => {
+    setError(null);
+    const numVal = parseFloat(amountCoin);
+    if (!amountCoin || isNaN(numVal) || numVal <= 0) {
+      setError(`Please enter a valid deposit amount in ${currentSymbol}.`);
+      return;
+    }
+    if (!selectedNetwork) {
+      setError('Please select a network.');
+      return;
+    }
+    if (minDepositUSD > 0 && calculatedUSDVal < minDepositUSD) {
+      setError(`Minimum required deposit for ${currentSymbol} on ${selectedNetwork} is $${minDepositUSD.toFixed(2)} USD (approx. ${(minDepositUSD / unitPrice).toFixed(4)} ${currentSymbol}).`);
+      return;
+    }
+
+    setIsCreatingPayment(true);
+    try {
+      const res = await fetch('/api/crypto/nowpayments/create-payment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.uid,
+          userEmail: user.email,
+          amountUsd: calculatedUSDVal,
+          payCurrency: selectedCoin?.id,
+          network: selectedNetwork,
+          coinSymbol: currentSymbol,
+          coinAmount: numVal
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Failed to initialize automated crypto invoice.');
+      }
+
+      const expiry = Date.now() + 20 * 60 * 1000;
+      const paymentInfo = {
+        paymentId: String(data.paymentId),
+        payAddress: data.payAddress,
+        payAmount: data.payAmount,
+        payCurrency: data.payCurrency,
+        priceAmount: data.priceAmount,
+        priceCurrency: data.priceCurrency,
+        network: data.network || selectedNetwork,
+        transactionId: data.transactionId,
+        gatewayStatus: data.gatewayStatus || 'waiting'
+      };
+
+      setGatewayPayment(paymentInfo);
+      setLivePaymentStatus(paymentInfo.gatewayStatus);
+      setExpiresAt(expiry);
+      setMethod('crypto_address');
+      saveSession('crypto_address', expiry, paymentInfo);
+      toast.success('Dynamic deposit address generated! Blockchain monitoring active.', 'Invoice Ready');
+    } catch (err: any) {
+      console.error('NOWPayments creation error:', err);
+      // Fallback: If NOWPayments is unreachable, permit standard manual address flow
+      const expiry = Date.now() + 15 * 60 * 1000;
+      setExpiresAt(expiry);
+      setMethod('crypto_address');
+      saveSession('crypto_address', expiry);
+      toast.error(err.message || 'Automated gateway temporary fallback to standard deposit address.', 'Notice');
+    } finally {
+      setIsCreatingPayment(false);
     }
   };
 
@@ -842,6 +1047,11 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
               <div className="space-y-1.5">
                 <div className="flex justify-between items-center">
                   <label className="text-xs font-semibold text-zinc-600">Deposit Amount ({currentSymbol})</label>
+                  {minDepositUSD > 0 && (
+                    <span className="text-[10px] text-amber-700 font-bold bg-amber-100/70 px-2 py-0.5 rounded-md border border-amber-200">
+                      Min: ~${minDepositUSD.toFixed(2)} USD (~{(minDepositUSD / unitPrice).toFixed(4)} {currentSymbol})
+                    </span>
+                  )}
                 </div>
                 <div className="relative">
                   <input
@@ -876,47 +1086,39 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
                     </button>
                   </div>
                 </div>
+
+                {amountCoin && parseFloat(amountCoin) > 0 && (
+                  <div className="flex justify-between items-center text-[11px] text-zinc-500 pt-1 px-1">
+                    <span>Est. USD Value:</span>
+                    <span className="font-mono font-bold text-amber-700">${calculatedUSDVal.toFixed(2)} USD</span>
+                  </div>
+                )}
               </div>
 
-              {/* Generate Receiver Address Action */}
+              {/* Automated Deposit Action */}
               <button
                 id="crypto-deposit-proceed"
-                onClick={() => {
-                  setError(null);
-                  const numVal = parseFloat(amountCoin);
-                  if (!amountCoin || isNaN(numVal) || numVal <= 0) {
-                    setError(`Please enter a valid deposit amount in ${currentSymbol}.`);
-                    return;
-                  }
-                  if (!selectedNetwork) {
-                    setError('Please select a network.');
-                    return;
-                  }
-                  const expiry = Date.now() + 15 * 60 * 1000;
-                  setExpiresAt(expiry);
-                  setMethod('crypto_address');
-                  
-                  if (selectedCoin && user?.uid) {
-                    const session = {
-                      userId: user.uid,
-                      coinId: selectedCoin.id,
-                      network: selectedNetwork,
-                      amount: amountCoin,
-                      method: 'crypto_address',
-                      expiresAt: expiry
-                    };
-                    localStorage.setItem('morex_active_deposit_session', JSON.stringify(session));
-                  }
-                }}
-                className="w-full flex items-center justify-center gap-2 py-3.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600 disabled:bg-zinc-200 disabled:text-zinc-400 rounded-xl text-sm font-black transition-all shadow-md mt-6 cursor-pointer uppercase tracking-wider"
+                onClick={handleCreateGatewayDeposit}
+                disabled={isCreatingPayment}
+                className="w-full flex items-center justify-center gap-2 py-3.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600 disabled:opacity-60 disabled:cursor-not-allowed rounded-xl text-sm font-black transition-all shadow-md mt-6 cursor-pointer uppercase tracking-wider"
               >
-                <span>Generate Receiver Address</span>
-                <ChevronRight size={16} />
+                {isCreatingPayment ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin text-white" />
+                    <span>Generating Dynamic Address...</span>
+                  </>
+                ) : (
+                  <>
+                    <Zap size={16} className="text-amber-200" />
+                    <span>Proceed to Automated Deposit</span>
+                    <ChevronRight size={16} />
+                  </>
+                )}
               </button>
             </div>
           )}
 
-          {/* Crypto Step 2: Receiver Address & Instructions */}
+          {/* Crypto Step 2: Receiver Address & Automated Live Gateway Terminal */}
           {method === 'crypto_address' && selectedCoin && (
             <div className="space-y-5">
               {/* Expired state lock safeguard */}
@@ -941,6 +1143,62 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
                     Start New Deposit
                   </button>
                 </div>
+              ) : isPaymentApproved ? (
+                /* Celebration card: Auto-approved by gateway */
+                <div className="bg-white border-2 border-emerald-500/40 rounded-3xl p-6 text-center space-y-5 shadow-lg animate-fadeIn">
+                  <div className="w-20 h-20 bg-emerald-50 border-2 border-emerald-500/30 text-emerald-500 rounded-full flex items-center justify-center mx-auto shadow-inner">
+                    <CheckCircle2 size={44} className="animate-bounce text-emerald-600" />
+                  </div>
+                  <div className="space-y-2">
+                    <span className="inline-flex items-center gap-1.5 text-[10px] font-mono uppercase font-bold tracking-wider px-3 py-1 bg-emerald-100 text-emerald-800 rounded-full border border-emerald-300">
+                      <Zap size={12} className="text-emerald-600" />
+                      <span>Blockchain Verified & Auto-Credited</span>
+                    </span>
+                    <h3 className="text-xl font-black text-zinc-900 tracking-tight">Deposit Successfully Approved!</h3>
+                    <p className="text-xs text-zinc-600 leading-relaxed max-w-sm mx-auto">
+                      Your transfer of <strong className="font-mono text-zinc-900">{gatewayPayment?.payAmount || amountCoin} {currentSymbol}</strong> (${calculatedUSDVal.toFixed(2)} USD) has been confirmed on the blockchain and automatically credited to your trading wallet.
+                    </p>
+                  </div>
+
+                  {referralConfig && referralConfig.enabled && (
+                    <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-2xl p-3.5 text-left flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-700 flex items-center justify-center shrink-0">
+                        <Sparkles size={18} />
+                      </div>
+                      <div>
+                        <p className="text-xs font-black text-amber-900">Welcome Rewards Credited</p>
+                        <p className="text-[11px] text-amber-700 font-medium">First-deposit welcome bonus & referral benefits applied.</p>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="bg-zinc-50 border border-zinc-200 rounded-2xl p-3.5 text-xs space-y-2 font-mono text-left">
+                    <div className="flex justify-between items-center text-zinc-500 text-[11px]">
+                      <span>Invoice ID:</span>
+                      <span className="font-bold text-zinc-800">#{gatewayPayment?.paymentId || 'Instant'}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-zinc-500 text-[11px]">
+                      <span>Network:</span>
+                      <span className="font-bold text-emerald-600 font-sans">{selectedNetwork}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-zinc-500 text-[11px]">
+                      <span>Approval Mode:</span>
+                      <span className="font-bold text-emerald-700">100% Automated (Zero Wait)</span>
+                    </div>
+                  </div>
+
+                  <button
+                    id="deposit-success-return-btn"
+                    onClick={() => {
+                      clearSession();
+                      onSuccess();
+                    }}
+                    className="w-full py-4 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-black rounded-2xl text-sm transition-all shadow-md cursor-pointer uppercase tracking-wider flex items-center justify-center gap-2"
+                  >
+                    <span>View Balance & Start Trading</span>
+                    <ChevronRight size={16} />
+                  </button>
+                </div>
               ) : (
                 <>
                   {/* Countdown Timer HUD */}
@@ -949,7 +1207,7 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
                       <div className="flex items-center gap-2">
                         <Clock size={16} className={`shrink-0 ${parseInt(timeLeft.split(':')[0] || '0') < 5 ? 'text-red-500 animate-pulse' : 'text-emerald-400'}`} />
                         <div className="text-left">
-                          <p className="text-[9px] uppercase font-bold text-zinc-400 tracking-wider">Session Expires In</p>
+                          <p className="text-[9px] uppercase font-bold text-zinc-400 tracking-wider">Session Rate Lock</p>
                           <p className="text-xs font-mono font-black">
                             Expires in <span className={parseInt(timeLeft.split(':')[0] || '0') < 5 ? 'text-red-500 font-bold' : 'text-emerald-400'}>{timeLeft}</span>
                           </p>
@@ -962,12 +1220,51 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
                             setMethod('crypto_coin_select');
                           });
                         }}
-                        className="text-[9px] font-bold text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 px-2 py-1 rounded-lg border border-red-500/20 transition-all cursor-pointer"
+                        className="text-[9px] font-bold text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 px-2.5 py-1 rounded-lg border border-red-500/20 transition-all cursor-pointer"
                       >
                         Cancel Invoice
                       </button>
                     </div>
                   )}
+
+                  {/* Automated Gateway Live Radar HUD */}
+                  <div className="bg-zinc-900 text-white rounded-2xl p-4 border border-zinc-800 shadow-sm space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="relative flex h-2.5 w-2.5">
+                          <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
+                            livePaymentStatus === 'confirming' || livePaymentStatus === 'sending' ? 'bg-cyan-400' : 'bg-emerald-400'
+                          }`}></span>
+                          <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${
+                            livePaymentStatus === 'confirming' || livePaymentStatus === 'sending' ? 'bg-cyan-500' : 'bg-emerald-500'
+                          }`}></span>
+                        </div>
+                        <span className="text-[11px] font-black uppercase tracking-wider text-zinc-200">
+                          Automated Gateway Active
+                        </span>
+                      </div>
+                      <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border ${
+                        livePaymentStatus === 'confirming' || livePaymentStatus === 'sending'
+                          ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30 animate-pulse'
+                          : 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                      }`}>
+                        {livePaymentStatus === 'confirming' || livePaymentStatus === 'sending'
+                          ? 'Confirming on Chain'
+                          : 'Waiting for Deposit'}
+                      </span>
+                    </div>
+
+                    <p className="text-xs text-zinc-300 leading-relaxed font-sans">
+                      {livePaymentStatus === 'confirming' || livePaymentStatus === 'sending' ? (
+                        <span className="text-cyan-300 font-semibold flex items-center gap-1.5">
+                          <RefreshCw size={13} className="animate-spin shrink-0 text-cyan-400" />
+                          <span>Transaction detected on-chain! Confirming blocks before auto-crediting...</span>
+                        </span>
+                      ) : (
+                        <span>Send funds to the address below. Your balance will be credited automatically once confirmed.</span>
+                      )}
+                    </p>
+                  </div>
 
                   {/* Transfer Summary Card */}
                   <div className="bg-white border border-zinc-200 rounded-2xl p-4 space-y-3 shadow-xs">
@@ -982,20 +1279,38 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
                       <span className="text-xs text-zinc-500 font-medium">Network</span>
                       <span className="font-mono font-bold text-xs text-amber-600 px-2 py-0.5 bg-amber-50 rounded-md border border-amber-200">{selectedNetwork}</span>
                     </div>
-                    <div className="flex justify-between items-center">
+                    <div className="flex justify-between items-center pb-2 border-b border-zinc-100">
                       <span className="text-xs text-zinc-500 font-medium">Exact Deposit Amount</span>
-                      <span className="font-mono font-extrabold text-sm text-amber-700">{amountCoin} {currentSymbol}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-extrabold text-sm text-amber-700">
+                          {gatewayPayment?.payAmount || amountCoin} {currentSymbol}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleCopy(String(gatewayPayment?.payAmount || amountCoin))}
+                          className="p-1 rounded bg-amber-50 hover:bg-amber-100 text-amber-700 text-[10px] font-bold border border-amber-200"
+                          title="Copy exact amount"
+                        >
+                          <Copy size={11} />
+                        </button>
+                      </div>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-zinc-500 font-medium">USD Value</span>
+                      <span className="font-mono font-bold text-xs text-zinc-700">${calculatedUSDVal.toFixed(2)} USD</span>
                     </div>
                   </div>
 
                   {/* Wallet Address Card */}
                   <div className="bg-white border border-zinc-200 rounded-2xl p-4 space-y-3 shadow-sm">
                     <div className="flex justify-between items-center">
-                      <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Receiver Address ({selectedNetwork})</span>
+                      <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">
+                        Dynamic Receiver Address ({selectedNetwork})
+                      </span>
                       <button
                         id="crypto-copy-address"
                         type="button"
-                        onClick={() => handleCopy(selectedCoin.addresses[selectedNetwork] || '')}
+                        onClick={() => handleCopy(gatewayPayment?.payAddress || selectedCoin.addresses[selectedNetwork] || '')}
                         className="p-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-700 transition-colors flex items-center gap-1 text-[11px] font-bold cursor-pointer"
                       >
                         {copied ? <Check size={12} className="text-amber-600" /> : <Copy size={12} />}
@@ -1003,7 +1318,7 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
                       </button>
                     </div>
                     <div className="bg-zinc-50 border border-zinc-200 p-3 rounded-xl font-mono text-xs text-amber-800 break-all select-all font-bold leading-relaxed tracking-wide">
-                      {selectedCoin.addresses[selectedNetwork] || 'No Address configured'}
+                      {gatewayPayment?.payAddress || selectedCoin.addresses[selectedNetwork] || 'No Address configured'}
                     </div>
                   </div>
 
@@ -1011,7 +1326,7 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
                   <div className="bg-white border border-zinc-200 rounded-2xl p-4 flex flex-col items-center justify-center text-center shadow-xs animate-fadeIn">
                     <div className="bg-zinc-50 border border-zinc-100 p-2.5 rounded-xl mb-2">
                       <img 
-                        src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&color=27272a&data=${encodeURIComponent(selectedCoin.addresses[selectedNetwork] || '')}`}
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&color=27272a&data=${encodeURIComponent(gatewayPayment?.payAddress || selectedCoin.addresses[selectedNetwork] || '')}`}
                         alt="Deposit QR Code"
                         className="w-32 h-32 object-contain"
                         referrerPolicy="no-referrer"
@@ -1020,32 +1335,54 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
                     <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">Scan QR Code to pay</p>
                   </div>
 
-                  {/* Instruction Banner */}
-                  <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 text-xs space-y-1.5 text-zinc-800">
-                    <div className="flex items-center gap-1.5 font-black text-amber-800 text-xs">
-                      <AlertCircle size={15} className="text-amber-600 shrink-0" />
-                      <span>Deposit Instructions</span>
+                  {/* Instruction & Zero-Admin Guarantee Banner */}
+                  <div className="bg-emerald-500/10 border border-emerald-500/25 rounded-2xl p-4 text-xs space-y-2 text-zinc-800">
+                    <div className="flex items-center gap-1.5 font-black text-emerald-800 text-xs">
+                      <ShieldCheck size={16} className="text-emerald-600 shrink-0" />
+                      <span>Zero Admin Waiting Guarantee</span>
                     </div>
                     <p className="text-[11px] leading-relaxed text-zinc-700">
-                      Please transfer exactly <strong className="font-mono text-amber-900">{amountCoin} {currentSymbol}</strong> to the address above.
+                      Transfer exactly <strong className="font-mono text-zinc-900">{gatewayPayment?.payAmount || amountCoin} {currentSymbol}</strong> using the <strong className="font-mono text-emerald-800">{selectedNetwork}</strong> network.
                     </p>
-                    <p className="text-[10px] text-amber-800 font-semibold">
-                      ⚠️ Transfer strictly using the <strong className="underline">{selectedNetwork}</strong> network. Sending via any other network will result in permanent loss of funds.
+                    <p className="text-[10px] text-emerald-800 font-medium">
+                      ⚡ Our automated node continuously listens to the blockchain. As soon as your transfer is confirmed, your wallet is automatically topped up with zero human intervention.
                     </p>
                   </div>
 
-                  {/* I Have Made Payment Action */}
-                  <button
-                    id="crypto-payment-made-btn"
-                    onClick={() => {
-                      setMethod('crypto_confirm');
-                      saveSession('crypto_confirm');
-                    }}
-                    className="w-full flex items-center justify-center gap-2 py-3.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600 rounded-xl text-sm font-black transition-all shadow-md cursor-pointer uppercase tracking-wider"
-                  >
-                    <span>I HAVE MADE PAYMENT</span>
-                    <ChevronRight size={16} />
-                  </button>
+                  {/* Manual Refresh & Fallback Actions */}
+                  <div className="space-y-2 pt-1">
+                    <button
+                      id="crypto-check-status-btn"
+                      onClick={() => checkLiveStatus(true)}
+                      disabled={isCheckingStatus}
+                      className="w-full flex items-center justify-center gap-2 py-3.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600 disabled:opacity-75 rounded-xl text-sm font-black transition-all shadow-md cursor-pointer uppercase tracking-wider"
+                    >
+                      {isCheckingStatus ? (
+                        <>
+                          <RefreshCw size={15} className="animate-spin text-white" />
+                          <span>Checking Blockchain...</span>
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw size={15} />
+                          <span>Check Blockchain Status Now</span>
+                        </>
+                      )}
+                    </button>
+
+                    <button
+                      id="crypto-fallback-upload-btn"
+                      type="button"
+                      onClick={() => {
+                        setMethod('crypto_confirm');
+                        saveSession('crypto_confirm');
+                      }}
+                      className="w-full py-2.5 bg-white hover:bg-zinc-50 border border-zinc-200 text-zinc-600 hover:text-zinc-800 rounded-xl text-xs font-bold transition-all cursor-pointer text-center flex items-center justify-center gap-1.5"
+                    >
+                      <Upload size={13} />
+                      <span>Prefer to upload receipt manually? Click here</span>
+                    </button>
+                  </div>
                 </>
               )}
             </div>

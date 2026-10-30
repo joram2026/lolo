@@ -80,6 +80,13 @@ export interface Transaction {
   feeAmount?: number;  // fee in USD (e.g. 15% standard or 50% early)
   netAmount?: number;  // amount user actually receives (e.g. 85% or 50%)
   isCredit?: boolean | null;
+  gateway?: 'nowpayments' | 'manual';
+  gatewayPaymentId?: string;
+  gatewayStatus?: string;
+  payAddress?: string;
+  onChainTxHash?: string;
+  actuallyPaid?: number;
+  approvedAt?: any;
   aiAudit?: {
     isValid: boolean;
     confidence: number;

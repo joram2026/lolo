@@ -17,7 +17,7 @@ import { AdminAdsManager } from './AdminAdsManager';
 import { 
   Users, CheckCircle2, XCircle, Settings, ShieldAlert, Key, 
   Trash2, ToggleLeft, ToggleRight, Loader, ZoomIn, Plus, Edit, Check, Eye, Star, Mail, RefreshCw, X, FileText, Coins, TrendingUp, Bot, Cpu, Smartphone, Phone, Sparkles, ChevronDown, ChevronUp,
-  Search, Award, Flame, UserCheck, Tag, Gift, Copy, Megaphone, Percent, ArrowDownToLine, Calendar, DollarSign, Save
+  Search, Award, Flame, UserCheck, Tag, Gift, Copy, Megaphone, Percent, ArrowDownToLine, Calendar, DollarSign, Save, Zap
 } from 'lucide-react';
 
 const STATIC_CRYPTO: Record<string, { name: string; price: number }> = {
@@ -3132,6 +3132,65 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                           <div><span className="text-zinc-500 font-sans font-medium">COIN / NETWORK:</span> {tx.merchantName || 'Stablecoin'} ({tx.network})</div>
                           <div><span className="text-zinc-500 font-sans font-medium">WALLET ADDRESS SENT:</span> <span className="select-all">{tx.address}</span></div>
                         </div>
+
+                        {/* NOWPayments Gateway Automated Tracker */}
+                        {tx.gateway === 'nowpayments' && (
+                          <div className="bg-emerald-950/30 border border-emerald-500/30 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                            <div className="flex items-center gap-2">
+                              <div className="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+                                <Zap size={15} />
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs font-bold text-emerald-300">NOWPayments Automated Gateway</span>
+                                  <span className={`text-[9px] font-mono uppercase px-1.5 py-0.5 rounded font-black border ${
+                                    tx.gatewayStatus === 'finished' || tx.gatewayStatus === 'confirmed'
+                                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                                      : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                                  }`}>
+                                    {tx.gatewayStatus || 'waiting'}
+                                  </span>
+                                </div>
+                                <p className="text-[10px] text-zinc-400 font-mono">
+                                  Payment ID: <span className="text-zinc-200 select-all font-bold">#{tx.gatewayPaymentId || tx.id}</span>
+                                  {tx.onChainTxHash && (
+                                    <span className="ml-2 text-zinc-400">Tx: <span className="text-emerald-400 truncate max-w-[120px] inline-block align-bottom">{tx.onChainTxHash}</span></span>
+                                  )}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              {tx.gatewayPaymentId && (
+                                <button
+                                  type="button"
+                                  disabled={actioning === tx.id}
+                                  onClick={async () => {
+                                    setActioning(tx.id);
+                                    try {
+                                      const res = await fetch(`/api/crypto/nowpayments/payment-status/${tx.gatewayPaymentId}`);
+                                      const data = await res.json();
+                                      if (data.success && data.payment) {
+                                        showFeedback('success', `Gateway Status: ${data.payment.payment_status}. Balance auto-processed if confirmed.`);
+                                        await loadAllData(true);
+                                      } else {
+                                        showFeedback('error', 'Status check returned: ' + (data.error || 'unknown'));
+                                      }
+                                    } catch (err: any) {
+                                      showFeedback('error', 'Sync failed: ' + err.message);
+                                    } finally {
+                                      setActioning(null);
+                                    }
+                                  }}
+                                  className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-emerald-500/30 rounded-lg text-[10px] font-bold flex items-center gap-1.5 cursor-pointer shadow-xs transition-colors"
+                                >
+                                  <RefreshCw size={12} className={actioning === tx.id ? 'animate-spin' : ''} />
+                                  <span>Sync Gateway Status</span>
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        )}
 
                         <div className="bg-zinc-950 p-3 rounded-xl border border-zinc-900/80 flex items-center justify-between">
                           <div>

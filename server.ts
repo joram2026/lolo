@@ -4,6 +4,17 @@ import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
 import nodemailer from "nodemailer";
+import { 
+  mapToNowPaymentsCurrency, 
+  getMinDepositAmount, 
+  createNowPayment, 
+  getNowPaymentStatus, 
+  verifyNowPaymentsSignature, 
+  processDepositAutoApproval,
+  ensureAdminAuth
+} from "./src/utils/nowpaymentsServer";
+import { db } from "./src/firebase";
+import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 
 dotenv.config();
 
@@ -537,6 +548,138 @@ async function startServer() {
         error: "Failed to audit the proof image.", 
         details: error.message || error 
       });
+    }
+  });
+
+  // ==========================================
+  // NOWPayments Automated Deposit API Routes
+  // ==========================================
+
+  // Query minimum required deposit for currency
+  app.get("/api/crypto/nowpayments/min-amount", async (req, res) => {
+    try {
+      const { symbol, network } = req.query;
+      const currency = mapToNowPaymentsCurrency(String(symbol || 'usdt'), String(network || ''));
+      const minAmount = await getMinDepositAmount(currency);
+      res.json({ currency, minAmount });
+    } catch (err: any) {
+      console.error("Error fetching min amount:", err);
+      res.status(500).json({ error: err.message || "Failed to fetch min amount." });
+    }
+  });
+
+  // Create payment session with dynamic address
+  app.post("/api/crypto/nowpayments/create-payment", async (req, res) => {
+    try {
+      const { coinSymbol, network, userId, userEmail } = req.body;
+      const rawAmount = req.body.amountUSD ?? req.body.amountUsd;
+      const numAmount = parseFloat(rawAmount);
+
+      if (isNaN(numAmount) || numAmount <= 0) {
+        return res.status(400).json({ error: "A valid deposit amount in USD is required." });
+      }
+      if (!userId || !userEmail) {
+        return res.status(400).json({ error: "User credentials are required." });
+      }
+
+      const appBaseUrl = process.env.APP_URL || `${req.protocol}://${req.get('host')}`;
+      const callbackUrl = `${appBaseUrl}/api/webhooks/nowpayments`;
+
+      const payment = await createNowPayment({
+        amountUSD: numAmount,
+        coinSymbol: String(coinSymbol || 'USDT'),
+        network: String(network || ''),
+        userId,
+        userEmail,
+        callbackUrl
+      });
+
+      await ensureAdminAuth();
+
+      // Record pending transaction in Firestore
+      const txRef = await addDoc(collection(db, 'transactions'), {
+        userId,
+        userEmail,
+        type: 'deposit_crypto',
+        amount: numAmount,
+        coinSymbol: String(coinSymbol || 'USDT').toUpperCase(),
+        coinAmount: payment.payAmount,
+        status: 'PENDING APPROVAL',
+        createdAt: serverTimestamp(),
+        network: payment.network,
+        address: payment.payAddress,
+        gateway: 'nowpayments',
+        gatewayPaymentId: payment.paymentId,
+        gatewayStatus: 'waiting',
+        payAddress: payment.payAddress,
+        paymentMessage: `NOWPayments Gateway: Waiting for ${payment.payAmount} ${payment.payCurrency.toUpperCase()} on ${payment.network}`
+      });
+
+      res.json({
+        success: true,
+        transactionId: txRef.id,
+        paymentId: payment.paymentId,
+        payAddress: payment.payAddress,
+        payAmount: payment.payAmount,
+        payCurrency: payment.payCurrency,
+        priceAmount: payment.priceAmount,
+        priceCurrency: payment.priceCurrency,
+        network: payment.network,
+        gatewayStatus: 'waiting',
+        payment
+      });
+    } catch (err: any) {
+      console.error("Error creating NOWPayments session:", err);
+      res.status(500).json({ error: err.message || "Failed to create gateway payment session." });
+    }
+  });
+
+  // Check live payment status & trigger auto-approval if confirmed
+  app.get("/api/crypto/nowpayments/payment-status/:paymentId", async (req, res) => {
+    try {
+      const { paymentId } = req.params;
+      const paymentData = await getNowPaymentStatus(paymentId);
+      
+      const status = (paymentData.payment_status || '').toLowerCase();
+      let autoApproved = false;
+
+      if (['finished', 'confirmed', 'sending'].includes(status)) {
+        try {
+          const approvalResult = await processDepositAutoApproval(paymentData);
+          autoApproved = approvalResult.success;
+        } catch (approvalErr) {
+          console.error("Error during auto-approval on status check:", approvalErr);
+        }
+      }
+
+      res.json({
+        ...paymentData,
+        autoApproved
+      });
+    } catch (err: any) {
+      console.error("Error querying payment status:", err);
+      res.status(500).json({ error: err.message || "Failed to query status." });
+    }
+  });
+
+  // NOWPayments Instant Payment Notification (IPN) Webhook
+  app.post("/api/webhooks/nowpayments", async (req, res) => {
+    try {
+      const sig = (req.headers['x-nowpayments-sig'] || '') as string;
+      const isVerified = verifyNowPaymentsSignature(req.body, sig);
+
+      if (!isVerified) {
+        console.warn("[NOWPayments Webhook] Signature verification failed for header:", sig);
+        return res.status(401).send("Invalid signature");
+      }
+
+      console.log(`[NOWPayments Webhook] Received valid IPN for payment ${req.body.payment_id}, status: ${req.body.payment_status}`);
+      await processDepositAutoApproval(req.body);
+
+      res.status(200).send("OK");
+    } catch (err: any) {
+      console.error("[NOWPayments Webhook] Processing error:", err);
+      res.status(500).send("Webhook handler error");
     }
   });
 
