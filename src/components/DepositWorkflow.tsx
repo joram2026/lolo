@@ -475,8 +475,7 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
         const symbol = selectedCoin.id.toLowerCase();
         const network = selectedNetwork || (selectedCoin.networks && selectedCoin.networks[0]) || '';
         const res = await fetch(`/api/crypto/nowpayments/min-amount?symbol=${encodeURIComponent(symbol)}&network=${encodeURIComponent(network)}`);
-        const contentType = res.headers.get('content-type') || '';
-        if (res.ok && contentType.includes('application/json')) {
+        if (res.ok) {
           const data = await res.json();
           if (!isCancelled && typeof data.minAmountUsd === 'number') {
             setMinDepositUSD(data.minAmountUsd);
@@ -518,13 +517,8 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
     if (!gatewayPayment?.paymentId) return;
     if (manual) setIsCheckingStatus(true);
     try {
-      let res = await fetch(`/api/crypto/nowpayments/payment-status/${gatewayPayment.paymentId}`);
-      if (!res.ok) {
-        // Fallback to query param rewrite for serverless platforms
-        res = await fetch(`/api/crypto/nowpayments/payment-status?paymentId=${gatewayPayment.paymentId}`);
-      }
-      const contentType = res.headers.get('content-type') || '';
-      if (res.ok && contentType.includes('application/json')) {
+      const res = await fetch(`/api/crypto/nowpayments/payment-status/${gatewayPayment.paymentId}`);
+      if (res.ok) {
         const data = await res.json();
         if (data.success && data.payment) {
           const status = data.payment.payment_status;
@@ -774,21 +768,9 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
         })
       });
 
-      let data: any = null;
-      const contentType = res.headers.get('content-type') || '';
-      if (contentType.includes('application/json')) {
-        data = await res.json();
-      } else {
-        const rawText = await res.text();
-        try {
-          data = JSON.parse(rawText);
-        } catch {
-          throw new Error('Deposit gateway service response could not be parsed. Please check connection or use manual proof upload.');
-        }
-      }
-
-      if (!res.ok || !data?.success) {
-        throw new Error(data?.error || 'Failed to initialize automated crypto invoice.');
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Failed to initialize automated crypto invoice.');
       }
 
       const expiry = Date.now() + 20 * 60 * 1000;
