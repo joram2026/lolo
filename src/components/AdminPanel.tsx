@@ -3168,7 +3168,11 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                                   onClick={async () => {
                                     setActioning(tx.id);
                                     try {
-                                      const res = await fetch(`/api/crypto/nowpayments/payment-status/${tx.gatewayPaymentId}`);
+                                      let res = await fetch(`/api/crypto/nowpayments/payment-status/${tx.gatewayPaymentId}`);
+                                      let contentType = res.headers.get('content-type') || '';
+                                      if (!res.ok || !contentType.includes('application/json')) {
+                                        res = await fetch(`/api/nowpayments-payment-status?paymentId=${tx.gatewayPaymentId}`);
+                                      }
                                       const data = await res.json();
                                       if (data.success && data.payment) {
                                         showFeedback('success', `Gateway Status: ${data.payment.payment_status}. Balance auto-processed if confirmed.`);

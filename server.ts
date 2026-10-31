@@ -556,12 +556,12 @@ async function startServer() {
   // ==========================================
 
   // Query minimum required deposit for currency
-  app.get("/api/crypto/nowpayments/min-amount", async (req, res) => {
+  app.get(["/api/crypto/nowpayments/min-amount", "/api/nowpayments-min-amount"], async (req, res) => {
     try {
       const { symbol, network } = req.query;
       const currency = mapToNowPaymentsCurrency(String(symbol || 'usdt'), String(network || ''));
       const minAmount = await getMinDepositAmount(currency);
-      res.json({ currency, minAmount });
+      res.json({ currency, minAmount, minAmountUsd: minAmount });
     } catch (err: any) {
       console.error("Error fetching min amount:", err);
       res.status(500).json({ error: err.message || "Failed to fetch min amount." });
@@ -569,7 +569,7 @@ async function startServer() {
   });
 
   // Create payment session with dynamic address
-  app.post("/api/crypto/nowpayments/create-payment", async (req, res) => {
+  app.post(["/api/crypto/nowpayments/create-payment", "/api/nowpayments-create-payment"], async (req, res) => {
     try {
       const { coinSymbol, network, userId, userEmail } = req.body;
       const rawAmount = req.body.amountUSD ?? req.body.amountUsd;
@@ -635,10 +635,13 @@ async function startServer() {
   });
 
   // Check live payment status & trigger auto-approval if confirmed
-  app.get("/api/crypto/nowpayments/payment-status/:paymentId", async (req, res) => {
+  app.get(["/api/crypto/nowpayments/payment-status/:paymentId", "/api/crypto/nowpayments/payment-status", "/api/nowpayments-payment-status/:paymentId", "/api/nowpayments-payment-status"], async (req, res) => {
     try {
-      const { paymentId } = req.params;
-      const paymentData = await getNowPaymentStatus(paymentId);
+      const paymentId = req.params.paymentId || req.query.paymentId;
+      if (!paymentId) {
+        return res.status(400).json({ error: "paymentId is required." });
+      }
+      const paymentData = await getNowPaymentStatus(String(paymentId));
       
       const status = (paymentData.payment_status || '').toLowerCase();
       let autoApproved = false;

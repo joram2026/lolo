@@ -1,8 +1,12 @@
 {
   "cleanUrls": true,
   "rewrites": [
-    { "source": "/api/crypto/nowpayments/payment-status/(.*)", "destination": "/api/crypto/nowpayments/payment-status?paymentId=$1" },
+    { "source": "/api/crypto/nowpayments/create-payment", "destination": "/api/nowpayments-create-payment" },
+    { "source": "/api/crypto/nowpayments/min-amount", "destination": "/api/nowpayments-min-amount" },
+    { "source": "/api/crypto/nowpayments/payment-status/(.*)", "destination": "/api/nowpayments-payment-status?paymentId=$1" },
+    { "source": "/api/crypto/nowpayments/payment-status", "destination": "/api/nowpayments-payment-status" },
+    { "source": "/api/webhooks/nowpayments", "destination": "/api/nowpayments-webhook" },
     { "source": "/api/(.*)", "destination": "/api/$1" },
-    { "source": "/(.*)", "destination": "/index.html" }
+    { "source": "/((?!api/.*).*)", "destination": "/index.html" }
   ]
 }

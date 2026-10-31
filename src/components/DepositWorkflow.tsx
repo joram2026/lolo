@@ -474,8 +474,12 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
       try {
         const symbol = selectedCoin.id.toLowerCase();
         const network = selectedNetwork || (selectedCoin.networks && selectedCoin.networks[0]) || '';
-        const res = await fetch(`/api/crypto/nowpayments/min-amount?symbol=${encodeURIComponent(symbol)}&network=${encodeURIComponent(network)}`);
-        const contentType = res.headers.get('content-type') || '';
+        let res = await fetch(`/api/crypto/nowpayments/min-amount?symbol=${encodeURIComponent(symbol)}&network=${encodeURIComponent(network)}`);
+        let contentType = res.headers.get('content-type') || '';
+        if (!res.ok || !contentType.includes('application/json')) {
+          res = await fetch(`/api/nowpayments-min-amount?symbol=${encodeURIComponent(symbol)}&network=${encodeURIComponent(network)}`);
+          contentType = res.headers.get('content-type') || '';
+        }
         if (res.ok && contentType.includes('application/json')) {
           const data = await res.json();
           if (!isCancelled && typeof data.minAmountUsd === 'number') {
@@ -519,11 +523,11 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
     if (manual) setIsCheckingStatus(true);
     try {
       let res = await fetch(`/api/crypto/nowpayments/payment-status/${gatewayPayment.paymentId}`);
-      if (!res.ok) {
-        // Fallback to query param rewrite for serverless platforms
-        res = await fetch(`/api/crypto/nowpayments/payment-status?paymentId=${gatewayPayment.paymentId}`);
+      let contentType = res.headers.get('content-type') || '';
+      if (!res.ok || !contentType.includes('application/json')) {
+        res = await fetch(`/api/nowpayments-payment-status?paymentId=${gatewayPayment.paymentId}`);
+        contentType = res.headers.get('content-type') || '';
       }
-      const contentType = res.headers.get('content-type') || '';
       if (res.ok && contentType.includes('application/json')) {
         const data = await res.json();
         if (data.success && data.payment) {
@@ -760,22 +764,35 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
 
     setIsCreatingPayment(true);
     try {
-      const res = await fetch('/api/crypto/nowpayments/create-payment', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: user.uid,
-          userEmail: user.email,
-          amountUsd: calculatedUSDVal,
-          payCurrency: selectedCoin?.id,
-          network: selectedNetwork,
-          coinSymbol: currentSymbol,
-          coinAmount: numVal
-        })
+      const payload = JSON.stringify({
+        userId: user.uid,
+        userEmail: user.email,
+        amountUsd: calculatedUSDVal,
+        payCurrency: selectedCoin?.id,
+        network: selectedNetwork,
+        coinSymbol: currentSymbol,
+        coinAmount: numVal
       });
 
+      let res = await fetch('/api/crypto/nowpayments/create-payment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: payload
+      });
+
+      let contentType = res.headers.get('content-type') || '';
+      // If Vercel rewrote to index.html or returned 404, fallback to flat serverless function
+      if (!res.ok || !contentType.includes('application/json')) {
+        console.warn('Nested route returned non-JSON, retrying with flat serverless endpoint /api/nowpayments-create-payment...');
+        res = await fetch('/api/nowpayments-create-payment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: payload
+        });
+        contentType = res.headers.get('content-type') || '';
+      }
+
       let data: any = null;
-      const contentType = res.headers.get('content-type') || '';
       if (contentType.includes('application/json')) {
         data = await res.json();
       } else {
@@ -783,7 +800,8 @@ export default function DepositWorkflow({ user, onBack, onSuccess, initialCoinSy
         try {
           data = JSON.parse(rawText);
         } catch {
-          throw new Error('Deposit gateway service response could not be parsed. Please check connection or use manual proof upload.');
+          console.error('Non-JSON response received:', rawText);
+          throw new Error('Automated payment gateway is synchronizing. Please tap "Proceed" again or use manual proof upload.');
         }
       }
 
